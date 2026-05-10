@@ -1,0 +1,203 @@
+export type ThemePreference = 'light' | 'dark' | 'system';
+
+/** Matches how usual pay relates to Household “monthly” — used only for cheque / OT hints. */
+export type PaySchedule = 'weekly' | 'biweekly' | 'monthly';
+
+export type ExtraIncomeCategory = 'overtime' | 'bonus' | 'gift' | 'side' | 'other';
+
+export type DebtKind = 'card' | 'installment' | 'loan' | 'personal';
+
+export interface IncomeConfig {
+  husbandMonthly: number;
+  wifeMonthly: number;
+  husbandPayNote: string;
+  wifePayNote: string;
+  husbandPaySchedule: PaySchedule;
+  wifePaySchedule: PaySchedule;
+  /** Override expected amount per cheque; 0 → derive from monthly ÷ schedule in Paycheque hints. */
+  husbandTypicalPerPay: number;
+  wifeTypicalPerPay: number;
+  /**
+   * When true, inserts paycheque log rows on each scheduled payday (anchor + usual pay rhythm), after local noon,
+   * when no row exists for that earner + date.
+   */
+  husbandPayAutoLog?: boolean;
+  /** Start date `YYYY-MM-DD` for auto pay lines; next paydays follow husband’s pay rhythm above. */
+  husbandPayAnchor?: string | null;
+
+  wifePayAutoLog?: boolean;
+  /** Start date `YYYY-MM-DD`; next paydays follow wife’s pay rhythm (weekly +7d, biweekly +14d, monthly same DOM). */
+  wifeBiweeklyPayAnchor?: string | null;
+}
+
+export interface EssentialExpense {
+  id: string;
+  name: string;
+  amount: number;
+  cadence: 'month' | 'week';
+  /** Day of month the bill falls on — only used when `cadence` is month (defaults to 15 in the timeline when omitted). */
+  dueDay?: number;
+  /** `Date.getDay()`: 0 Sun … 6 Sat — only used when `cadence` is week (defaults to 6 Saturday). */
+  weeklyDueWeekday?: number;
+}
+
+export interface DebtAccount {
+  id: string;
+  name: string;
+  /** What you owe today — type this from statements; we do **not** add interest into it automatically. */
+  balance: number;
+  monthlyPayment: number;
+  dueDay: number;
+  autoDeduction: boolean;
+  endsOn?: string | null;
+  kind: DebtKind;
+  /** Optional annual APR % — used only for a rough “interest this month” hint; 0 / omit = hide. */
+  annualInterestApr?: number;
+}
+
+export interface AllocationPercents {
+  essentials: number;
+  debt: number;
+  savings: number;
+  groceries: number;
+  personal: number;
+}
+
+export interface PersonalWallets {
+  husbandBudget: number;
+  wifeBudget: number;
+  husbandSpent: number;
+  wifeSpent: number;
+}
+
+export type IncomeEarner = 'husband' | 'wife' | 'joint';
+
+/** Actual pay deposited — use to compare with the monthly plan from Household data. */
+export interface IncomeLogEntry {
+  id: string;
+  date: string;
+  amount: number;
+  earner: IncomeEarner;
+  label: string;
+}
+
+export interface ExtraIncomeEntry {
+  id: string;
+  label: string;
+  amount: number;
+  date: string;
+  category: ExtraIncomeCategory;
+}
+
+export type SurpriseCategory =
+  | 'car_repair'
+  | 'medical'
+  | 'home'
+  | 'travel'
+  | 'family'
+  | 'other';
+
+/** One-off costs that were not in the regular plan (vet bill, broken fridge, etc.) */
+export interface SurpriseExpenseEntry {
+  id: string;
+  label: string;
+  amount: number;
+  date: string;
+  category: SurpriseCategory;
+}
+
+/** Dollars you moved from planned “unallocated” room into the emergency saver (manual bookkeeping). */
+export interface BudgetSurplusSweepEntry {
+  id: string;
+  monthKey: string;
+  amount: number;
+  /** Calendar date you tapped the sweep (ISO yyyy-mm-dd). */
+  date: string;
+}
+
+export interface MonthCashflowOpening {
+  /** ISO yyyy-mm-dd when you confirmed this month’s opening. */
+  confirmedAt: string;
+  /** This record always keys the same bucket (redundant; useful for CSV/debug). */
+  forMonthKey: string;
+  /** Prior calendar month we used to read unused slack. */
+  settledFromPriorMonthKey: string;
+  /** surplus room from prior month (`net incl. carry` − sweeps) at the time you closed. */
+  priorSurplusRemainderShown: number;
+  /** Dollars you’re moving off the “rollover” pile into savings (checking → savings story). */
+  savingsDirectedAway: number;
+  /** What we set as this month’s typed carry-in (slack minus savings, floored at 0). */
+  carryApplied: number;
+  /** Saved automatically on upgrade from builds before month-opening existed. */
+  migrated?: boolean;
+}
+
+export interface FinanceState {
+  version: number;
+  income: IncomeConfig;
+  essentials: EssentialExpense[];
+  debts: DebtAccount[];
+  allocation: AllocationPercents;
+  wallets: PersonalWallets;
+  emergencyFund: number;
+  /** Target for “3‑month cushion” milestone (editable) */
+  threeMonthFundTarget: number;
+  /**
+   * Planned dollars per month toward savings (after modelling essentials, groceries, debt in Household).
+   * Pie + totals use this — not allocation.savings × income.
+   */
+  plannedSavingsMonthly: number;
+  /** Planned monthly personal / discretionary envelope in dollars (ditto — not allocation.personal × income). */
+  plannedPersonalMonthly: number;
+  /** billId -> months (YYYY-MM) marked paid */
+  billsPaid: Record<string, string[]>;
+  /** billId -> payment-key (aligned with checklist toggles, see billPaymentKey) -> amount actually paid */
+  billPaidAmounts: Record<string, Record<string, number>>;
+  /**
+   * For auto-deduction bills: months the household tapped “Undo handled” so we do not keep
+   * re-applying the automatic checkmark on every visit.
+   */
+  billsAutoUnmarked: Record<string, string[]>;
+  /** Logged deposits this month vs planned income — see Paycheque log */
+  incomeLog: IncomeLogEntry[];
+  extraIncome: ExtraIncomeEntry[];
+  /** Unexpected one-off spending — for memory and peace of mind, not judgment */
+  surpriseExpenses: SurpriseExpenseEntry[];
+  /**
+   * Confirmed moves into Emergency from realized month cashflow slack (logged income + extra + optional typed
+   * carry‑in, minus paid bill calendar lines + surprises), after earlier sweeps this month.
+   */
+  budgetSurplusSweeps: BudgetSurplusSweepEntry[];
+  /**
+   * Dollars you treat as spendable **this calendar month** on top of logged pay/extra —
+   * e.g. checking cushion left after last month. Keyed `YYYY-MM`. Bookkeeping-only; defaults empty.
+   */
+  monthSpendableCarryByMonth?: Record<string, number>;
+  /**
+   * One-time confirmation per calendar month: how much prior-month slack went to savings vs rolled into
+   * this month’s carry-in. Absent current month + meaningful activity → month-opening gate.
+   */
+  monthCashflowOpening?: Record<string, MonthCashflowOpening>;
+  theme: ThemePreference;
+  walletResetMonth: string;
+  /**
+   * Extra calendar days after a due date before the app shows OVERDUE (e.g. money leaves a day or two later).
+   */
+  billOverdueGraceDays?: number;
+  /**
+   * Bills due within this many business days (Mon–Fri, inclusive from today) show a softer “closing in” hint.
+   */
+  billUpcomingLeadBusinessDays?: number;
+}
+
+export interface TimelineBill {
+  id: string;
+  billId: string;
+  name: string;
+  amount: number;
+  due: Date;
+  autoDeduction: boolean;
+  category: 'essential' | 'debt' | 'other';
+}
+
+export const STORAGE_KEY = 'our-finance-dashboard-v1';
