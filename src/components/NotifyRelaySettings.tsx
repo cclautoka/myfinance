@@ -78,8 +78,14 @@ export function NotifyRelaySettings({
     const notifyUrl = (cfg.url ?? '').trim();
     const hid = (cfg.householdId ?? '').trim();
     if (!notifyUrl || !hid) return '';
-    return buildShareSetupLink({ baseUrl: base, notifyUrl, householdId: hid });
-  }, [cfg.householdId, cfg.url]);
+    return buildShareSetupLink({
+      baseUrl: base,
+      notifyUrl,
+      householdId: hid,
+      husbandEmail: cfg.husbandEmail,
+      wifeEmail: cfg.wifeEmail,
+    });
+  }, [cfg.householdId, cfg.husbandEmail, cfg.url, cfg.wifeEmail]);
 
   return (
     <div className="max-w-3xl rounded-2xl border border-sage-200/90 bg-white/95 p-5 text-sage-900 shadow-sm dark:border-moss-border dark:bg-moss-elevated dark:text-moss-fg">

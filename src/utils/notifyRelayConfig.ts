@@ -65,11 +65,17 @@ export function buildShareSetupLink(input: {
   baseUrl: string;
   notifyUrl: string;
   householdId: string;
+  husbandEmail?: string;
+  wifeEmail?: string;
 }): string {
-  const { baseUrl, notifyUrl, householdId } = input;
+  const { baseUrl, notifyUrl, householdId, husbandEmail, wifeEmail } = input;
   const u = new URL(baseUrl);
-  // Never include secrets or recipient emails in links.
-  u.hash = `setup=1&notify=${encodeURIComponent(notifyUrl)}&hid=${encodeURIComponent(householdId)}`;
+  // Never include secrets in links. Emails are okay to include.
+  const he = (husbandEmail ?? '').trim();
+  const we = (wifeEmail ?? '').trim();
+  const emailPart =
+    he || we ? `&he=${encodeURIComponent(he)}&we=${encodeURIComponent(we)}` : '';
+  u.hash = `setup=1&notify=${encodeURIComponent(notifyUrl)}&hid=${encodeURIComponent(householdId)}${emailPart}`;
   return u.toString();
 }
 
@@ -81,7 +87,14 @@ export function applySetupFromUrlHash(): Partial<NotifyRelayConfig> | null {
   if (params.get('setup') !== '1') return null;
   const notify = (params.get('notify') ?? '').trim();
   const hid = (params.get('hid') ?? '').trim();
+  const he = (params.get('he') ?? '').trim();
+  const we = (params.get('we') ?? '').trim();
   if (!notify || !hid) return null;
   if (!/^[a-f0-9]{16,64}$/i.test(hid)) return null;
-  return { url: decodeURIComponent(notify), householdId: decodeURIComponent(hid) };
+  return {
+    url: decodeURIComponent(notify),
+    householdId: decodeURIComponent(hid),
+    husbandEmail: decodeURIComponent(he),
+    wifeEmail: decodeURIComponent(we),
+  };
 }
