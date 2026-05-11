@@ -240,9 +240,20 @@ fastify.post('/v1/reminders/send', async (request, reply) => {
   const body = request.body;
   const id = typeof body?.id === 'string' && body.id.trim() ? body.id.trim().slice(0, 64) : '';
   if (!id) return reply.code(400).send({ error: 'Body must include "id" string.' });
+
+  // Prefer snapshot (fast). If missing, fall back to Postgres state so schedules work immediately after enabling server storage.
   const snap = await readSnapshot(id).catch(() => null);
-  if (!snap?.data) return reply.code(404).send({ error: 'No snapshot found for id.' });
-  const { monthKey: mk, dueSoon, overdue, counts } = computeReminderEmailPayload(snap.data, new Date());
+  let stateData = snap?.data ?? null;
+  if (!stateData) {
+    await initDbIfNeeded(request.log);
+    if (getDbEnabled()) {
+      const stored = await readState(id).catch(() => null);
+      stateData = stored?.state ?? null;
+    }
+  }
+  if (!stateData) return reply.code(404).send({ error: 'No snapshot or stored state found for id.' });
+
+  const { monthKey: mk, dueSoon, overdue, counts } = computeReminderEmailPayload(stateData, new Date());
   if (counts.dueSoon === 0 && counts.overdue === 0) {
     // Quiet days: do not email.
     return reply.send({ ok: true, skipped: true, counts });
