@@ -8,6 +8,7 @@ RUN npm run build
 
 FROM node:22-alpine AS runtime
 WORKDIR /app
+RUN apk add --no-cache curl
 COPY server/package.json server/package-lock.json ./
 RUN npm ci --omit=dev
 COPY server/index.mjs ./
