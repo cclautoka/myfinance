@@ -208,15 +208,18 @@ export const getServerStorageConfig = (): {
   // We reuse the existing “notify relay” URL/secret as the shared secret for state endpoints.
   // If url points at /v1/notify, compute base.
   const url = (cfg.url ?? '').trim();
-  const baseUrl = url
-    ? url.endsWith('/v1/notify')
-      ? url.replace(/\/v1\/notify$/, '')
-      : url.replace(/\/$/, '')
-    : '';
+  // Same-origin URLs like `/v1/notify` should yield an empty baseUrl so we can call `/v1/state` relatively.
+  const baseUrl = !url
+    ? ''
+    : url.startsWith('/')
+      ? ''
+      : url.endsWith('/v1/notify')
+        ? url.replace(/\/v1\/notify$/, '')
+        : url.replace(/\/$/, '');
 
   const householdId = ensureNotifyRelayHouseholdId();
   return {
-    enabled: Boolean(cfg.enabled) && Boolean(baseUrl) && Boolean(cfg.secret) && Boolean(householdId),
+    enabled: Boolean(cfg.enabled) && Boolean(url) && Boolean(cfg.secret) && Boolean(householdId),
     baseUrl,
     secret: cfg.secret,
     householdId,
