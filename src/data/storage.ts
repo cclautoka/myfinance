@@ -11,6 +11,10 @@ import { applyAutoMarkHandled } from '../utils/autoBills';
 import { monthSpendableCarry, surplusSweepRoomRemaining } from '../utils/budgetSurplus';
 import { combinedMonthlyIncome } from '../utils/calculations';
 import { hasMeaningfulFinanceTouch } from '../utils/monthOpening';
+import {
+  ensureNotifyRelayHouseholdId,
+  readNotifyRelayConfig,
+} from '../utils/notifyRelayConfig';
 
 /** Older builds stored weekly essentials with YYYY-MM so one toggle checked every week in the month — remove those stubs. */
 const stripLegacyWeeklyEssentialMonthKeys = (state: FinanceState): FinanceState => {
@@ -181,27 +185,108 @@ const silentlyBackfillMonthCashflowOpeningForLegacySave = (
   };
 };
 
+const normalizeLoadedState = (base: FinanceState, parsed?: Partial<FinanceState>): FinanceState => {
+  if (!parsed) return applyAutoScheduledPayLogs(applyAutoMarkHandled(base));
+  const merged = deepMerge(base, parsed);
+  const withPlanned = ensurePlannedMonthlyDollars(merged, parsed);
+  const migrated = stripLegacyWeeklyEssentialMonthKeys(withPlanned);
+  const pruned = prunePreTrackingBillKeys(migrated);
+  const withMonth = resetWalletsIfNewMonth(pruned);
+  const legacyOpening = silentlyBackfillMonthCashflowOpeningForLegacySave(withMonth, parsed);
+  return applyAutoScheduledPayLogs(applyAutoMarkHandled(legacyOpening));
+};
+
+export const SERVER_CACHE_KEY = 'finance-server-cache-v1';
+
+export const getServerStorageConfig = (): {
+  enabled: boolean;
+  baseUrl: string;
+  secret: string;
+  householdId: string;
+} => {
+  const cfg = readNotifyRelayConfig();
+  // We reuse the existing “notify relay” URL/secret as the shared secret for state endpoints.
+  // If url points at /v1/notify, compute base.
+  const url = (cfg.url ?? '').trim();
+  const baseUrl = url
+    ? url.endsWith('/v1/notify')
+      ? url.replace(/\/v1\/notify$/, '')
+      : url.replace(/\/$/, '')
+    : '';
+
+  const householdId = ensureNotifyRelayHouseholdId();
+  return {
+    enabled: Boolean(cfg.enabled) && Boolean(baseUrl) && Boolean(cfg.secret) && Boolean(householdId),
+    baseUrl,
+    secret: cfg.secret,
+    householdId,
+  };
+};
+
+export const fetchServerFinanceState = async (): Promise<
+  | { ok: true; state: FinanceState; updatedAt: string }
+  | { ok: false; status: number; error: string }
+> => {
+  const base = defaultFinanceState();
+  const c = getServerStorageConfig();
+  if (!c.enabled) return { ok: false, status: 0, error: 'Server storage not configured' };
+
+  const url = `${c.baseUrl}/v1/state?id=${encodeURIComponent(c.householdId)}`;
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${c.secret}` },
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => '');
+    return { ok: false, status: res.status, error: t || res.statusText };
+  }
+  const j = (await res.json()) as { state?: Partial<FinanceState>; updatedAt?: string };
+  const normalized = normalizeLoadedState(base, (j.state ?? {}) as Partial<FinanceState>);
+  return { ok: true, state: normalized, updatedAt: String(j.updatedAt ?? '') };
+};
+
+export const putServerFinanceState = async (
+  state: FinanceState,
+): Promise<{ ok: true; updatedAt: string } | { ok: false; status: number; error: string }> => {
+  const c = getServerStorageConfig();
+  if (!c.enabled) return { ok: false, status: 0, error: 'Server storage not configured' };
+  const url = `${c.baseUrl}/v1/state?id=${encodeURIComponent(c.householdId)}`;
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${c.secret}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ state }),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => '');
+    return { ok: false, status: res.status, error: t || res.statusText };
+  }
+  const j = (await res.json()) as { updatedAt?: string };
+  return { ok: true, updatedAt: String(j.updatedAt ?? '') };
+};
+
 export const loadFinanceState = (): FinanceState => {
   const base = defaultFinanceState();
   try {
+    const cache = localStorage.getItem(SERVER_CACHE_KEY);
+    if (cache) {
+      const parsed = JSON.parse(cache) as Partial<FinanceState>;
+      return normalizeLoadedState(base, parsed);
+    }
+
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return applyAutoScheduledPayLogs(applyAutoMarkHandled(base));
+    if (!raw) return normalizeLoadedState(base);
     const parsed = JSON.parse(raw) as Partial<FinanceState>;
-    const merged = deepMerge(base, parsed);
-    const withPlanned = ensurePlannedMonthlyDollars(merged, parsed);
-    const migrated = stripLegacyWeeklyEssentialMonthKeys(withPlanned);
-    const pruned = prunePreTrackingBillKeys(migrated);
-    const withMonth = resetWalletsIfNewMonth(pruned);
-    const legacyOpening = silentlyBackfillMonthCashflowOpeningForLegacySave(withMonth, parsed);
-    return applyAutoScheduledPayLogs(applyAutoMarkHandled(legacyOpening));
+    return normalizeLoadedState(base, parsed);
   } catch {
-    return applyAutoScheduledPayLogs(applyAutoMarkHandled(base));
+    return normalizeLoadedState(base);
   }
 };
 
 export const saveFinanceState = (s: FinanceState): void => {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+    // Keep a cache for server-first mode/offline startup.
+    localStorage.setItem(SERVER_CACHE_KEY, JSON.stringify(s));
   } catch {
     /* ignore quota */
   }

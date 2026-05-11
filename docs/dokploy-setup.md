@@ -57,28 +57,33 @@ Wait until DNS resolves before expecting SSL to succeed.
 Open **Environment** for this application and add at least:
 
 | Name | Example | Purpose |
-|------|---------|---------|
+| ------ | --------- | --------- |
 | `NODE_ENV` | `production` | Standard Node production mode. |
+| `DATABASE_URL` | `postgres://user:pass@host:5432/dbname` | **Server-side persistence** for your entire workbook (JSONB in Postgres). |
 | `NOTIFY_API_SECRET` | `paste-a-long-random-string-at-least-16-chars` | Same value you type in the app under **Tips & backup → Shared secret**. |
 | `NOTIFY_TO` | `you@gmail.com` | Where change-summary emails go. |
 
 **Email (pick one path):**
 
 **A — Resend (easiest)**  
-| `RESEND_API_KEY` | From Resend dashboard |  
+| `RESEND_API_KEY` | From Resend dashboard |
 | `RESEND_FROM` | Verified sender, e.g. `Household <onboarding@resend.dev>` |
 
 **B — SMTP (if `RESEND_API_KEY` is empty)**  
-| `SMTP_HOST` | your SMTP host |  
-| `SMTP_PORT` | `587` |  
-| `SMTP_SECURE` | `false` (usually for 587) |  
-| `SMTP_USER` / `SMTP_PASS` | if required |  
+| `SMTP_HOST` | your SMTP host |
+| `SMTP_PORT` | `587` |
+| `SMTP_SECURE` | `false` (usually for 587) |
+| `SMTP_USER` / `SMTP_PASS` | if required |
 | `MAIL_FROM` | e.g. `Household <noreply@yourdomain.com>` |
 
 **CORS (optional for this single-host setup)**  
 | `NOTIFY_CORS_ORIGINS` | Leave **empty** if the browser URL is the **same** origin as the API (one Dokploy app). If you split frontend/API later, set comma-separated origins, e.g. `https://finances.yourdomain.com`. |
 
 See also: `server/env.example` in the repo.
+
+### Postgres note (Dokploy)
+
+Dokploy already runs Postgres for itself, but it’s usually best to create a **dedicated Postgres app/database** for your finance data (or at least a separate database) and set `DATABASE_URL` to that. The app will create a table named `finance_state` automatically.
 
 ---
 
@@ -114,7 +119,7 @@ Success response: JSON `{"ok":true}`.
 ## 8. Troubleshooting
 
 | Symptom | What to check |
-|---------|----------------|
+| --------- | ---------------- |
 | **`{"message":"Branch Not Match"}`** on a URL like `/api/deploy/...` | That URL is a **deploy webhook**, not your website. Don’t open it in the browser as the “site.” In Dokploy, set the app’s **Git branch** to **`main`** (same as GitHub). Webhooks must **POST** with the matching branch (GitHub does this automatically); a manual browser visit is a **GET** and will often fail this check. |
 | 502 / blank page | Port mapping → container **8787**; build logs for failed `npm run build`. |
 | Site loads, test email fails | `RESEND_*` or `SMTP_*` + `NOTIFY_TO`; Resend: domain/sender verified. |

@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
@@ -6,6 +7,9 @@ import crypto from 'crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildChangeEmailTemplate, buildReminderEmailTemplate, renderEmailHtml, renderEmailText } from './templates.mjs';
+import { readSnapshot, writeSnapshot } from './snapshots.mjs';
+import { getDbEnabled, getHouseholdIdFromRequest, initDbIfNeeded, readState, writeState } from './db.mjs';
 
 const port = Number(process.env.PORT ?? 8787);
 const secret = process.env.NOTIFY_API_SECRET ?? '';
@@ -60,13 +64,18 @@ async function sendWithSmtp({ to, subject, text }) {
   if (!transport) throw new Error('SMTP_HOST not configured');
   const from = process.env.MAIL_FROM ?? process.env.SMTP_USER;
   if (!from) throw new Error('MAIL_FROM or SMTP_USER required for SMTP');
-  await transport.sendMail({ from, to, subject, text });
+  await transport.sendMail({ from, to, subject, text, html: undefined });
   return { provider: 'smtp' };
 }
 
-async function sendMail({ to, subject, text }) {
+async function sendMail({ to, subject, text, html }) {
   if (process.env.RESEND_API_KEY) return sendWithResend({ to, subject, text });
-  return sendWithSmtp({ to, subject, text });
+  const transport = createSmtpTransport();
+  if (!transport) throw new Error('SMTP_HOST not configured');
+  const from = process.env.MAIL_FROM ?? process.env.SMTP_USER;
+  if (!from) throw new Error('MAIL_FROM or SMTP_USER required for SMTP');
+  await transport.sendMail({ from, to, subject, text, ...(html ? { html } : {}) });
+  return { provider: 'smtp' };
 }
 
 const fastify = Fastify({ logger: true });
@@ -89,22 +98,75 @@ await fastify.register(cors, {
 
 fastify.get('/health', async () => ({ ok: true }));
 
+fastify.get('/v1/state/meta', async (request, reply) => {
+  if (!authOr401(request, reply)) return;
+  await initDbIfNeeded(request.log);
+  if (!getDbEnabled()) return reply.code(503).send({ error: 'DATABASE_URL is not set.' });
+  const id = getHouseholdIdFromRequest(request);
+  const existing = await readState(id);
+  return reply.send({
+    ok: true,
+    id,
+    exists: Boolean(existing),
+    updatedAt: existing?.updatedAt ?? null,
+  });
+});
+
+fastify.get('/v1/state', async (request, reply) => {
+  if (!authOr401(request, reply)) return;
+  await initDbIfNeeded(request.log);
+  if (!getDbEnabled()) return reply.code(503).send({ error: 'DATABASE_URL is not set.' });
+  const id = getHouseholdIdFromRequest(request);
+  const existing = await readState(id);
+  if (!existing) return reply.code(404).send({ error: 'Not found' });
+  return reply.send({ ok: true, id, state: existing.state, updatedAt: existing.updatedAt });
+});
+
+fastify.put('/v1/state', async (request, reply) => {
+  if (!authOr401(request, reply)) return;
+  await initDbIfNeeded(request.log);
+  if (!getDbEnabled()) return reply.code(503).send({ error: 'DATABASE_URL is not set.' });
+  const id = getHouseholdIdFromRequest(request);
+  const body = request.body;
+  const state = body?.state;
+  if (!state || typeof state !== 'object') return reply.code(400).send({ error: 'Body must include "state" object.' });
+  const r = await writeState(id, state);
+  return reply.send({ ok: true, id, updatedAt: r.updatedAt });
+});
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, 'public');
 const serveSpa = fs.existsSync(path.join(publicDir, 'index.html'));
 
-fastify.post('/v1/notify', async (request, reply) => {
+function pickRecipients(body) {
+  const envTo = notifyTo.trim();
+  const list = Array.isArray(body?.to) ? body.to : [];
+  const cleaned = list
+    .filter((v) => typeof v === 'string')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 5);
+  return cleaned.length ? cleaned.join(',') : envTo;
+}
+
+function authOr401(request, reply) {
   if (!secret || secret.length < 16) {
-    return reply.code(503).send({ error: 'NOTIFY_API_SECRET is not set or too short (min 16 chars).' });
+    reply.code(503).send({ error: 'NOTIFY_API_SECRET is not set or too short (min 16 chars).' });
+    return false;
   }
+  const token = parseBearer(request.headers.authorization);
+  if (!token || !timingSafeEqual(token, secret)) {
+    reply.code(401).send({ error: 'Unauthorized' });
+    return false;
+  }
+  return true;
+}
+
+fastify.post('/v1/notify', async (request, reply) => {
   if (!notifyTo) {
     return reply.code(503).send({ error: 'NOTIFY_TO is not set.' });
   }
-
-  const token = parseBearer(request.headers.authorization);
-  if (!token || !timingSafeEqual(token, secret)) {
-    return reply.code(401).send({ error: 'Unauthorized' });
-  }
+  if (!authOr401(request, reply)) return;
 
   const body = request.body;
   const summary =
@@ -115,16 +177,29 @@ fastify.post('/v1/notify', async (request, reply) => {
     return reply.code(400).send({ error: 'Body must include a non-empty "summary" string.' });
   }
 
-  const subject =
-    typeof body?.subject === 'string' && body.subject.trim()
-      ? body.subject.trim().slice(0, 200)
-      : 'Household finances · update';
+  const monthKey =
+    typeof body?.monthKey === 'string' && body.monthKey.trim() ? body.monthKey.trim().slice(0, 16) : 'this month';
+  const pocketLeft = Number.isFinite(Number(body?.pocketLeft)) ? Number(body.pocketLeft) : 0;
+  const template = buildChangeEmailTemplate({ summaryText: summary, pocketLeft, monthKey });
+  const html = renderEmailHtml({
+    title: template.title,
+    preheader: template.preheader,
+    sections: template.sections,
+  });
+  const text = renderEmailText({
+    title: template.title,
+    preheader: template.preheader,
+    sections: template.sections,
+  });
+  const subject = template.subject.slice(0, 200);
 
   try {
+    const to = pickRecipients(body);
     const result = await sendMail({
-      to: notifyTo,
+      to,
       subject,
-      text: summary,
+      text,
+      html,
     });
     return reply.send({ ok: true, ...result });
   } catch (e) {
@@ -134,6 +209,114 @@ fastify.post('/v1/notify', async (request, reply) => {
       detail: process.env.NODE_ENV === 'development' ? String(e?.message ?? e) : undefined,
     });
   }
+});
+
+fastify.post('/v1/snapshot', async (request, reply) => {
+  if (!authOr401(request, reply)) return;
+  const body = request.body;
+  const id = typeof body?.id === 'string' && body.id.trim() ? body.id.trim().slice(0, 64) : '';
+  const data = body?.data;
+  if (!id) return reply.code(400).send({ error: 'Body must include "id" string.' });
+  if (!data || typeof data !== 'object') return reply.code(400).send({ error: 'Body must include "data" object.' });
+  await writeSnapshot(id, data);
+  return reply.send({ ok: true });
+});
+
+/** Manual trigger (or Dokploy Schedule cron) to send due/overdue reminders. */
+fastify.post('/v1/reminders/send', async (request, reply) => {
+  if (!notifyTo) return reply.code(503).send({ error: 'NOTIFY_TO is not set.' });
+  if (!authOr401(request, reply)) return;
+  const body = request.body;
+  const id = typeof body?.id === 'string' && body.id.trim() ? body.id.trim().slice(0, 64) : '';
+  if (!id) return reply.code(400).send({ error: 'Body must include "id" string.' });
+  const snap = await readSnapshot(id).catch(() => null);
+  if (!snap?.data) return reply.code(404).send({ error: 'No snapshot found for id.' });
+
+  // Minimal reminder logic (monthly dueDay only): essentials + debts.
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const mk = `${y}-${String(m + 1).padStart(2, '0')}`;
+  const today = new Date(y, m, now.getDate());
+  const daysLead = Number.isFinite(Number(body?.leadDays)) ? Math.max(0, Math.min(14, Number(body.leadDays))) : 3;
+  const leadEdge = new Date(today);
+  leadEdge.setDate(leadEdge.getDate() + daysLead);
+
+  const billsPaid = snap.data.billsPaid ?? {};
+  const isPaidForMonth = (idKey) => Array.isArray(billsPaid[idKey]) && billsPaid[idKey].includes(mk);
+
+  const asMonthly = (row) =>
+    row && typeof row === 'object' && row.dueDay && typeof row.dueDay === 'number'
+      ? new Date(y, m, Math.max(1, Math.min(31, row.dueDay)))
+      : null;
+
+  const dueSoon = [];
+  const overdue = [];
+
+  for (const e of snap.data.essentials ?? []) {
+    if (e?.cadence !== 'month') continue;
+    const due = asMonthly(e);
+    if (!due) continue;
+    if (isPaidForMonth(e.id)) continue;
+    const rec = { name: e.name ?? e.id, amount: Number(e.amount ?? 0), dueDate: due.toISOString().slice(0, 10) };
+    if (due > today && due <= leadEdge) dueSoon.push(rec);
+    if (due < today) overdue.push(rec);
+  }
+
+  for (const d of snap.data.debts ?? []) {
+    const due = asMonthly(d);
+    if (!due) continue;
+    if (isPaidForMonth(d.id)) continue;
+    const rec = { name: d.name ?? d.id, amount: Number(d.monthlyPayment ?? 0), dueDate: due.toISOString().slice(0, 10) };
+    if (due > today && due <= leadEdge) dueSoon.push(rec);
+    if (due < today) overdue.push(rec);
+  }
+
+  const template = buildReminderEmailTemplate({ monthKey: mk, dueSoon, overdue });
+  const html = renderEmailHtml({
+    title: template.title,
+    preheader: template.preheader,
+    sections: template.sections,
+    footerHint: 'Open the app to mark bills paid and keep reminders quiet.',
+  });
+  const text = renderEmailText({
+    title: template.title,
+    preheader: template.preheader,
+    sections: template.sections,
+  });
+
+  try {
+    const to = pickRecipients(body);
+    const result = await sendMail({ to, subject: template.subject.slice(0, 200), text, html });
+    return reply.send({ ok: true, ...result, counts: { dueSoon: dueSoon.length, overdue: overdue.length } });
+  } catch (e) {
+    request.log.error(e);
+    return reply.code(502).send({ error: 'Failed to send email' });
+  }
+});
+
+fastify.get('/preview/email', async (request, reply) => {
+  const kind = request.query?.kind === 'reminder' ? 'reminder' : 'change';
+  const monthKey = '2026-05';
+  const tpl =
+    kind === 'reminder'
+      ? buildReminderEmailTemplate({
+          monthKey,
+          dueSoon: [
+            { name: 'Internet', amount: 114, dueDate: '2026-05-14', note: 'Monthly' },
+            { name: 'Rent', amount: 400, dueDate: '2026-05-22', note: 'Monthly' },
+          ],
+          overdue: [{ name: 'Car loan', amount: 224, dueDate: '2026-05-05', note: 'Auto-deduction' }],
+        })
+      : buildChangeEmailTemplate({
+          summaryText:
+            'Income updated (wife schedule biweekly).\nMarked Rent paid for May.\nLogged Husband pay deposit.',
+          pocketLeft: 42.75,
+          monthKey,
+        });
+
+  const html = renderEmailHtml({ title: tpl.title, preheader: tpl.preheader, sections: tpl.sections });
+  reply.header('Content-Type', 'text/html; charset=utf-8').send(html);
 });
 
 if (serveSpa) {

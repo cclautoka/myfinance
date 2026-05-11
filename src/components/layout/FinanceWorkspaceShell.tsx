@@ -14,7 +14,7 @@ const TAB_DEF: { id: WorkspaceTab; label: string }[] = [
   { id: 'past', label: 'Past months' },
   { id: 'household', label: 'Your numbers' },
   { id: 'plan', label: 'Plan & bills' },
-  { id: 'backup', label: 'Tips & backup' },
+  { id: 'backup', label: 'Tools & alerts' },
 ];
 
 const INTRO_BY_TAB: Record<WorkspaceTab, { eyebrow: string; title: string; body: string }> = {
@@ -35,8 +35,8 @@ const INTRO_BY_TAB: Record<WorkspaceTab, { eyebrow: string; title: string; body:
   },
   backup: {
     eyebrow: 'Housekeeping',
-    title: 'Tips & backup',
-    body: 'Guidance recap, replay the tour, CSV export under Past months, or reset this browser. Auto deposit logs live in Household → Your numbers.',
+    title: 'Tools & alerts',
+    body: 'Email notifications, replay the tour, CSV export under Past months, or reset this browser. Auto deposit logs live in Household → Your numbers.',
   },
 };
 

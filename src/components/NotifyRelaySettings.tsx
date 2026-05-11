@@ -1,15 +1,24 @@
 import { useCallback, useState } from 'react';
 import {
+  ensureNotifyRelayHouseholdId,
   readNotifyRelayConfig,
   writeNotifyRelayConfig,
   type NotifyRelayConfig,
 } from '../utils/notifyRelayConfig';
-import { buildFinanceChangeSummary, postNotifyRelay } from '../utils/notifyRelay';
+import {
+  buildFinanceChangeSummary,
+  pocketLeftSoFar,
+  postNotifyRelay,
+  postSnapshotRelay,
+  buildSnapshotForReminders,
+} from '../utils/notifyRelay';
 import type { FinanceState } from '../types/finance';
 
 export function NotifyRelaySettings({ state }: { state: FinanceState }) {
   const [cfg, setCfg] = useState<NotifyRelayConfig>(() =>
-    typeof window !== 'undefined' ? readNotifyRelayConfig() : { enabled: false, url: '', secret: '' },
+    typeof window !== 'undefined'
+      ? { ...readNotifyRelayConfig(), householdId: ensureNotifyRelayHouseholdId() }
+      : { enabled: false, url: '', secret: '', husbandEmail: '', wifeEmail: '', householdId: '' },
   );
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -23,9 +32,19 @@ export function NotifyRelaySettings({ state }: { state: FinanceState }) {
     setBusy(true);
     setMsg(null);
     const summary = `[Test]\n${buildFinanceChangeSummary(state)}`;
-    const r = await postNotifyRelay(summary, 'Household finances · test');
+    const r = await postNotifyRelay(summary, {
+      subject: 'Household finances · test',
+      pocketLeft: pocketLeftSoFar(state),
+    });
+    const snap = await postSnapshotRelay(buildSnapshotForReminders(state));
     setBusy(false);
-    setMsg(r.ok ? 'Test email queued — check your inbox (and spam).' : r.error);
+    setMsg(
+      r.ok
+        ? snap.ok
+          ? 'Test email sent and snapshot saved. Check inbox (and spam).'
+          : `Email sent; snapshot failed: ${snap.error}`
+        : r.error,
+    );
   }, [state]);
 
   return (
@@ -48,6 +67,10 @@ export function NotifyRelaySettings({ state }: { state: FinanceState }) {
         />
         Send email summaries after changes (debounced ~60s)
       </label>
+      <p className="mt-2 text-xs leading-relaxed text-sage-700 dark:text-moss-muted">
+        <strong className="text-sage-900 dark:text-moss-fg">Server storage</strong> uses the same shared secret and URL. When enabled,
+        your workbook is saved to Postgres on the server (and still cached locally for offline).
+      </p>
 
       <div className="mt-4 space-y-3">
         <div>
@@ -61,6 +84,55 @@ export function NotifyRelaySettings({ state }: { state: FinanceState }) {
             onChange={(e) => persist({ ...cfg, url: e.target.value })}
             autoComplete="off"
           />
+        </div>
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-wide text-sage-600 dark:text-moss-muted">
+            Household id (used for server storage & reminders)
+          </label>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <code className="max-w-full flex-1 overflow-x-auto rounded-lg border border-sage-200 bg-sage-50 px-3 py-2 text-xs text-sage-800 dark:border-moss-border dark:bg-moss-bg dark:text-moss-subtle">
+              {cfg.householdId || '—'}
+            </code>
+            <button
+              type="button"
+              className="btn-secondary btn-secondary-sm font-bold"
+              onClick={() => {
+                if (!cfg.householdId) return;
+                void navigator.clipboard?.writeText(cfg.householdId);
+                setMsg('Household id copied.');
+              }}
+            >
+              Copy
+            </button>
+          </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-wide text-sage-600 dark:text-moss-muted">
+              Husband email (recipient)
+            </label>
+            <input
+              className="mt-1 w-full rounded-lg border border-sage-300 bg-white px-3 py-2 text-sm dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
+              placeholder="husband@example.com"
+              value={cfg.husbandEmail}
+              onChange={(e) => persist({ ...cfg, husbandEmail: e.target.value })}
+              autoComplete="email"
+              inputMode="email"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-wide text-sage-600 dark:text-moss-muted">
+              Wife email (recipient)
+            </label>
+            <input
+              className="mt-1 w-full rounded-lg border border-sage-300 bg-white px-3 py-2 text-sm dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
+              placeholder="wife@example.com"
+              value={cfg.wifeEmail}
+              onChange={(e) => persist({ ...cfg, wifeEmail: e.target.value })}
+              autoComplete="email"
+              inputMode="email"
+            />
+          </div>
         </div>
         <div>
           <label className="text-xs font-semibold uppercase tracking-wide text-sage-600 dark:text-moss-muted">
@@ -81,6 +153,14 @@ export function NotifyRelaySettings({ state }: { state: FinanceState }) {
         <button type="button" className="btn-secondary btn-secondary-sm font-bold" disabled={busy} onClick={testSend}>
           {busy ? 'Sending…' : 'Send test email'}
         </button>
+        <a
+          className="btn-secondary btn-secondary-sm font-bold"
+          href="/preview/email?kind=change"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Preview template
+        </a>
       </div>
 
       {msg ? (

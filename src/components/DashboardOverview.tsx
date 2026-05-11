@@ -129,6 +129,20 @@ export function DashboardOverview({ state }: { state: FinanceState }) {
               <p className="mt-3 text-xs leading-snug text-sage-700 dark:text-moss-subtle">
                 Total of both salary lines from your household worksheet; excludes irregular items unless logged separately.
               </p>
+              <div className="mt-4 rounded-xl border border-sage-200/80 bg-sage-50/70 px-4 py-3 dark:border-moss-border dark:bg-moss-bg/40">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-sage-600 dark:text-moss-muted">
+                  Pocket left so far (deposits − counted spend)
+                </p>
+                <p
+                  className={`mt-1 ${
+                    loggedPay - actualExpenseMonth >= 0
+                      ? 'text-sage-950 dark:text-moss-fg'
+                      : 'text-rose-700 dark:text-rose-300/90'
+                  } ${METRIC_SUBHERO_SIZE}`}
+                >
+                  {formatMoney(loggedPay - actualExpenseMonth)}
+                </p>
+              </div>
             </MetricCard>
           </MetricWithTip>
           <MetricWithTip tip={dashboardIncomeLoggedVsPlannedTip(income, loggedPay)}>

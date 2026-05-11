@@ -1,4 +1,4 @@
-export const ONBOARDING_STORAGE_KEY = 'finance-onboarding-tour-done-v6';
+export const ONBOARDING_STORAGE_KEY = 'finance-onboarding-tour-done-v7';
 
 export type TourStepSpec = {
   target: string;
@@ -18,7 +18,7 @@ export const ONBOARDING_STEPS: TourStepSpec[] = [
   {
     target: 'tour-quick-nav',
     title: 'Section shortcuts',
-    body: 'Dashboard, surprise costs, Guidance, then worksheet tabs — Past months, Your numbers (auto Paycheque logs per earner), Plan & bills, and Tips & backup.',
+    body: 'Dashboard, surprise costs, Guidance, then worksheet tabs — Past months, Your numbers (auto Paycheque logs per earner), Plan & bills, and Tools & alerts (email notifications).',
     scrollBlock: 'nearest',
   },
   {
@@ -36,7 +36,7 @@ export const ONBOARDING_STEPS: TourStepSpec[] = [
   {
     target: 'tour-workspace',
     title: 'Past months & planners',
-    body: 'Tabs for archived months (picker, recap, CSV), income & bills in Your numbers, plan tools, and tips / backup / reset. Open a tab with quick nav or tap here.',
+    body: 'Tabs for archived months (picker, recap, CSV), income & bills in Your numbers, plan tools, and tools / alerts / reset. Open a tab with quick nav or tap here.',
     scrollBlock: 'start',
   },
 ];

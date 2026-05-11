@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { defaultFinanceState } from '../data/defaults';
-import { loadFinanceState, saveFinanceState } from '../data/storage';
+import {
+  fetchServerFinanceState,
+  getServerStorageConfig,
+  loadFinanceState,
+  putServerFinanceState,
+  saveFinanceState,
+} from '../data/storage';
 import type {
   AllocationPercents,
   DebtAccount,
@@ -17,7 +23,13 @@ import type { BillsPaidTogglePayload } from '../utils/billsTimeline';
 import { billPaymentKey } from '../utils/billsTimeline';
 import { applyAutoScheduledPayLogs } from '../utils/autoScheduledPayLog';
 import { surplusSweepRoomRemaining } from '../utils/budgetSurplus';
-import { buildFinanceChangeSummary, postNotifyRelay } from '../utils/notifyRelay';
+import {
+  buildFinanceChangeSummary,
+  buildSnapshotForReminders,
+  pocketLeftSoFar,
+  postNotifyRelay,
+  postSnapshotRelay,
+} from '../utils/notifyRelay';
 import { readNotifyRelayConfig } from '../utils/notifyRelayConfig';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -40,6 +52,51 @@ export function usePersistedFinance() {
 
   useEffect(() => {
     saveFinanceState(state);
+  }, [state]);
+
+  /** Server hydration + one-time import when server is empty. */
+  useEffect(() => {
+    const cfg = getServerStorageConfig();
+    if (!cfg.enabled) return;
+
+    let cancelled = false;
+    (async () => {
+      const remote = await fetchServerFinanceState();
+      if (cancelled) return;
+
+      if (!remote.ok && remote.status === 404) {
+        // Server empty; one-time import of current local/cache state.
+        await putServerFinanceState(stateRef.current);
+        const after = await fetchServerFinanceState();
+        if (!cancelled && after.ok) setState(after.state);
+        return;
+      }
+
+      if (remote.ok) {
+        setState(remote.state);
+      }
+    })().catch(() => {
+      /* offline / ignore */
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /** Server persistence (debounced) — local cache is written in saveFinanceState above. */
+  const serverSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const cfg = getServerStorageConfig();
+    if (!cfg.enabled) return;
+    if (serverSaveRef.current !== null) clearTimeout(serverSaveRef.current);
+    serverSaveRef.current = setTimeout(() => {
+      serverSaveRef.current = null;
+      void putServerFinanceState(stateRef.current);
+    }, 1500);
+    return () => {
+      if (serverSaveRef.current !== null) clearTimeout(serverSaveRef.current);
+    };
   }, [state]);
 
   /** Re-check wife biweekly auto-log when the tab regains focus so a Thursday-afternoon hit appears without full reload. */
@@ -269,10 +326,16 @@ export function usePersistedFinance() {
       const cfg = readNotifyRelayConfig();
       if (!cfg.enabled || !cfg.url || !cfg.secret) return;
       const latest = stateRef.current;
-      void postNotifyRelay(buildFinanceChangeSummary(latest)).then((r) => {
+      const summary = buildFinanceChangeSummary(latest);
+      const mk = currentMonthKey();
+      const pocket = pocketLeftSoFar(latest);
+      void postNotifyRelay(summary, { monthKey: mk, pocketLeft: pocket }).then((r) => {
         if (!r.ok && typeof console !== 'undefined') {
           console.warn('[notify relay]', r.error);
         }
+      });
+      void postSnapshotRelay(buildSnapshotForReminders(latest)).then((r) => {
+        if (!r.ok && typeof console !== 'undefined') console.warn('[notify relay snapshot]', r.error);
       });
     }, 60_000);
 

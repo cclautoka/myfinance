@@ -7,7 +7,7 @@ const LINKS: { id: string; label: string; workspaceTab?: WorkspaceTab }[] = [
   { id: 'finance-history', label: 'Past months', workspaceTab: 'past' },
   { id: 'finance-household', label: 'Your numbers', workspaceTab: 'household' },
   { id: 'finance-plan', label: 'Plan & bills', workspaceTab: 'plan' },
-  { id: 'finance-manage', label: 'Tips & backup', workspaceTab: 'backup' },
+  { id: 'finance-manage', label: 'Tools & alerts', workspaceTab: 'backup' },
 ];
 
 function scrollTo(el: HTMLElement | null) {
