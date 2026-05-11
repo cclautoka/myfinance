@@ -115,6 +115,7 @@ Success response: JSON `{"ok":true}`.
 
 | Symptom | What to check |
 |---------|----------------|
+| **`{"message":"Branch Not Match"}`** on a URL like `/api/deploy/...` | That URL is a **deploy webhook**, not your website. Don’t open it in the browser as the “site.” In Dokploy, set the app’s **Git branch** to **`main`** (same as GitHub). Webhooks must **POST** with the matching branch (GitHub does this automatically); a manual browser visit is a **GET** and will often fail this check. |
 | 502 / blank page | Port mapping → container **8787**; build logs for failed `npm run build`. |
 | Site loads, test email fails | `RESEND_*` or `SMTP_*` + `NOTIFY_TO`; Resend: domain/sender verified. |
 | Browser console CORS on `/v1/notify` | Same host should avoid CORS; if you use a different API URL, set **`NOTIFY_CORS_ORIGINS`** to your exact UI origin (including `https://`). |
