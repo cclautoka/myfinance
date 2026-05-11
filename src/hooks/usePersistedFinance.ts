@@ -87,9 +87,9 @@ export function usePersistedFinance() {
   }, []);
 
   const reloadFromServer = useCallback(async () => {
-    const cfg = getServerStorageConfig();
+    const cfg = getServerStorageConfig({ force: true });
     if (!cfg.enabled) return { ok: false as const, error: 'Server storage not configured yet (URL + secret + household id).' };
-    const remote = await fetchServerFinanceState();
+    const remote = await fetchServerFinanceState({ force: true });
     if (!remote.ok) {
       if (remote.status === 404) {
         return { ok: false as const, error: 'No server data found for this household id yet.' };

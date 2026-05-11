@@ -198,7 +198,9 @@ const normalizeLoadedState = (base: FinanceState, parsed?: Partial<FinanceState>
 
 export const SERVER_CACHE_KEY = 'finance-server-cache-v1';
 
-export const getServerStorageConfig = (): {
+export const getServerStorageConfig = (
+  opts?: { force?: boolean },
+): {
   enabled: boolean;
   baseUrl: string;
   secret: string;
@@ -218,20 +220,23 @@ export const getServerStorageConfig = (): {
         : url.replace(/\/$/, '');
 
   const householdId = ensureNotifyRelayHouseholdId();
+  const ready = Boolean(url) && Boolean(cfg.secret) && Boolean(householdId);
   return {
-    enabled: Boolean(cfg.enabled) && Boolean(url) && Boolean(cfg.secret) && Boolean(householdId),
+    enabled: (opts?.force ? true : Boolean(cfg.enabled)) && ready,
     baseUrl,
     secret: cfg.secret,
     householdId,
   };
 };
 
-export const fetchServerFinanceState = async (): Promise<
+export const fetchServerFinanceState = async (
+  opts?: { force?: boolean },
+): Promise<
   | { ok: true; state: FinanceState; updatedAt: string }
   | { ok: false; status: number; error: string }
 > => {
   const base = defaultFinanceState();
-  const c = getServerStorageConfig();
+  const c = getServerStorageConfig(opts);
   if (!c.enabled) return { ok: false, status: 0, error: 'Server storage not configured' };
 
   const url = `${c.baseUrl}/v1/state?id=${encodeURIComponent(c.householdId)}`;
@@ -250,8 +255,9 @@ export const fetchServerFinanceState = async (): Promise<
 
 export const putServerFinanceState = async (
   state: FinanceState,
+  opts?: { force?: boolean },
 ): Promise<{ ok: true; updatedAt: string } | { ok: false; status: number; error: string }> => {
-  const c = getServerStorageConfig();
+  const c = getServerStorageConfig(opts);
   if (!c.enabled) return { ok: false, status: 0, error: 'Server storage not configured' };
   const url = `${c.baseUrl}/v1/state?id=${encodeURIComponent(c.householdId)}`;
   const res = await fetch(url, {
