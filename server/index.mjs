@@ -36,7 +36,7 @@ function splitRecipients(raw) {
     .filter(Boolean);
 }
 
-async function sendWithResend({ to, subject, text }) {
+async function sendWithResend({ to, subject, text, html }) {
   const key = process.env.RESEND_API_KEY;
   const from = process.env.RESEND_FROM;
   if (!key || !from) throw new Error('RESEND_API_KEY and RESEND_FROM must be set');
@@ -48,7 +48,7 @@ async function sendWithResend({ to, subject, text }) {
       Authorization: `Bearer ${key}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ from, to: toList, subject, text }),
+    body: JSON.stringify({ from, to: toList, subject, text, ...(html ? { html } : {}) }),
   });
   const body = await res.text();
   if (!res.ok) throw new Error(`Resend ${res.status}: ${body}`);
@@ -79,7 +79,7 @@ async function sendWithSmtp({ to, subject, text }) {
 }
 
 async function sendMail({ to, subject, text, html }) {
-  if (process.env.RESEND_API_KEY) return sendWithResend({ to, subject, text });
+  if (process.env.RESEND_API_KEY) return sendWithResend({ to, subject, text, html });
   const transport = createSmtpTransport();
   if (!transport) throw new Error('SMTP_HOST not configured');
   const from = process.env.MAIL_FROM ?? process.env.SMTP_USER;
