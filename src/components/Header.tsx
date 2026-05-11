@@ -18,6 +18,9 @@ export function Header({
           <p className="mt-1 max-w-xl text-sm leading-snug text-sage-700 dark:text-moss-subtle">
             Current-month metrics, archived months, worksheets, then planning tools—all local to this browser until you reset or export.
           </p>
+          <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-sage-500 dark:text-moss-muted">
+            Build {__BUILD_SHA__} · {new Date(__BUILD_TIME_ISO__).toLocaleString()}
+          </p>
         </div>
         <div className="flex items-center gap-2 rounded-full border border-sage-300 bg-sage-50 p-1 dark:border-moss-border dark:bg-moss-elevated">
           {(['system', 'light', 'dark'] as const).map((t) => (
