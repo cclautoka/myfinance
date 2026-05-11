@@ -28,17 +28,27 @@ function parseBearer(authHeader) {
   return m ? m[1].trim() : '';
 }
 
+function splitRecipients(raw) {
+  if (!raw) return [];
+  return String(raw)
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 async function sendWithResend({ to, subject, text }) {
   const key = process.env.RESEND_API_KEY;
   const from = process.env.RESEND_FROM;
   if (!key || !from) throw new Error('RESEND_API_KEY and RESEND_FROM must be set');
+  const toList = Array.isArray(to) ? to : splitRecipients(to);
+  if (toList.length === 0) throw new Error('No recipients configured');
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${key}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ from, to: [to], subject, text }),
+    body: JSON.stringify({ from, to: toList, subject, text }),
   });
   const body = await res.text();
   if (!res.ok) throw new Error(`Resend ${res.status}: ${body}`);
@@ -139,14 +149,14 @@ const publicDir = path.join(__dirname, 'public');
 const serveSpa = fs.existsSync(path.join(publicDir, 'index.html'));
 
 function pickRecipients(body) {
-  const envTo = notifyTo.trim();
+  const envTo = splitRecipients(notifyTo.trim());
   const list = Array.isArray(body?.to) ? body.to : [];
   const cleaned = list
     .filter((v) => typeof v === 'string')
     .map((s) => s.trim())
     .filter(Boolean)
     .slice(0, 5);
-  return cleaned.length ? cleaned.join(',') : envTo;
+  return cleaned.length ? cleaned : envTo;
 }
 
 function authOr401(request, reply) {
