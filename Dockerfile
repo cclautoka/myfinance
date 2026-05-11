@@ -14,6 +14,7 @@ COPY server/index.mjs ./
 COPY server/templates.mjs ./templates.mjs
 COPY server/snapshots.mjs ./snapshots.mjs
 COPY server/db.mjs ./db.mjs
+COPY server/reminders.mjs ./reminders.mjs
 COPY --from=frontend-build /web/dist ./public
 ENV NODE_ENV=production
 EXPOSE 8787

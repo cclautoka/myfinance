@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { buildChangeEmailTemplate, buildReminderEmailTemplate, renderEmailHtml, renderEmailText } from './templates.mjs';
 import { readSnapshot, writeSnapshot } from './snapshots.mjs';
 import { getDbEnabled, getHouseholdIdFromRequest, initDbIfNeeded, readState, writeState } from './db.mjs';
+import { computeReminderEmailPayload } from './reminders.mjs';
 
 const port = Number(process.env.PORT ?? 8787);
 const secret = process.env.NOTIFY_API_SECRET ?? '';
@@ -241,64 +242,34 @@ fastify.post('/v1/reminders/send', async (request, reply) => {
   if (!id) return reply.code(400).send({ error: 'Body must include "id" string.' });
   const snap = await readSnapshot(id).catch(() => null);
   if (!snap?.data) return reply.code(404).send({ error: 'No snapshot found for id.' });
-
-  // Minimal reminder logic (monthly dueDay only): essentials + debts.
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth();
-  const mk = `${y}-${String(m + 1).padStart(2, '0')}`;
-  const today = new Date(y, m, now.getDate());
-  const daysLead = Number.isFinite(Number(body?.leadDays)) ? Math.max(0, Math.min(14, Number(body.leadDays))) : 3;
-  const leadEdge = new Date(today);
-  leadEdge.setDate(leadEdge.getDate() + daysLead);
-
-  const billsPaid = snap.data.billsPaid ?? {};
-  const isPaidForMonth = (idKey) => Array.isArray(billsPaid[idKey]) && billsPaid[idKey].includes(mk);
-
-  const asMonthly = (row) =>
-    row && typeof row === 'object' && row.dueDay && typeof row.dueDay === 'number'
-      ? new Date(y, m, Math.max(1, Math.min(31, row.dueDay)))
-      : null;
-
-  const dueSoon = [];
-  const overdue = [];
-
-  for (const e of snap.data.essentials ?? []) {
-    if (e?.cadence !== 'month') continue;
-    const due = asMonthly(e);
-    if (!due) continue;
-    if (isPaidForMonth(e.id)) continue;
-    const rec = { name: e.name ?? e.id, amount: Number(e.amount ?? 0), dueDate: due.toISOString().slice(0, 10) };
-    if (due > today && due <= leadEdge) dueSoon.push(rec);
-    if (due < today) overdue.push(rec);
-  }
-
-  for (const d of snap.data.debts ?? []) {
-    const due = asMonthly(d);
-    if (!due) continue;
-    if (isPaidForMonth(d.id)) continue;
-    const rec = { name: d.name ?? d.id, amount: Number(d.monthlyPayment ?? 0), dueDate: due.toISOString().slice(0, 10) };
-    if (due > today && due <= leadEdge) dueSoon.push(rec);
-    if (due < today) overdue.push(rec);
+  const { monthKey: mk, dueSoon, overdue, counts } = computeReminderEmailPayload(snap.data, new Date());
+  if (counts.dueSoon === 0 && counts.overdue === 0) {
+    // Quiet days: do not email.
+    return reply.send({ ok: true, skipped: true, counts });
   }
 
   const template = buildReminderEmailTemplate({ monthKey: mk, dueSoon, overdue });
+  const footerHint =
+    counts.overdue > 0
+      ? 'Overdue items are past your grace window. Open the app and mark handled to keep reminders quiet.'
+      : 'Open the app to mark bills paid and keep reminders quiet.';
   const html = renderEmailHtml({
     title: template.title,
     preheader: template.preheader,
     sections: template.sections,
-    footerHint: 'Open the app to mark bills paid and keep reminders quiet.',
+    footerHint,
   });
   const text = renderEmailText({
     title: template.title,
     preheader: template.preheader,
     sections: template.sections,
+    footerHint,
   });
 
   try {
     const to = pickRecipients(body);
     const result = await sendMail({ to, subject: template.subject.slice(0, 200), text, html });
-    return reply.send({ ok: true, ...result, counts: { dueSoon: dueSoon.length, overdue: overdue.length } });
+    return reply.send({ ok: true, ...result, counts });
   } catch (e) {
     request.log.error(e);
     return reply.code(502).send({ error: 'Failed to send email' });

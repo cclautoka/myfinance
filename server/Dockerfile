@@ -8,6 +8,7 @@ COPY index.mjs ./
 COPY templates.mjs ./
 COPY snapshots.mjs ./
 COPY db.mjs ./
+COPY reminders.mjs ./
 
 ENV NODE_ENV=production
 EXPOSE 8787
