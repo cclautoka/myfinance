@@ -91,6 +91,7 @@ export default function App() {
     setEssentials,
     setDebts,
     resetAll,
+    reloadFromServer,
   } = usePersistedFinance();
 
   const monthOpeningBlocked = requiresMonthCashflowOpening(state);
@@ -313,7 +314,7 @@ export default function App() {
                   <strong className="text-sage-900 dark:text-moss-fg">Paycheque</strong> logs for husband and wife are in{' '}
                   <strong className="text-sage-900 dark:text-moss-fg">Household → Your numbers</strong>. Guidance cards live in the Guidance band above.
                 </p>
-                <NotifyRelaySettings state={state} />
+                <NotifyRelaySettings state={state} onReloadFromServer={reloadFromServer} />
                 <footer className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border-2 border-dashed border-sage-400/80 bg-white/90 p-5 text-sm font-medium leading-relaxed text-sage-900 dark:border-moss-border dark:bg-moss-surface dark:text-moss-subtle">
                   <p className="max-w-xl">
                     Saved only on this device. Clear site data wipes it — grab a CSV from Past months anytime. Need the walk-through again?

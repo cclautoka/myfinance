@@ -48,7 +48,9 @@ function hashFinanceState(s: FinanceState): string {
 export function usePersistedFinance() {
   const [state, setState] = useState<FinanceState>(() => loadFinanceState());
   const stateRef = useRef(state);
-  stateRef.current = state;
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   useEffect(() => {
     saveFinanceState(state);
@@ -82,6 +84,20 @@ export function usePersistedFinance() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  const reloadFromServer = useCallback(async () => {
+    const cfg = getServerStorageConfig();
+    if (!cfg.enabled) return { ok: false as const, error: 'Server storage not configured yet (URL + secret + household id).' };
+    const remote = await fetchServerFinanceState();
+    if (!remote.ok) {
+      if (remote.status === 404) {
+        return { ok: false as const, error: 'No server data found for this household id yet.' };
+      }
+      return { ok: false as const, error: remote.error || 'Failed to load server data.' };
+    }
+    setState(remote.state);
+    return { ok: true as const, updatedAt: remote.updatedAt };
   }, []);
 
   /** Server persistence (debounced) — local cache is written in saveFinanceState above. */
@@ -369,5 +385,6 @@ export function usePersistedFinance() {
     setMonthSpendableCarry,
     completeMonthCashflowOpening,
     resetAll,
+    reloadFromServer,
   };
 }

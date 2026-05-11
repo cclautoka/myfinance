@@ -16,28 +16,36 @@ import {
 } from '../utils/notifyRelay';
 import type { FinanceState } from '../types/finance';
 
-export function NotifyRelaySettings({ state }: { state: FinanceState }) {
-  const [cfg, setCfg] = useState<NotifyRelayConfig>(() =>
-    typeof window !== 'undefined'
-      ? { ...readNotifyRelayConfig(), householdId: ensureNotifyRelayHouseholdId() }
-      : { enabled: false, url: '', secret: '', husbandEmail: '', wifeEmail: '', householdId: '' },
-  );
+export function NotifyRelaySettings({
+  state,
+  onReloadFromServer,
+}: {
+  state: FinanceState;
+  onReloadFromServer?: () => Promise<{ ok: true; updatedAt: string } | { ok: false; error: string }>;
+}) {
+  const [cfg, setCfg] = useState<NotifyRelayConfig>(() => {
+    if (typeof window === 'undefined') {
+      return { enabled: false, url: '', secret: '', husbandEmail: '', wifeEmail: '', householdId: '' };
+    }
+    const base = { ...readNotifyRelayConfig(), householdId: ensureNotifyRelayHouseholdId() };
+    const prefill = applySetupFromUrlHash();
+    return prefill ? { ...base, ...prefill } : base;
+  });
   const [householdDraft, setHouseholdDraft] = useState(() => cfg.householdId);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return applySetupFromUrlHash()
+      ? 'Setup link applied. Paste the shared secret, then load from server.'
+      : null;
+  });
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const prefill = applySetupFromUrlHash();
-    if (!prefill) return;
-    const next = { ...cfg, ...prefill };
-    setCfg(next);
-    setHouseholdDraft(next.householdId);
-    writeNotifyRelayConfig(next);
-    setMsg('Setup link applied. Paste the shared secret, then refresh to load server data.');
     // Remove hash so you don’t re-apply on every refresh / accidentally share again.
-    history.replaceState(null, '', window.location.pathname + window.location.search);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (window.location.hash.includes('setup=1')) {
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
   }, []);
 
   const persist = useCallback((next: NotifyRelayConfig) => {
@@ -100,9 +108,23 @@ export function NotifyRelaySettings({ state }: { state: FinanceState }) {
 
       <div className="mt-4 space-y-3">
         <div>
-          <label className="text-xs font-semibold uppercase tracking-wide text-sage-600 dark:text-moss-muted">
-            Notify API URL
-          </label>
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <label className="text-xs font-semibold uppercase tracking-wide text-sage-600 dark:text-moss-muted">
+              Notify API URL
+            </label>
+            {shareLink ? (
+              <button
+                type="button"
+                className="text-xs font-bold text-teal-800 underline underline-offset-2 hover:text-teal-900 dark:text-teal-300 dark:hover:text-teal-200"
+                onClick={() => {
+                  void navigator.clipboard?.writeText(shareLink);
+                  setMsg('Share link copied (no secrets included).');
+                }}
+              >
+                Copy setup link
+              </button>
+            ) : null}
+          </div>
           <input
             className="mt-1 w-full rounded-lg border border-sage-300 bg-white px-3 py-2 text-sm dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
             placeholder="/v1/notify (same host) or https://notify.yourdomain.com/v1/notify"
@@ -110,6 +132,16 @@ export function NotifyRelaySettings({ state }: { state: FinanceState }) {
             onChange={(e) => persist({ ...cfg, url: e.target.value })}
             autoComplete="off"
           />
+          <p className="mt-1 text-[11px] leading-snug text-sage-600 dark:text-moss-muted">
+            {shareLink ? (
+              <>
+                Setup link fills <strong>URL</strong> + <strong>household id</strong> only (never the secret).{' '}
+                <span className="font-semibold">Paste the secret on the new device, then load from server.</span>
+              </>
+            ) : (
+              <>Tip: enter URL + household id first to unlock the setup link.</>
+            )}
+          </p>
         </div>
         <div>
           <label className="text-xs font-semibold uppercase tracking-wide text-sage-600 dark:text-moss-muted">
@@ -187,14 +219,34 @@ export function NotifyRelaySettings({ state }: { state: FinanceState }) {
           <label className="text-xs font-semibold uppercase tracking-wide text-sage-600 dark:text-moss-muted">
             Shared secret (same as NOTIFY_API_SECRET on server)
           </label>
-          <input
-            type="password"
-            className="mt-1 w-full rounded-lg border border-sage-300 bg-white px-3 py-2 text-sm dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
-            placeholder="Long random string — never share publicly"
-            value={cfg.secret}
-            onChange={(e) => persist({ ...cfg, secret: e.target.value })}
-            autoComplete="new-password"
-          />
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <input
+              type="password"
+              className="min-w-0 flex-1 rounded-lg border border-sage-300 bg-white px-3 py-2 text-sm dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
+              placeholder="Long random string — never share publicly"
+              value={cfg.secret}
+              onChange={(e) => persist({ ...cfg, secret: e.target.value })}
+              autoComplete="new-password"
+            />
+            <button
+              type="button"
+              className="btn-secondary btn-secondary-sm font-bold"
+              disabled={busy || !onReloadFromServer}
+              onClick={async () => {
+                if (!onReloadFromServer) return;
+                setBusy(true);
+                setMsg(null);
+                try {
+                  const r = await onReloadFromServer();
+                  setMsg(r.ok ? `Loaded from server (updated ${r.updatedAt}).` : r.error);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              {busy ? 'Loading…' : 'Load from server'}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -210,24 +262,7 @@ export function NotifyRelaySettings({ state }: { state: FinanceState }) {
         >
           Preview template
         </a>
-        <button
-          type="button"
-          className="btn-secondary btn-secondary-sm font-bold"
-          disabled={!shareLink}
-          onClick={() => {
-            if (!shareLink) return;
-            void navigator.clipboard?.writeText(shareLink);
-            setMsg('Share link copied (no secrets included).');
-          }}
-        >
-          Copy share link
-        </button>
       </div>
-      {shareLink ? (
-        <p className="mt-2 break-all text-[11px] text-sage-600 dark:text-moss-muted">
-          Share link (no secrets): <span className="font-semibold">{shareLink}</span>
-        </p>
-      ) : null}
 
       {msg ? (
         <p className="mt-3 text-sm font-medium text-sage-800 dark:text-moss-subtle" role="status">
