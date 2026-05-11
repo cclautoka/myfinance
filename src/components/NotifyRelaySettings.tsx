@@ -20,6 +20,7 @@ export function NotifyRelaySettings({ state }: { state: FinanceState }) {
       ? { ...readNotifyRelayConfig(), householdId: ensureNotifyRelayHouseholdId() }
       : { enabled: false, url: '', secret: '', husbandEmail: '', wifeEmail: '', householdId: '' },
   );
+  const [householdDraft, setHouseholdDraft] = useState(() => cfg.householdId);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -90,9 +91,14 @@ export function NotifyRelaySettings({ state }: { state: FinanceState }) {
             Household id (used for server storage & reminders)
           </label>
           <div className="mt-1 flex flex-wrap items-center gap-2">
-            <code className="max-w-full flex-1 overflow-x-auto rounded-lg border border-sage-200 bg-sage-50 px-3 py-2 text-xs text-sage-800 dark:border-moss-border dark:bg-moss-bg dark:text-moss-subtle">
-              {cfg.householdId || '—'}
-            </code>
+            <input
+              className="min-w-0 flex-1 rounded-lg border border-sage-300 bg-white px-3 py-2 text-xs font-semibold tracking-wide text-sage-800 dark:border-moss-border dark:bg-moss-surface dark:text-moss-subtle"
+              value={householdDraft}
+              onChange={(e) => setHouseholdDraft(e.target.value)}
+              placeholder="Paste the shared household id"
+              autoComplete="off"
+              inputMode="text"
+            />
             <button
               type="button"
               className="btn-secondary btn-secondary-sm font-bold"
@@ -104,7 +110,25 @@ export function NotifyRelaySettings({ state }: { state: FinanceState }) {
             >
               Copy
             </button>
+            <button
+              type="button"
+              className="btn-secondary btn-secondary-sm font-bold"
+              onClick={() => {
+                const next = householdDraft.trim();
+                if (!/^[a-f0-9]{16,64}$/i.test(next)) {
+                  setMsg('Household id should be hex (16–64 chars).');
+                  return;
+                }
+                persist({ ...cfg, householdId: next });
+                setMsg('Household id saved on this device. Refresh to load server data.');
+              }}
+            >
+              Use
+            </button>
           </div>
+          <p className="mt-1 text-[11px] leading-snug text-sage-600 dark:text-moss-muted">
+            To see the same data on another phone/laptop, paste the household id from your primary device and tap <strong>Use</strong>.
+          </p>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
