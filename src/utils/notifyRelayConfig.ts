@@ -60,3 +60,28 @@ export function ensureNotifyRelayHouseholdId(): string {
     return '';
   }
 }
+
+export function buildShareSetupLink(input: {
+  baseUrl: string;
+  notifyUrl: string;
+  householdId: string;
+}): string {
+  const { baseUrl, notifyUrl, householdId } = input;
+  const u = new URL(baseUrl);
+  // Never include secrets or recipient emails in links.
+  u.hash = `setup=1&notify=${encodeURIComponent(notifyUrl)}&hid=${encodeURIComponent(householdId)}`;
+  return u.toString();
+}
+
+export function applySetupFromUrlHash(): Partial<NotifyRelayConfig> | null {
+  if (typeof window === 'undefined') return null;
+  const h = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
+  if (!h.includes('setup=1')) return null;
+  const params = new URLSearchParams(h);
+  if (params.get('setup') !== '1') return null;
+  const notify = (params.get('notify') ?? '').trim();
+  const hid = (params.get('hid') ?? '').trim();
+  if (!notify || !hid) return null;
+  if (!/^[a-f0-9]{16,64}$/i.test(hid)) return null;
+  return { url: decodeURIComponent(notify), householdId: decodeURIComponent(hid) };
+}

@@ -1,5 +1,7 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  applySetupFromUrlHash,
+  buildShareSetupLink,
   ensureNotifyRelayHouseholdId,
   readNotifyRelayConfig,
   writeNotifyRelayConfig,
@@ -24,6 +26,20 @@ export function NotifyRelaySettings({ state }: { state: FinanceState }) {
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const prefill = applySetupFromUrlHash();
+    if (!prefill) return;
+    const next = { ...cfg, ...prefill };
+    setCfg(next);
+    setHouseholdDraft(next.householdId);
+    writeNotifyRelayConfig(next);
+    setMsg('Setup link applied. Paste the shared secret, then refresh to load server data.');
+    // Remove hash so you don’t re-apply on every refresh / accidentally share again.
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const persist = useCallback((next: NotifyRelayConfig) => {
     setCfg(next);
     writeNotifyRelayConfig(next);
@@ -47,6 +63,15 @@ export function NotifyRelaySettings({ state }: { state: FinanceState }) {
         : r.error,
     );
   }, [state]);
+
+  const shareLink = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    const base = window.location.origin + window.location.pathname;
+    const notifyUrl = (cfg.url ?? '').trim();
+    const hid = (cfg.householdId ?? '').trim();
+    if (!notifyUrl || !hid) return '';
+    return buildShareSetupLink({ baseUrl: base, notifyUrl, householdId: hid });
+  }, [cfg.householdId, cfg.url]);
 
   return (
     <div className="max-w-3xl rounded-2xl border border-sage-200/90 bg-white/95 p-5 text-sage-900 shadow-sm dark:border-moss-border dark:bg-moss-elevated dark:text-moss-fg">
@@ -185,7 +210,24 @@ export function NotifyRelaySettings({ state }: { state: FinanceState }) {
         >
           Preview template
         </a>
+        <button
+          type="button"
+          className="btn-secondary btn-secondary-sm font-bold"
+          disabled={!shareLink}
+          onClick={() => {
+            if (!shareLink) return;
+            void navigator.clipboard?.writeText(shareLink);
+            setMsg('Share link copied (no secrets included).');
+          }}
+        >
+          Copy share link
+        </button>
       </div>
+      {shareLink ? (
+        <p className="mt-2 break-all text-[11px] text-sage-600 dark:text-moss-muted">
+          Share link (no secrets): <span className="font-semibold">{shareLink}</span>
+        </p>
+      ) : null}
 
       {msg ? (
         <p className="mt-3 text-sm font-medium text-sage-800 dark:text-moss-subtle" role="status">
