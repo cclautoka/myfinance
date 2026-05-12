@@ -38,7 +38,7 @@ export function FinanceQuickNav({
       id="finance-quick-nav"
       data-tour={dataTour}
       aria-label="Page sections"
-      className="sticky top-[4.85rem] z-30 border-b border-sage-300/60 bg-gradient-to-r from-emerald-50/50 via-white to-violet-50/45 py-3.5 backdrop-blur-md dark:border-moss-border dark:from-emerald-950/18 dark:via-moss-bg/95 dark:to-violet-950/22 sm:top-[5.15rem]"
+      className="sticky top-[4.85rem] z-30 hidden border-b border-sage-300/60 bg-gradient-to-r from-emerald-50/50 via-white to-violet-50/45 py-3.5 backdrop-blur-md dark:border-moss-border dark:from-emerald-950/18 dark:via-moss-bg/95 dark:to-violet-950/22 lg:block sm:top-[5.15rem]"
     >
       <div className="mx-auto flex max-w-6xl flex-wrap gap-2 px-4 sm:px-6 xl:max-w-[96rem]">
         <span className="mr-1 self-center text-[11px] font-semibold uppercase tracking-[0.14em] text-sage-700 dark:text-moss-muted">

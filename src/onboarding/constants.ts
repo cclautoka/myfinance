@@ -16,9 +16,9 @@ export const ONBOARDING_STEPS: TourStepSpec[] = [
     scrollBlock: 'start',
   },
   {
-    target: 'tour-quick-nav',
+    target: 'tour-nav-shortcuts',
     title: 'Section shortcuts',
-    body: 'Dashboard, surprise costs, Guidance, then worksheet tabs — Past months, Your numbers (auto Paycheque logs per earner), Plan & bills, and Tools & alerts (email notifications).',
+    body: 'On your phone, use the bottom bar: Home, Shocks, Tips, and More for worksheets. On a wide screen, the sticky pill row under the header does the same — Dashboard, surprises, Guidance, and workspace tabs.',
     scrollBlock: 'nearest',
   },
   {

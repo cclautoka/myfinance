@@ -1,5 +1,17 @@
 const MS_DAY = 86400_000;
 
+/**
+ * First calendar month bill reminders consider (must match `HISTORY_TRACKING_STARTED_MONTH_KEY` in `src/data/defaults.ts`).
+ * Occurrences before this month are historical placeholders only — not included in email reminders.
+ */
+const HISTORY_TRACKING_STARTED_MONTH_KEY = '2026-05';
+
+function billTrackingEarliestDueDate() {
+  const m = /^(\d{4})-(\d{2})$/.exec(HISTORY_TRACKING_STARTED_MONTH_KEY);
+  if (!m) return new Date(2026, 4, 1);
+  return new Date(Number(m[1]), Number(m[2]) - 1, 1);
+}
+
 function startOfLocalDay(d) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
@@ -130,11 +142,13 @@ function buildTimeline(state, monthsAhead = 2, ref = new Date()) {
   const y0 = ref.getFullYear();
   const m0 = ref.getMonth();
   const lookbackMonths = 6;
+  const trackingMonthStart = billTrackingEarliestDueDate().getTime();
 
   for (let i = -lookbackMonths; i < monthsAhead; i++) {
     const dt = new Date(y0, m0 + i, 1);
     const year = dt.getFullYear();
     const monthIndex = dt.getMonth();
+    if (new Date(year, monthIndex, 1).getTime() < trackingMonthStart) continue;
 
     for (const e of state.essentials ?? []) {
       for (const inst of essentialInstancesForMonth(e, year, monthIndex)) {

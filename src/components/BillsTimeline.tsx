@@ -79,14 +79,18 @@ export function BillsTimeline({
 
   return (
     <div id="bills-timeline" className="min-h-0 min-w-0">
-      <HoverTip content={billsTimelineTip()} className="flex min-h-0 min-w-0 flex-col">
-        <div className="min-h-0 min-w-0">
-          <Card
-            accent="teal"
-            className="min-w-0"
-            title="Bill calendar & checkmarks"
-            subtitle="Mark handled with the real amount paid — we keep plan vs actual on each line. Bookkeeping only, not auto-pay."
-          >
+      <div className="min-h-0 min-w-0">
+        <Card
+          accent="teal"
+          className="min-w-0"
+          title="Bill calendar & checkmarks"
+          subtitle="Mark handled with the real amount paid — we keep plan vs actual on each line. Bookkeeping only, not auto-pay."
+          titleAside={
+            <HoverTip content={billsTimelineTip()} interaction="tap" layout="inline-end" className="w-auto max-w-[min(100%,18rem)]">
+              <span className="sr-only">About this bill calendar</span>
+            </HoverTip>
+          }
+        >
             {overdueCount > 0 && (
               <div
                 role="alert"
@@ -150,9 +154,8 @@ export function BillsTimeline({
                 );
               })}
             </ul>
-          </Card>
-        </div>
-      </HoverTip>
+        </Card>
+      </div>
     </div>
   );
 }

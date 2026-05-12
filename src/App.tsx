@@ -15,6 +15,7 @@ import { IncomeLogPanel } from './components/IncomeLogPanel';
 import { LifeThisMonth } from './components/LifeThisMonth';
 import { HistoryMonthBanner } from './components/HistoryMonthBanner';
 import { FinanceQuickNav } from './components/layout/FinanceQuickNav';
+import { MobileBottomNav } from './components/layout/MobileBottomNav';
 import { FinanceWorkspaceShell, type WorkspaceTabSelection } from './components/layout/FinanceWorkspaceShell';
 import { PageSection } from './components/layout/PageSection';
 import { MonthCashflowOpeningModal } from './components/MonthCashflowOpeningModal';
@@ -111,6 +112,21 @@ export default function App() {
     return () => mq.removeEventListener('change', handler);
   }, [state.theme]);
 
+  /** Status bar tint on mobile (matches light/dark body). */
+  useEffect(() => {
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (!(meta instanceof HTMLMetaElement)) return;
+    const light = '#f6f7f4';
+    const dark = '#0b0c0a';
+    const sync = () => {
+      meta.content = document.documentElement.classList.contains('dark') ? dark : light;
+    };
+    sync();
+    const obs = new MutationObserver(sync);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => obs.disconnect();
+  }, []);
+
   const openTourReplay = () => {
     try {
       localStorage.removeItem(ONBOARDING_STORAGE_KEY);
@@ -121,7 +137,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-svh pb-16">
+    <div className="min-h-svh pb-[max(4rem,calc(4.5rem+env(safe-area-inset-bottom,0px)))] lg:pb-16">
       {!monthOpeningBlocked ? (
         <TimelineColumnSpotlight
           open={timelineColumnSpotlight}
@@ -141,6 +157,7 @@ export default function App() {
       >
       <Header theme={state.theme} onTheme={setTheme} />
       <FinanceQuickNav dataTour="tour-quick-nav" onWorkspaceTab={setWorkspaceTab} />
+      {!monthOpeningBlocked ? <MobileBottomNav onWorkspaceTab={setWorkspaceTab} /> : null}
       <main className="mx-auto max-w-7xl space-y-24 px-4 py-10 sm:px-6 xl:max-w-[96rem]">
         <PageSection
           id="finance-dashboard"
@@ -151,8 +168,8 @@ export default function App() {
           accent="emerald"
           eyebrow="Live month"
         >
-          <div className="relative isolate flex min-w-0 flex-col gap-10">
-            <div className="flex min-w-0 flex-col gap-8 lg:ml-[calc((100%-4rem)*3/12+2rem)] lg:mr-[calc((100%-4rem)*3/12+2rem)] lg:w-[calc((100%-4rem)*6/12)]">
+          <div className="relative isolate flex min-w-0 flex-col gap-10 lg:block">
+            <div className="order-3 flex min-w-0 flex-col gap-8 lg:order-none lg:ml-[calc((100%-4rem)*3/12+2rem)] lg:mr-[calc((100%-4rem)*3/12+2rem)] lg:w-[calc((100%-4rem)*6/12)]">
               <DashboardOverview state={state} />
               <DebtSnowball state={state} compact />
               <BudgetSurplusPanel
@@ -172,17 +189,17 @@ export default function App() {
               <LifeThisMonth state={state} onAddExtra={addExtraIncome} onRemoveExtra={removeExtraIncome} />
             </div>
 
-            <aside className="min-w-0 lg:absolute lg:left-0 lg:top-0 lg:z-[1] lg:h-full lg:w-[calc((100%-4rem)*3/12)] lg:overflow-hidden">
-              <div className="scrollbar-app h-auto min-h-0 w-full min-w-0 lg:h-full lg:overflow-x-hidden lg:overflow-y-auto lg:overscroll-contain">
+            <aside className="order-1 min-w-0 lg:order-none lg:absolute lg:left-0 lg:top-0 lg:z-[1] lg:h-full lg:w-[calc((100%-4rem)*3/12)] lg:overflow-hidden">
+              <div className="scrollbar-app h-auto min-h-0 w-full min-w-0">
                 <UpcomingBillsStrip state={state} onOpenTimeline={scrollToBills} />
               </div>
             </aside>
 
             <aside
               id={DASHBOARD_BILLS_COLUMN_ID}
-              className="min-w-0 lg:absolute lg:right-0 lg:top-0 lg:z-[1] lg:h-full lg:w-[calc((100%-4rem)*3/12)] lg:overflow-hidden"
+              className="order-2 min-w-0 lg:order-none lg:absolute lg:right-0 lg:top-0 lg:z-[1] lg:h-full lg:w-[calc((100%-4rem)*3/12)] lg:overflow-hidden"
             >
-              <div className="scrollbar-app h-auto min-h-0 w-full min-w-0 lg:h-full lg:overflow-x-hidden lg:overflow-y-auto lg:overscroll-contain">
+              <div className="scrollbar-app h-auto min-h-0 w-full min-w-0">
                 <BillsTimeline state={state} onTogglePaid={toggleBillPaid} />
               </div>
             </aside>

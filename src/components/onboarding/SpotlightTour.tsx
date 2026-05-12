@@ -24,6 +24,27 @@ function persistDismiss() {
   }
 }
 
+/** Bottom bar is `position: fixed` — `offsetParent` is often null; use geometry instead. */
+function isTourTargetVisible(el: HTMLElement): boolean {
+  const r = el.getBoundingClientRect();
+  return r.width > 8 && r.height > 8;
+}
+
+function queryTourElement(target: string): HTMLElement | null {
+  if (target === 'tour-nav-shortcuts') {
+    const wide = typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches;
+    const primary = wide ? 'tour-quick-nav' : 'tour-bottom-nav';
+    const secondary = wide ? 'tour-bottom-nav' : 'tour-quick-nav';
+    for (const key of [primary, secondary]) {
+      const e = document.querySelector(`[data-tour="${key}"]`);
+      if (e instanceof HTMLElement && isTourTargetVisible(e)) return e;
+    }
+    return null;
+  }
+  const el = document.querySelector(`[data-tour="${target}"]`);
+  return el instanceof HTMLElement ? el : null;
+}
+
 function computePopoverStyle(hole: {
   top: number;
   left: number;
@@ -101,8 +122,8 @@ export function SpotlightTour() {
       });
       return;
     }
-    const el = document.querySelector(`[data-tour="${step.target}"]`);
-    if (!el || !(el instanceof HTMLElement)) {
+    const el = queryTourElement(step.target);
+    if (!el) {
       setHole(null);
       setPopoverStyle({
         position: 'fixed',
@@ -141,9 +162,9 @@ export function SpotlightTour() {
     if (!visible) return;
     const step = ONBOARDING_STEPS[stepIndex];
     if (!step) return;
-    const el = document.querySelector(`[data-tour="${step.target}"]`);
-    if (el instanceof HTMLElement) {
-      if (step.target === 'tour-quick-nav') {
+    const el = queryTourElement(step.target);
+    if (el) {
+      if (step.target === 'tour-nav-shortcuts' && window.matchMedia('(min-width: 1024px)').matches) {
         window.scrollTo({ top: 0, behavior: stepIndex <= 1 ? 'auto' : 'smooth' });
       }
       const block = step.scrollBlock ?? 'center';
@@ -175,7 +196,7 @@ export function SpotlightTour() {
     window.addEventListener('resize', queueHole);
     const ro =
       typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => queueHole()) : null;
-    const observed = document.querySelector(`[data-tour="${ONBOARDING_STEPS[stepIndex]?.target}"]`);
+    const observed = queryTourElement(ONBOARDING_STEPS[stepIndex]?.target ?? '');
     if (ro && observed instanceof HTMLElement) ro.observe(observed);
     return () => {
       cancelAnimationFrame(raf);

@@ -65,7 +65,7 @@ export function FinanceWorkspaceShell({
         <div
           role="tablist"
           aria-label="Archive and planners"
-          className="flex flex-wrap items-center gap-2"
+          className="-mx-1 flex flex-nowrap items-center gap-2 overflow-x-auto overscroll-x-contain pb-1 [-ms-overflow-style:none] [scrollbar-width:none] snap-x snap-mandatory lg:flex-wrap lg:overflow-visible lg:pb-0 lg:snap-none [&::-webkit-scrollbar]:hidden"
         >
           {TAB_DEF.map(({ id, label }) => {
             const selected = tab === id;
@@ -76,7 +76,7 @@ export function FinanceWorkspaceShell({
                 role="tab"
                 id={`workspace-tab-${id}`}
                 aria-selected={selected}
-                className={`rounded-xl border px-4 py-2.5 text-sm font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-moss-bg ${
+                className={`shrink-0 snap-start rounded-xl border px-4 py-2.5 text-sm font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-moss-bg ${
                   selected ? workspaceTabSelected : workspaceTabIdle
                 }`}
                 onClick={() => onTabChange(id)}

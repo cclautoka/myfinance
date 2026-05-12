@@ -66,8 +66,8 @@ function MetricCard({
 
 function MetricWithTip({ tip, children }: { tip: ReactNode; children: ReactNode }) {
   return (
-    <HoverTip content={tip} className="min-w-0 w-full">
-      {children}
+    <HoverTip content={tip} interaction="auto" layout="corner" className="min-w-0 w-full">
+      <MetricCard>{children}</MetricCard>
     </HoverTip>
   );
 }
@@ -114,7 +114,7 @@ export function DashboardOverview({ state }: { state: FinanceState }) {
           Financial snapshot
         </h2>
         <p className="mx-auto mt-4 max-w-lg text-center text-sm leading-relaxed text-sage-100/95">
-          Hover or Tab a metric for definitions. Planned amounts follow{' '}
+          Hover or Tab a metric for definitions (tap <span className="font-semibold">i</span> on touch). Planned amounts follow{' '}
           <span className="font-medium text-white underline decoration-teal-300/75 underline-offset-2">Income & recurring expenses</span>
           {' · '}posted pay follows deposits you record this month.
         </p>

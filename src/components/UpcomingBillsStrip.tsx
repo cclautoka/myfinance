@@ -81,19 +81,24 @@ export function UpcomingBillsStrip({
           </div>
         )}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-sage-200/80 pb-3 dark:border-moss-border">
-          <div>
+          <div className="min-w-0 flex-1">
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-sage-800 dark:text-moss-muted">
               Next bills
             </p>
             <p className="mt-0.5 text-sm font-semibold text-sage-800 dark:text-moss-subtle">
-              Skips anything you already marked paid. Hover for timing rules.
+              Skips anything you already marked paid. Tap <span className="font-bold">i</span> for timing rules.
             </p>
           </div>
-          {onOpenTimeline && (
-            <button type="button" onClick={onOpenTimeline} className="btn-primary px-4 py-2 text-xs">
-              Full timeline
-            </button>
-          )}
+          <div className="flex shrink-0 items-center gap-2">
+            <HoverTip content={upcomingStripTip()} interaction="tap" layout="inline-end" className="w-auto">
+              <span className="sr-only">About this strip</span>
+            </HoverTip>
+            {onOpenTimeline && (
+              <button type="button" onClick={onOpenTimeline} className="btn-primary px-4 py-2 text-xs">
+                Full timeline
+              </button>
+            )}
+          </div>
         </div>
         <ul className="mt-3 divide-y divide-sage-200/80 dark:divide-moss-border">
           {next.map((b) => {
@@ -130,9 +135,5 @@ export function UpcomingBillsStrip({
       </div>
     );
 
-  return (
-    <HoverTip content={upcomingStripTip()} className="flex min-h-0 min-w-0 flex-col">
-      <div className="min-h-0 min-w-0">{inner}</div>
-    </HoverTip>
-  );
+  return <div className="min-h-0 min-w-0">{inner}</div>;
 }
