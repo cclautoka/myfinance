@@ -24,7 +24,7 @@ import { billPaymentKey } from '../utils/billsTimeline';
 import { applyAutoScheduledPayLogs } from '../utils/autoScheduledPayLog';
 import { surplusSweepRoomRemaining } from '../utils/budgetSurplus';
 import {
-  buildFinanceChangeSummary,
+  buildSaveEmailDigest,
   buildSnapshotForReminders,
   pocketLeftSoFar,
   postNotifyRelay,
@@ -327,25 +327,49 @@ export function usePersistedFinance() {
   /** Optional: POST summary to self-hosted notify API (Dokploy) ~60s after last local change. */
   const notifyDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const notifyBaselineRef = useRef<string | null>(null);
+  const prevStateRef = useRef(state);
+  const notifyWindowFromRef = useRef<FinanceState | null>(null);
+
   useEffect(() => {
     const h = hashFinanceState(state);
+    const prev = prevStateRef.current;
+
     if (notifyBaselineRef.current === null) {
       notifyBaselineRef.current = h;
+      prevStateRef.current = state;
       return;
     }
-    if (notifyBaselineRef.current === h) return;
-    notifyBaselineRef.current = h; // new snapshot — arm debounced notify
+    if (notifyBaselineRef.current === h) {
+      prevStateRef.current = state;
+      return;
+    }
 
+    const hadTimer = notifyDebounceRef.current !== null;
     if (notifyDebounceRef.current !== null) clearTimeout(notifyDebounceRef.current);
+    if (!hadTimer) {
+      try {
+        notifyWindowFromRef.current = structuredClone(prev);
+      } catch {
+        notifyWindowFromRef.current = prev;
+      }
+    }
+    notifyBaselineRef.current = h;
+
     notifyDebounceRef.current = setTimeout(() => {
       notifyDebounceRef.current = null;
       const cfg = readNotifyRelayConfig();
-      if (!cfg.enabled || !cfg.url || !cfg.secret) return;
+      if (!cfg.enabled || !cfg.url || !cfg.secret) {
+        notifyWindowFromRef.current = null;
+        return;
+      }
       const latest = stateRef.current;
-      const summary = buildFinanceChangeSummary(latest);
+      const from = notifyWindowFromRef.current ?? prev;
+      notifyWindowFromRef.current = null;
+
+      const digest = buildSaveEmailDigest(from, latest);
       const mk = currentMonthKey();
       const pocket = pocketLeftSoFar(latest);
-      void postNotifyRelay(summary, { monthKey: mk, pocketLeft: pocket }).then((r) => {
+      void postNotifyRelay('', { digest, monthKey: mk, pocketLeft: pocket }).then((r) => {
         if (!r.ok && typeof console !== 'undefined') {
           console.warn('[notify relay]', r.error);
         }
@@ -354,6 +378,8 @@ export function usePersistedFinance() {
         if (!r.ok && typeof console !== 'undefined') console.warn('[notify relay snapshot]', r.error);
       });
     }, 60_000);
+
+    prevStateRef.current = state;
 
     return () => {
       if (notifyDebounceRef.current !== null) clearTimeout(notifyDebounceRef.current);

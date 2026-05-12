@@ -8,7 +8,7 @@ import {
   type NotifyRelayConfig,
 } from '../utils/notifyRelayConfig';
 import {
-  buildFinanceChangeSummary,
+  buildSaveEmailDigest,
   pocketLeftSoFar,
   postNotifyRelay,
   postSnapshotRelay,
@@ -77,17 +77,20 @@ export function NotifyRelaySettings({
   const testSend = useCallback(async () => {
     setBusy(true);
     setMsg(null);
-    const summary = `[Test]\n${buildFinanceChangeSummary(state)}`;
-    const r = await postNotifyRelay(summary, {
+    const from = structuredClone(state);
+    from.emergencyFund = state.emergencyFund + 0.01;
+    const digest = buildSaveEmailDigest(from, state);
+    const r = await postNotifyRelay('', {
       subject: 'Household finances · test',
       pocketLeft: pocketLeftSoFar(state),
+      digest,
     });
     const snap = await postSnapshotRelay(buildSnapshotForReminders(state));
     setBusy(false);
     setMsg(
       r.ok
         ? snap.ok
-          ? 'Test email sent and snapshot saved. Check inbox (and spam).'
+          ? 'Test email sent (full digest layout) and snapshot saved. Check inbox (and spam).'
           : `Email sent; snapshot failed: ${snap.error}`
         : r.error,
     );

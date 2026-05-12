@@ -37,7 +37,9 @@ export function renderEmailHtml({
   };
   const sectionHtml = sections
     .map((s) => {
-      const items = (s.items ?? [])
+      const itemRows = Array.isArray(s.items) ? s.items : [];
+      const hasItems = itemRows.length > 0;
+      const items = itemRows
         .map(
           (it) => `<li style="margin: 0 0 10px 0; padding: 10px 12px; border: 1px solid #E5E7EB; border-radius: 14px; background: #FFFFFF;">
   <div style="font-weight: 800; color: #0F172A;">${escapeHtml(it.title)}</div>
@@ -46,14 +48,15 @@ export function renderEmailHtml({
 </li>`,
         )
         .join('');
+      const inner = hasItems
+        ? `<ul style="margin: 0; padding: 0; list-style: none;">${items}</ul>`
+        : s.body
+          ? renderBody(s.body)
+          : `<div style="color: #64748B; font-size: 13px;">None right now.</div>`;
       return `
 <div style="margin-top: 18px; padding: 16px 16px; border: 1px solid #E5E7EB; border-radius: 16px; background: #FFFFFF;">
   <div style="font-weight: 900; color: #0F172A; margin-bottom: 10px; font-size: 14px;">${escapeHtml(s.heading)}</div>
-  ${
-    items
-      ? `<ul style="margin: 0; padding: 0; list-style: none;">${items}</ul>`
-      : renderBody(s.body)
-  }
+  ${inner}
 </div>`;
     })
     .join('');
@@ -113,7 +116,7 @@ export function renderEmailText({ title, preheader, sections, footerHint }) {
   lines.push('');
   for (const s of sections) {
     lines.push(`== ${s.heading} ==`);
-    if (s.items?.length) {
+    if (Array.isArray(s.items) && s.items.length > 0) {
       for (const it of s.items) {
         lines.push(`- ${it.title}`);
         if (it.body) lines.push(`  ${it.body}`);
@@ -121,6 +124,8 @@ export function renderEmailText({ title, preheader, sections, footerHint }) {
       }
     } else if (s.body) {
       lines.push(s.body);
+    } else {
+      lines.push('None right now.');
     }
     lines.push('');
   }
@@ -144,18 +149,53 @@ export function buildChangeEmailTemplate({ summaryText, pocketLeft, monthKey }) 
   };
 }
 
-export function buildReminderEmailTemplate({ monthKey, dueSoon = [], overdue = [] }) {
-  const title = overdue.length ? 'Overdue items' : 'Upcoming bills';
-  const preheader = overdue.length
-    ? `${overdue.length} overdue item(s) need attention.`
-    : `${dueSoon.length} bill(s) coming up soon.`;
+/** Structured save email from SPA digest (`version: 1`). */
+export function buildSaveEmailTemplate(digest) {
+  const monthKey =
+    typeof digest?.monthKey === 'string' && digest.monthKey.trim() ? digest.monthKey.trim().slice(0, 16) : 'this month';
+  const pocketLeft = Number.isFinite(Number(digest?.pocketLeft)) ? Number(digest.pocketLeft) : 0;
+  const planned = Number.isFinite(Number(digest?.plannedIncomeCombined)) ? Number(digest.plannedIncomeCombined) : 0;
+  const title = 'Update saved';
+  const preheader = `Saved ${monthKey}. Planned income ${fmtMoney(planned)} · Pocket left ${fmtMoney(pocketLeft)}.`;
+  const sections = Array.isArray(digest?.sections)
+    ? digest.sections.map((s) => ({
+        heading: String(s.heading ?? 'Details').slice(0, 120),
+        body: typeof s.body === 'string' ? s.body.slice(0, 8000) : undefined,
+        items: Array.isArray(s.items)
+          ? s.items.slice(0, 40).map((it) => ({
+              title: String(it.title ?? '').slice(0, 220),
+              body: it.body != null ? String(it.body).slice(0, 500) : undefined,
+              meta: it.meta != null ? String(it.meta).slice(0, 220) : undefined,
+            }))
+          : undefined,
+      }))
+    : [];
+  return {
+    subject: `Household finances · saved · ${monthKey}`,
+    title,
+    preheader,
+    sections,
+  };
+}
+
+export function buildReminderEmailTemplate({ monthKey, dueSoon = [], overdue = [], horizon = [] }) {
+  const nO = overdue.length;
+  const nS = dueSoon.length;
+  const nH = horizon.length;
+  const title = nO > 0 ? 'Overdue items' : nS > 0 ? 'Upcoming bills' : 'Bills on the horizon';
+  const preheader =
+    nO > 0
+      ? `${nO} overdue · ${nS} due soon · ${nH} on horizon.`
+      : nS > 0
+        ? `${nS} bill(s) due soon or in grace · ${nH} further out (14d).`
+        : `${nH} unpaid bill(s) due within the next 14 days.`;
   return {
     subject: `Household finances · reminders · ${monthKey}`,
     title,
     preheader,
     sections: [
       {
-        heading: 'Due soon',
+        heading: 'Due soon (includes grace window)',
         items: dueSoon.map((b) => ({
           title: `${b.name} — ${fmtMoney(b.amount)}`,
           body: `Due ${b.dueDate}`,
@@ -167,6 +207,14 @@ export function buildReminderEmailTemplate({ monthKey, dueSoon = [], overdue = [
         items: overdue.map((b) => ({
           title: `${b.name} — ${fmtMoney(b.amount)}`,
           body: `Was due ${b.dueDate}`,
+          meta: b.note ?? '',
+        })),
+      },
+      {
+        heading: 'On the horizon (next 14 days, unpaid)',
+        items: horizon.map((b) => ({
+          title: `${b.name} — ${fmtMoney(b.amount)}`,
+          body: `Due ${b.dueDate}`,
           meta: b.note ?? '',
         })),
       },

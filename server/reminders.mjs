@@ -1,5 +1,10 @@
 const MS_DAY = 86400_000;
 
+/** Unpaid “upcoming” bills due within this many calendar days — keep aligned with `SAVE_EMAIL_BILL_HORIZON_CALENDAR_DAYS` in client `reminderEmailPayloadClient.ts`. */
+export const REMINDER_EMAIL_HORIZON_CALENDAR_DAYS = 14;
+
+const MAX_REMINDER_ROWS = 25;
+
 /**
  * First calendar month bill reminders consider (must match `HISTORY_TRACKING_STARTED_MONTH_KEY` in `src/data/defaults.ts`).
  * Occurrences before this month are historical placeholders only — not included in email reminders.
@@ -180,9 +185,11 @@ export function computeReminderEmailPayload(snapshotData, ref = new Date()) {
   const state = snapshotData ?? {};
   const items = buildTimeline(state, 2, ref);
   const startToday = startOfLocalDay(ref).getTime();
+  const horizonEnd = startToday + REMINDER_EMAIL_HORIZON_CALENDAR_DAYS * MS_DAY;
 
   const dueSoon = [];
   const overdue = [];
+  const horizon = [];
 
   for (const b of items) {
     if (billOccurrenceIsPaid(state, b)) continue;
@@ -214,6 +221,20 @@ export function computeReminderEmailPayload(snapshotData, ref = new Date()) {
         dueDate: formatDueIso(b.due),
         note: metaBits.join(' · '),
       });
+      continue;
+    }
+
+    if (status === 'upcoming' && dueT >= startToday && dueT <= horizonEnd) {
+      const metaBits = [];
+      metaBits.push(b.category === 'debt' ? 'Debt' : 'Essential');
+      if (b.autoDeduction) metaBits.push('Auto');
+      metaBits.push(`Due in ≤${REMINDER_EMAIL_HORIZON_CALENDAR_DAYS}d`);
+      horizon.push({
+        name: b.name,
+        amount: Number(b.amount ?? 0),
+        dueDate: formatDueIso(b.due),
+        note: metaBits.join(' · '),
+      });
     }
   }
 
@@ -221,10 +242,24 @@ export function computeReminderEmailPayload(snapshotData, ref = new Date()) {
   const sortByDue = (a, b) => a.dueDate.localeCompare(b.dueDate);
   dueSoon.sort(sortByDue);
   overdue.sort(sortByDue);
+  horizon.sort(sortByDue);
+
+  const cap = (arr) => (arr.length > MAX_REMINDER_ROWS ? arr.slice(0, MAX_REMINDER_ROWS) : arr);
+  const dueSoonC = cap(dueSoon);
+  const overdueC = cap(overdue);
+  const horizonC = cap(horizon);
 
   const monthKey = dateToMonthKey(ref);
-  const counts = { dueSoon: dueSoon.length, overdue: overdue.length };
+  const counts = {
+    dueSoon: dueSoonC.length,
+    overdue: overdueC.length,
+    horizon: horizonC.length,
+    truncated:
+      dueSoon.length > MAX_REMINDER_ROWS ||
+      overdue.length > MAX_REMINDER_ROWS ||
+      horizon.length > MAX_REMINDER_ROWS,
+  };
 
-  return { monthKey, dueSoon, overdue, counts };
+  return { monthKey, dueSoon: dueSoonC, overdue: overdueC, horizon: horizonC, counts };
 }
 

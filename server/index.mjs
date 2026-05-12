@@ -7,7 +7,7 @@ import crypto from 'crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildChangeEmailTemplate, buildReminderEmailTemplate, renderEmailHtml, renderEmailText } from './templates.mjs';
+import { buildChangeEmailTemplate, buildReminderEmailTemplate, buildSaveEmailTemplate, renderEmailHtml, renderEmailText } from './templates.mjs';
 import { readSnapshot, writeSnapshot } from './snapshots.mjs';
 import { getDbEnabled, getHouseholdIdFromRequest, initDbIfNeeded, readState, writeState } from './db.mjs';
 import { computeReminderEmailPayload } from './reminders.mjs';
@@ -199,6 +199,33 @@ function authOr401(request, reply) {
   return true;
 }
 
+function sanitizeSaveDigest(body) {
+  const d = body?.digest;
+  if (!d || typeof d !== 'object' || d.version !== 1) return null;
+  const monthKey = typeof d.monthKey === 'string' ? d.monthKey.trim().slice(0, 16) : 'this month';
+  const pocketLeft = Number.isFinite(Number(d.pocketLeft)) ? Number(d.pocketLeft) : 0;
+  const plannedIncomeCombined = Number.isFinite(Number(d.plannedIncomeCombined))
+    ? Number(d.plannedIncomeCombined)
+    : 0;
+  const sectionsIn = Array.isArray(d.sections) ? d.sections : [];
+  const sections = [];
+  for (const s of sectionsIn.slice(0, 24)) {
+    const heading = typeof s.heading === 'string' ? s.heading.slice(0, 120) : 'Section';
+    const bodyT = typeof s.body === 'string' ? s.body.slice(0, 8000) : undefined;
+    const itemsIn = Array.isArray(s.items) ? s.items : [];
+    const items = [];
+    for (const it of itemsIn.slice(0, 35)) {
+      items.push({
+        title: typeof it.title === 'string' ? it.title.slice(0, 220) : '',
+        body: typeof it.body === 'string' ? it.body.slice(0, 500) : undefined,
+        meta: typeof it.meta === 'string' ? it.meta.slice(0, 220) : undefined,
+      });
+    }
+    sections.push({ heading, body: bodyT, items: items.length ? items : undefined });
+  }
+  return { version: 1, monthKey, pocketLeft, plannedIncomeCombined, sections };
+}
+
 fastify.post('/v1/notify', async (request, reply) => {
   if (!notifyTo) {
     return reply.code(503).send({ error: 'NOTIFY_TO is not set.' });
@@ -206,18 +233,37 @@ fastify.post('/v1/notify', async (request, reply) => {
   if (!authOr401(request, reply)) return;
 
   const body = request.body;
+  try {
+    const rawLen = JSON.stringify(body ?? {}).length;
+    if (rawLen > 28000) {
+      return reply.code(413).send({ error: 'Payload too large' });
+    }
+  } catch {
+    return reply.code(400).send({ error: 'Invalid JSON body' });
+  }
+
+  const digest = sanitizeSaveDigest(body);
   const summary =
-    typeof body?.summary === 'string' && body.summary.trim()
-      ? body.summary.trim().slice(0, 8000)
-      : '';
-  if (!summary) {
-    return reply.code(400).send({ error: 'Body must include a non-empty "summary" string.' });
+    typeof body?.summary === 'string' && body.summary.trim() ? body.summary.trim().slice(0, 8000) : '';
+
+  if (!digest && !summary) {
+    return reply
+      .code(400)
+      .send({ error: 'Body must include a valid "digest" (version: 1) or a non-empty "summary" string.' });
   }
 
   const monthKey =
-    typeof body?.monthKey === 'string' && body.monthKey.trim() ? body.monthKey.trim().slice(0, 16) : 'this month';
-  const pocketLeft = Number.isFinite(Number(body?.pocketLeft)) ? Number(body.pocketLeft) : 0;
-  const template = buildChangeEmailTemplate({ summaryText: summary, pocketLeft, monthKey });
+    digest?.monthKey ??
+    (typeof body?.monthKey === 'string' && body.monthKey.trim() ? body.monthKey.trim().slice(0, 16) : 'this month');
+  const pocketLeft = digest
+    ? digest.pocketLeft
+    : Number.isFinite(Number(body?.pocketLeft))
+      ? Number(body.pocketLeft)
+      : 0;
+
+  const template = digest
+    ? buildSaveEmailTemplate(digest)
+    : buildChangeEmailTemplate({ summaryText: summary, pocketLeft, monthKey });
   const html = renderEmailHtml({
     title: template.title,
     preheader: template.preheader,
@@ -279,13 +325,13 @@ fastify.post('/v1/reminders/send', async (request, reply) => {
   }
   if (!stateData) return reply.code(404).send({ error: 'No snapshot or stored state found for id.' });
 
-  const { monthKey: mk, dueSoon, overdue, counts } = computeReminderEmailPayload(stateData, new Date());
-  if (counts.dueSoon === 0 && counts.overdue === 0) {
+  const { monthKey: mk, dueSoon, overdue, horizon, counts } = computeReminderEmailPayload(stateData, new Date());
+  if (counts.dueSoon === 0 && counts.overdue === 0 && counts.horizon === 0) {
     // Quiet days: do not email.
     return reply.send({ ok: true, skipped: true, counts });
   }
 
-  const template = buildReminderEmailTemplate({ monthKey: mk, dueSoon, overdue });
+  const template = buildReminderEmailTemplate({ monthKey: mk, dueSoon, overdue, horizon });
   const footerHint =
     counts.overdue > 0
       ? 'Overdue items are past your grace window. Open the app and mark handled to keep reminders quiet.'
@@ -314,24 +360,57 @@ fastify.post('/v1/reminders/send', async (request, reply) => {
 });
 
 fastify.get('/preview/email', async (request, reply) => {
-  const kind = request.query?.kind === 'reminder' ? 'reminder' : 'change';
+  const q = request.query?.kind;
+  const kind = q === 'reminder' ? 'reminder' : q === 'digest' ? 'digest' : 'change';
   const monthKey = '2026-05';
-  const tpl =
-    kind === 'reminder'
-      ? buildReminderEmailTemplate({
-          monthKey,
-          dueSoon: [
-            { name: 'Internet', amount: 114, dueDate: '2026-05-14', note: 'Monthly' },
-            { name: 'Rent', amount: 400, dueDate: '2026-05-22', note: 'Monthly' },
+  let tpl;
+  if (kind === 'reminder') {
+    tpl = buildReminderEmailTemplate({
+      monthKey,
+      dueSoon: [
+        { name: 'Internet', amount: 114, dueDate: '2026-05-14', note: 'Essential · Past due (grace)' },
+        { name: 'Rent', amount: 400, dueDate: '2026-05-22', note: 'Essential' },
+      ],
+      overdue: [{ name: 'Car loan', amount: 224, dueDate: '2026-05-05', note: 'Debt · Auto' }],
+      horizon: [{ name: 'Water', amount: 45, dueDate: '2026-05-18', note: 'Essential · Due in ≤14d' }],
+    });
+  } else if (kind === 'digest') {
+    tpl = buildSaveEmailTemplate({
+      version: 1,
+      monthKey,
+      pocketLeft: 188.2,
+      plannedIncomeCombined: 3400,
+      sections: [
+        {
+          heading: 'What changed',
+          items: [
+            { title: 'Income · husbandMonthly', body: '$1,700.00 → $1,750.00' },
+            { title: 'Paycheque log added', body: '2026-05-10 · husband · $1,750.00 · Scheduled pay' },
           ],
-          overdue: [{ name: 'Car loan', amount: 224, dueDate: '2026-05-05', note: 'Auto-deduction' }],
-        })
-      : buildChangeEmailTemplate({
-          summaryText:
-            'Income updated (wife schedule biweekly).\nMarked Rent paid for May.\nLogged Husband pay deposit.',
-          pocketLeft: 42.75,
-          monthKey,
-        });
+        },
+        {
+          heading: 'This month (cash snapshot)',
+          items: [
+            { title: 'Planned monthly income (combined)', body: '$3,400.00' },
+            { title: 'Pocket left (deposits − counted spend)', body: '$188.20', meta: 'Same as dashboard “pocket left so far”.' },
+          ],
+        },
+        {
+          heading: 'Due soon (includes grace window)',
+          items: [{ title: 'Groceries — $120.00', body: 'Due 2026-05-23', meta: 'Essential' }],
+        },
+        { heading: 'Overdue', items: [] },
+        { heading: 'On the horizon (next 14 days, unpaid)', items: [] },
+      ],
+    });
+  } else {
+    tpl = buildChangeEmailTemplate({
+      summaryText:
+        'Income updated (wife schedule biweekly).\nMarked Rent paid for May.\nLogged Husband pay deposit.',
+      pocketLeft: 42.75,
+      monthKey,
+    });
+  }
 
   const html = renderEmailHtml({ title: tpl.title, preheader: tpl.preheader, sections: tpl.sections });
   reply.header('Content-Type', 'text/html; charset=utf-8').send(html);

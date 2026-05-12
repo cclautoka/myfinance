@@ -1,10 +1,35 @@
 import type { FinanceState } from '../types/finance';
 import { currentMonthKey } from '../data/defaults';
-import { combinedMonthlyIncome, totalDebtRemaining } from './calculations';
+import {
+  combinedMonthlyIncome,
+  extraIncomeMonthTotal,
+  totalDebtRemaining,
+} from './calculations';
 import { formatMoney } from './format';
 import { ensureNotifyRelayHouseholdId, readNotifyRelayConfig } from './notifyRelayConfig';
+import {
+  monthActualExpenseTotal,
+  monthActualIncomeTotal,
+  monthSpendableCarry,
+  monthTotalSpendableIncome,
+} from './budgetSurplus';
+import { incomeLogMonthTotal } from './incomeLog';
+import { computeFinanceStateDiff, type DigestSection } from './financeStateDiff';
+import { buildBillsHeadsUpSections } from './reminderEmailPayloadClient';
 
-/** Short plain-text summary for email — not a full state export. */
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+export const SAVE_EMAIL_DIGEST_VERSION = 1 as const;
+
+export type SaveEmailDigestV1 = {
+  version: typeof SAVE_EMAIL_DIGEST_VERSION;
+  monthKey: string;
+  pocketLeft: number;
+  plannedIncomeCombined: number;
+  sections: DigestSection[];
+};
+
+/** Short plain-text summary for email — legacy / tests; prefer {@link buildSaveEmailDigest}. */
 export function buildFinanceChangeSummary(state: FinanceState): string {
   const mk = currentMonthKey();
   const planned = combinedMonthlyIncome(state);
@@ -21,31 +46,73 @@ export function buildFinanceChangeSummary(state: FinanceState): string {
   return lines.join('\n');
 }
 
+/** Dashboard-aligned: paycheque log this month minus counted spend (handled bills + surprises). */
 export function pocketLeftSoFar(state: FinanceState): number {
   const mk = currentMonthKey();
-  const [y, m] = mk.split('-').map(Number);
-  const logged = (state.incomeLog ?? [])
-    .filter((e) => {
-      const d = new Date(e.date);
-      return d.getFullYear() === y && d.getMonth() + 1 === m;
-    })
-    .reduce((s, e) => s + (Number(e.amount) || 0), 0);
-  // actualExpenseMonth is computed in UI; avoid importing UI util here. Mirror the broad meaning:
-  // marked bills amounts are stored under billPaidAmounts and surprises list.
-  const surprise = (state.surpriseExpenses ?? [])
-    .filter((e) => {
-      const d = new Date(e.date);
-      return d.getFullYear() === y && d.getMonth() + 1 === m;
-    })
-    .reduce((s, e) => s + (Number(e.amount) || 0), 0);
-  const paidAmounts = state.billPaidAmounts ?? {};
-  let paidTotal = 0;
-  for (const id of Object.keys(paidAmounts)) {
-    const inner = paidAmounts[id] ?? {};
-    const v = inner[mk];
-    if (typeof v === 'number' && Number.isFinite(v)) paidTotal += v;
+  return round2(incomeLogMonthTotal(state, mk) - monthActualExpenseTotal(state, mk));
+}
+
+export function buildSaveEmailDigest(from: FinanceState, to: FinanceState): SaveEmailDigestV1 {
+  const mk = currentMonthKey();
+  const diffSections = computeFinanceStateDiff(from, to).sections;
+  const planned = combinedMonthlyIncome(to);
+  const logged = incomeLogMonthTotal(to, mk);
+  const extraIn = extraIncomeMonthTotal(to, mk);
+  const depositsPlusOther = monthActualIncomeTotal(to, mk);
+  const carry = monthSpendableCarry(to, mk);
+  const spendable = monthTotalSpendableIncome(to, mk);
+  const counted = monthActualExpenseTotal(to, mk);
+  const pocket = pocketLeftSoFar(to);
+
+  const cashSection: DigestSection = {
+    heading: 'This month (cash snapshot)',
+    items: [
+      { title: 'Planned monthly income (combined)', body: formatMoney(planned) },
+      { title: 'Deposits logged (paycheques)', body: formatMoney(logged) },
+      { title: 'Other income this month', body: formatMoney(extraIn) },
+      { title: 'Deposits + other income', body: formatMoney(depositsPlusOther) },
+      { title: 'Typed carry-in this month', body: formatMoney(carry) },
+      { title: 'Spendable (deposits + other + carry)', body: formatMoney(spendable) },
+      { title: 'Counted spend (handled bills + surprises)', body: formatMoney(counted) },
+      {
+        title: 'Pocket left (deposits − counted spend)',
+        body: formatMoney(pocket),
+        meta: 'Same as dashboard “pocket left so far”.',
+      },
+    ],
+  };
+
+  const billSections = buildBillsHeadsUpSections(to);
+
+  return {
+    version: SAVE_EMAIL_DIGEST_VERSION,
+    monthKey: mk,
+    pocketLeft: pocket,
+    plannedIncomeCombined: planned,
+    sections: [...diffSections, cashSection, ...billSections],
+  };
+}
+
+/** Plain-text fallback for legacy clients and server validation when digest is present. */
+export function digestPlainTextSummary(digest: SaveEmailDigestV1): string {
+  const lines: string[] = [
+    `Household finances · saved ${new Date().toISOString()}`,
+    `Calendar month: ${digest.monthKey}`,
+    `Planned income (combined): ${formatMoney(digest.plannedIncomeCombined)}`,
+    `Pocket left: ${formatMoney(digest.pocketLeft)}`,
+    '',
+  ];
+  for (const sec of digest.sections) {
+    lines.push(`== ${sec.heading} ==`);
+    if (sec.body) lines.push(sec.body);
+    if (sec.items?.length) {
+      for (const it of sec.items) {
+        lines.push(`- ${it.title}${it.body ? ` — ${it.body}` : ''}${it.meta ? ` (${it.meta})` : ''}`);
+      }
+    }
+    lines.push('');
   }
-  return logged - (paidTotal + surprise);
+  return lines.join('\n').slice(0, 7500);
 }
 
 /** Husband then wife — trimmed, deduped (max 5) — stored on snapshot for server reminder mail. */
@@ -82,7 +149,12 @@ export function buildSnapshotForReminders(state: FinanceState) {
 
 export async function postNotifyRelay(
   summary: string,
-  opts?: { subject?: string; monthKey?: string; pocketLeft?: number },
+  opts?: {
+    subject?: string;
+    monthKey?: string;
+    pocketLeft?: number;
+    digest?: SaveEmailDigestV1;
+  },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const { enabled, url, secret, husbandEmail, wifeEmail } = readNotifyRelayConfig();
   if (!enabled || !url || !secret) return { ok: false, error: 'Notify relay not configured' };
@@ -103,6 +175,12 @@ export async function postNotifyRelay(
     return { ok: false, error: 'Notify URL must be http(s)' };
   }
 
+  const digest = opts?.digest;
+  const summaryOut =
+    digest && digest.version === SAVE_EMAIL_DIGEST_VERSION
+      ? digestPlainTextSummary(digest)
+      : summary.trim();
+
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -110,9 +188,10 @@ export async function postNotifyRelay(
       Authorization: `Bearer ${secret}`,
     },
     body: JSON.stringify({
-      summary,
-      monthKey: opts?.monthKey ?? currentMonthKey(),
-      pocketLeft: opts?.pocketLeft,
+      summary: summaryOut,
+      monthKey: opts?.monthKey ?? digest?.monthKey ?? currentMonthKey(),
+      pocketLeft: opts?.pocketLeft ?? digest?.pocketLeft,
+      digest: digest && digest.version === SAVE_EMAIL_DIGEST_VERSION ? digest : undefined,
       to: [husbandEmail, wifeEmail].filter(Boolean),
       ...(opts?.subject ? { subject: opts.subject } : {}),
     }),

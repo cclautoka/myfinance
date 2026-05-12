@@ -291,7 +291,7 @@ export function DashboardOverview({ state }: { state: FinanceState }) {
           </MetricWithTip>
         </div>
 
-        <div className="mx-auto mt-8 grid min-w-0 w-full max-w-5xl gap-4 text-sage-950 sm:grid-cols-3">
+        <div className="mx-auto mt-8 grid min-w-0 w-full max-w-5xl gap-4 text-sage-950 sm:grid-cols-2">
           <MetricWithTip tip={dashboardBillsTickedTip()}>
             <MetricCard className="text-center sm:text-left">
               <p className="text-xs font-semibold uppercase tracking-wide text-sage-700 dark:text-moss-muted">
@@ -312,28 +312,30 @@ export function DashboardOverview({ state }: { state: FinanceState }) {
               </p>
             </MetricCard>
           </MetricWithTip>
-          <MetricWithTip tip={dashboardSavingsSliderTip()}>
-            <MetricCard className="text-center sm:text-left">
-              <p className="text-xs font-semibold uppercase tracking-wide text-sage-700 dark:text-moss-muted">
-                Savings · plan vs achieved*
-              </p>
-              <div className="mt-4 space-y-1">
-                <p className="text-[11px] font-semibold text-sage-600 dark:text-moss-muted">Planned lane (intent)</p>
-                <p className="font-display text-3xl font-semibold tabular-nums dark:text-moss-fg sm:text-[2.25rem]">
-                  {formatMoney(savings)}
+          <div className="min-w-0 w-full sm:col-span-2">
+            <MetricWithTip tip={dashboardSavingsSliderTip()}>
+              <MetricCard className="text-center sm:grid sm:grid-cols-2 sm:gap-x-8 sm:gap-y-4 sm:text-left">
+                <p className="text-xs font-semibold uppercase tracking-wide text-sage-700 dark:text-moss-muted sm:col-span-2">
+                  Savings · plan vs achieved*
                 </p>
-              </div>
-              <div className="mt-5 border-t border-sage-200/90 pt-4 dark:border-moss-border">
-                <p className="text-[11px] font-semibold text-sage-600 dark:text-moss-muted">Achieved (backup balance you type)</p>
-                <p className="mt-1 font-display text-3xl font-semibold tabular-nums text-teal-900 dark:text-moss-tip sm:text-[2.25rem]">
-                  {formatMoney(state.emergencyFund)}
+                <div className="mt-4 space-y-1 sm:mt-0">
+                  <p className="text-[11px] font-semibold text-sage-600 dark:text-moss-muted">Planned lane (intent)</p>
+                  <p className="font-display text-3xl font-semibold tabular-nums dark:text-moss-fg sm:text-[2.25rem]">
+                    {formatMoney(savings)}
+                  </p>
+                </div>
+                <div className="mt-5 border-t border-sage-200/90 pt-4 dark:border-moss-border sm:mt-0 sm:border-l sm:border-t-0 sm:pl-8 sm:pt-0">
+                  <p className="text-[11px] font-semibold text-sage-600 dark:text-moss-muted">Achieved (backup balance you type)</p>
+                  <p className="mt-1 font-display text-3xl font-semibold tabular-nums text-teal-900 dark:text-moss-tip sm:text-[2.25rem]">
+                    {formatMoney(state.emergencyFund)}
+                  </p>
+                </div>
+                <p className="mt-4 text-[11px] leading-snug text-sage-600 dark:text-moss-muted sm:col-span-2 sm:mt-2">
+                  We don’t auto-link pay deposits to savings — bump the rainy‑day figure when money actually lands in that saver.
                 </p>
-              </div>
-              <p className="mt-4 text-[11px] leading-snug text-sage-600 dark:text-moss-muted">
-                We don’t auto-link pay deposits to savings — bump the rainy‑day figure when money actually lands in that saver.
-              </p>
-            </MetricCard>
-          </MetricWithTip>
+              </MetricCard>
+            </MetricWithTip>
+          </div>
         </div>
 
         <p className="mx-auto mt-4 max-w-2xl text-center text-[11px] leading-relaxed text-teal-200/85 dark:text-moss-muted">

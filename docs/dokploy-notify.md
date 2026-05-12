@@ -43,3 +43,15 @@ docker run --rm -p 8787:8787 \
 ```
 
 Then visit `http://localhost:8787`.
+
+## Save email payload (`digest`)
+
+After a quiet period following edits, the SPA may POST **`digest`** (`version: 1`) with structured **sections** (field-level diff, cash snapshot, bills heads-up). The server still accepts a legacy plain-text **`summary`** only. Bodies larger than ~28KB are rejected.
+
+Preview HTML locally: **`GET /preview/email?kind=digest`** (also `kind=change` and `kind=reminder`).
+
+## Reminder email
+
+**`POST /v1/reminders/send`** uses the stored snapshot and includes **due soon** (including grace), **overdue**, and **on the horizon** (unpaid bills due within the next 14 calendar days). The email is skipped when all three buckets are empty.
+
+Keep **`REMINDER_EMAIL_HORIZON_CALENDAR_DAYS`** in `server/reminders.mjs` aligned with **`SAVE_EMAIL_BILL_HORIZON_CALENDAR_DAYS`** in `src/utils/reminderEmailPayloadClient.ts` when changing the horizon window.
