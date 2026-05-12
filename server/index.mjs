@@ -37,6 +37,32 @@ function splitRecipients(raw) {
     .filter(Boolean);
 }
 
+function normalizeRecipientList(arr) {
+  if (!Array.isArray(arr)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const v of arr) {
+    if (typeof v !== 'string') continue;
+    const s = v.trim();
+    if (!s) continue;
+    const k = s.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(s);
+    if (out.length >= 5) break;
+  }
+  return out;
+}
+
+/** Reminder cron: body.to if set, else notifyRecipientEmails from snapshot/state, else NOTIFY_TO. */
+function pickReminderRecipients(body, stateData) {
+  const fromBody = normalizeRecipientList(body?.to);
+  if (fromBody.length) return fromBody;
+  const fromSnapshot = normalizeRecipientList(stateData?.notifyRecipientEmails);
+  if (fromSnapshot.length) return fromSnapshot;
+  return splitRecipients(notifyTo.trim());
+}
+
 async function sendWithResend({ to, subject, text, html }) {
   const key = process.env.RESEND_API_KEY;
   const from = process.env.RESEND_FROM;
@@ -278,7 +304,7 @@ fastify.post('/v1/reminders/send', async (request, reply) => {
   });
 
   try {
-    const to = pickRecipients(body);
+    const to = pickReminderRecipients(body, stateData);
     const result = await sendMail({ to, subject: template.subject.slice(0, 200), text, html });
     return reply.send({ ok: true, ...result, counts });
   } catch (e) {

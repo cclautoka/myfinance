@@ -48,7 +48,25 @@ export function pocketLeftSoFar(state: FinanceState): number {
   return logged - (paidTotal + surprise);
 }
 
+/** Husband then wife — trimmed, deduped (max 5) — stored on snapshot for server reminder mail. */
+function notifyRecipientEmailsFromRelay(): string[] {
+  const { husbandEmail, wifeEmail } = readNotifyRelayConfig();
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of [husbandEmail, wifeEmail]) {
+    const s = (raw ?? '').trim();
+    if (!s) continue;
+    const k = s.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(s);
+    if (out.length >= 5) break;
+  }
+  return out;
+}
+
 export function buildSnapshotForReminders(state: FinanceState) {
+  const emails = typeof window !== 'undefined' ? notifyRecipientEmailsFromRelay() : [];
   return {
     essentials: state.essentials ?? [],
     debts: state.debts ?? [],
@@ -58,6 +76,7 @@ export function buildSnapshotForReminders(state: FinanceState) {
     surpriseExpenses: state.surpriseExpenses ?? [],
     billOverdueGraceDays: state.billOverdueGraceDays ?? 0,
     billUpcomingLeadBusinessDays: state.billUpcomingLeadBusinessDays ?? 3,
+    ...(emails.length ? { notifyRecipientEmails: emails } : {}),
   };
 }
 

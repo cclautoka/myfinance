@@ -61,7 +61,7 @@ Open **Environment** for this application and add at least:
 | `NODE_ENV` | `production` | Standard Node production mode. |
 | `DATABASE_URL` | `postgres://user:pass@host:5432/dbname` | **Server-side persistence** for your entire workbook (JSONB in Postgres). |
 | `NOTIFY_API_SECRET` | `paste-a-long-random-string-at-least-16-chars` | Same value you type in the app under **Tips & backup → Shared secret**. |
-| `NOTIFY_TO` | `you@gmail.com` | Where change-summary emails go. |
+| `NOTIFY_TO` | `you@gmail.com` or `a@gmail.com,b@gmail.com` | Change-summary mail and **fallback** for scheduled reminders. If the uploaded snapshot includes husband/wife addresses from **Tools & alerts**, reminder cron uses those first (unless the cron body sends its own `to`). |
 
 **Email (pick one path):**
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   applySetupFromUrlHash,
   buildShareSetupLink,
@@ -39,6 +39,9 @@ export function NotifyRelaySettings({
       : null;
   });
   const [busy, setBusy] = useState(false);
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const snapshotPushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -48,9 +51,27 @@ export function NotifyRelaySettings({
     }
   }, []);
 
+  useEffect(
+    () => () => {
+      if (snapshotPushTimerRef.current !== null) clearTimeout(snapshotPushTimerRef.current);
+    },
+    [],
+  );
+
   const persist = useCallback((next: NotifyRelayConfig) => {
     setCfg(next);
     writeNotifyRelayConfig(next);
+    const url = next.url.trim();
+    const sec = next.secret.trim();
+    const hid = next.householdId.trim();
+    if (!next.enabled || !url || !sec || !hid) return;
+    if (snapshotPushTimerRef.current !== null) clearTimeout(snapshotPushTimerRef.current);
+    snapshotPushTimerRef.current = setTimeout(() => {
+      snapshotPushTimerRef.current = null;
+      void postSnapshotRelay(buildSnapshotForReminders(stateRef.current)).then((r) => {
+        if (!r.ok && typeof console !== 'undefined') console.warn('[notify relay snapshot]', r.error);
+      });
+    }, 700);
   }, []);
 
   const testSend = useCallback(async () => {
@@ -109,7 +130,9 @@ export function NotifyRelaySettings({
       </label>
       <p className="mt-2 text-xs leading-relaxed text-sage-700 dark:text-moss-muted">
         <strong className="text-sage-900 dark:text-moss-fg">Server storage</strong> uses the same shared secret and URL. When enabled,
-        your workbook is saved to Postgres on the server (and still cached locally for offline).
+        your workbook is saved to Postgres on the server (and still cached locally for offline). Husband and wife emails below are
+        included in the server snapshot so <strong className="text-sage-900 dark:text-moss-fg">scheduled reminder mail</strong> can
+        reach both of you (after a short pause when you save); the server still falls back to <code className="rounded bg-sage-100 px-1 text-[11px] dark:bg-moss-bg">NOTIFY_TO</code> if no snapshot addresses are stored yet.
       </p>
 
       <div className="mt-4 space-y-3">
