@@ -55,3 +55,7 @@ Preview HTML locally: **`GET /preview/email?kind=digest`** (also `kind=change` a
 **`POST /v1/reminders/send`** uses the stored snapshot and includes **due soon** (including grace), **overdue**, and **on the horizon** (unpaid bills due within the next 14 calendar days). The email is skipped when all three buckets are empty.
 
 Keep **`REMINDER_EMAIL_HORIZON_CALENDAR_DAYS`** in `server/reminders.mjs` aligned with **`SAVE_EMAIL_BILL_HORIZON_CALENDAR_DAYS`** in `src/utils/reminderEmailPayloadClient.ts` when changing the horizon window.
+
+**Due soon vs lead days:** “Closing in” / reminder **Due soon** counts **weekdays from tomorrow** through the bill’s due date (inclusive of the due date), up to your **Bill upcoming lead (business days)** setting in the app (default 3). **Due today** is classified as **overdue** for reminders and the bill strip.
+
+**Cron / “today”:** `/v1/reminders/send` uses the server’s **`new Date()`** (the host’s local timezone). If your household is in another zone, “today” in the email may differ from your wall clock until you add a dedicated timezone (future enhancement).

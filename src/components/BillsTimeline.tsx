@@ -11,7 +11,7 @@ import {
   buildTimeline,
   upcomingDeductionsTotal,
 } from '../utils/billsTimeline';
-import { businessDaysInclusiveBetween } from '../utils/businessDays';
+import { businessWeekdaysFromTomorrowThroughDueInclusive } from '../utils/businessDays';
 import { formatMoney, formatShortDate } from '../utils/format';
 import { BillPaymentMarkControls } from './BillPaymentMarkControls';
 import { Card } from './ui/Card';
@@ -50,7 +50,7 @@ function chipLabel(state: FinanceState, b: TimelineBill, status: ReturnType<type
   if (status === 'overdue') return 'WARNING · Overdue';
   if (status === 'soon') {
     if (billIsInGraceAfterDue(state, b)) return 'Delay window · not red yet';
-    const n = businessDaysInclusiveBetween(new Date(), b.due);
+    const n = businessWeekdaysFromTomorrowThroughDueInclusive(new Date(), b.due);
     return `Closing in · ${n} business day${n === 1 ? '' : 's'}`;
   }
   return 'Upcoming';

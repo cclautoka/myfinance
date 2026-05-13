@@ -33,3 +33,21 @@ export function businessDaysInclusiveBetween(from: Date, to: Date): number {
   }
   return n;
 }
+
+/** Calendar day after `ref` at local midnight (used for “lead” windows that should not count today). */
+export function startOfNextCalendarDay(ref: Date): Date {
+  const d = startOfLocalDay(ref);
+  d.setDate(d.getDate() + 1);
+  return d;
+}
+
+/**
+ * Weekdays from **tomorrow** (first calendar day after `ref`) through `due` inclusive.
+ * Returns 0 if `due` is on or before `ref`’s calendar day (caller should handle due-today / past-due separately).
+ */
+export function businessWeekdaysFromTomorrowThroughDueInclusive(ref: Date, due: Date): number {
+  const dueStart = startOfLocalDay(due);
+  const refStart = startOfLocalDay(ref);
+  if (dueStart.getTime() <= refStart.getTime()) return 0;
+  return businessDaysInclusiveBetween(startOfNextCalendarDay(ref), due);
+}

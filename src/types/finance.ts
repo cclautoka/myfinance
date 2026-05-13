@@ -185,7 +185,8 @@ export interface FinanceState {
    */
   billOverdueGraceDays?: number;
   /**
-   * Bills due within this many business days (Mon–Fri, inclusive from today) show a softer “closing in” hint.
+   * Bills whose due date falls within this many **weekdays starting tomorrow**
+   * through the due date (inclusive) show a softer “closing in” hint (default 3).
    */
   billUpcomingLeadBusinessDays?: number;
 }

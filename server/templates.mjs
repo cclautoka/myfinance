@@ -206,7 +206,7 @@ export function buildReminderEmailTemplate({ monthKey, dueSoon = [], overdue = [
         heading: 'Overdue',
         items: overdue.map((b) => ({
           title: `${b.name} — ${fmtMoney(b.amount)}`,
-          body: `Was due ${b.dueDate}`,
+          body: b.dueToday ? `Due today (${b.dueDate})` : `Was due ${b.dueDate}`,
           meta: b.note ?? '',
         })),
       },

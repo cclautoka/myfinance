@@ -23,7 +23,9 @@ function metaForBill(state: FinanceState, b: TimelineBill, ref: Date): string {
   if (b.autoDeduction) bits.push('Auto');
   const startToday = startOfLocalDay(ref).getTime();
   const dueT = startOfLocalDay(b.due).getTime();
-  if (dueT < startToday && billVisualStatus(state, b, ref) === 'soon') bits.push('Past due (grace)');
+  const st = billVisualStatus(state, b, ref);
+  if (dueT === startToday && st === 'overdue') bits.push('Due today');
+  else if (dueT < startToday && st === 'soon') bits.push('Past due (grace)');
   return bits.join(' · ');
 }
 

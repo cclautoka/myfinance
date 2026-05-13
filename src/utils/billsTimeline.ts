@@ -7,7 +7,7 @@ import {
 } from '../data/defaults';
 import type { DebtAccount, EssentialExpense, FinanceState, TimelineBill } from '../types/finance';
 import {
-  businessDaysInclusiveBetween,
+  businessWeekdaysFromTomorrowThroughDueInclusive,
   calendarDaysAfterDue,
   startOfLocalDay,
 } from './businessDays';
@@ -222,13 +222,16 @@ export const billVisualStatus = (
   const startToday = startOfLocalDay(ref).getTime();
   const dueT = startOfLocalDay(b.due).getTime();
 
+  /** Calendar due date matches “today” — treat as overdue (reminders + UI). */
+  if (dueT === startToday) return 'overdue';
+
   if (dueT < startToday) {
     if (calendarDaysAfterDue(ref, b.due) > overdueGraceDays) return 'overdue';
     return 'soon';
   }
 
-  const bizSpan = businessDaysInclusiveBetween(ref, b.due);
-  if (bizSpan <= upcomingLeadBusinessDays) return 'soon';
+  const bizSpan = businessWeekdaysFromTomorrowThroughDueInclusive(ref, b.due);
+  if (bizSpan > 0 && bizSpan <= upcomingLeadBusinessDays) return 'soon';
   return 'upcoming';
 };
 

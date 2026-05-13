@@ -376,7 +376,7 @@ export function DataEditor({
               <NumericIntegerInput
                 min={1}
                 max={30}
-                title="Whole business days — blur to commit"
+                title="Weekdays from tomorrow through due date (inclusive) — blur to commit"
                 className="w-full rounded-lg border border-sage-300 bg-white px-2 py-1.5 dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
                 value={state.billUpcomingLeadBusinessDays ?? 3}
                 onValueChange={(n) =>

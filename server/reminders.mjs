@@ -46,6 +46,20 @@ function businessDaysInclusiveBetween(from, to) {
   return n;
 }
 
+/** Keep in sync with `src/utils/businessDays.ts` — lead window excludes “today”. */
+function startOfNextCalendarDay(ref) {
+  const d = startOfLocalDay(ref);
+  d.setDate(d.getDate() + 1);
+  return d;
+}
+
+function businessWeekdaysFromTomorrowThroughDueInclusive(ref, due) {
+  const dueStart = startOfLocalDay(due).getTime();
+  const refStart = startOfLocalDay(ref).getTime();
+  if (dueStart <= refStart) return 0;
+  return businessDaysInclusiveBetween(startOfNextCalendarDay(ref), due);
+}
+
 const dateToMonthKey = (d) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 
@@ -81,19 +95,22 @@ function billReminderPrefs(state) {
   return { overdueGraceDays: grace, upcomingLeadBusinessDays: lead };
 }
 
+/** Keep in sync with `src/utils/billsTimeline.ts` `billVisualStatus`. */
 function billVisualStatus(state, row, ref) {
   if (billOccurrenceIsPaid(state, row)) return 'paid';
   const { overdueGraceDays, upcomingLeadBusinessDays } = billReminderPrefs(state);
   const startToday = startOfLocalDay(ref).getTime();
   const dueT = startOfLocalDay(row.due).getTime();
 
+  if (dueT === startToday) return 'overdue';
+
   if (dueT < startToday) {
     if (calendarDaysAfterDue(ref, row.due) > overdueGraceDays) return 'overdue';
     return 'soon'; // past due but inside grace window
   }
 
-  const bizSpan = businessDaysInclusiveBetween(ref, row.due);
-  if (bizSpan <= upcomingLeadBusinessDays) return 'soon';
+  const bizSpan = businessWeekdaysFromTomorrowThroughDueInclusive(ref, row.due);
+  if (bizSpan > 0 && bizSpan <= upcomingLeadBusinessDays) return 'soon';
   return 'upcoming';
 }
 
@@ -215,10 +232,13 @@ export function computeReminderEmailPayload(snapshotData, ref = new Date()) {
       const metaBits = [];
       metaBits.push(b.category === 'debt' ? 'Debt' : 'Essential');
       if (b.autoDeduction) metaBits.push('Auto');
+      const dueToday = dueT === startToday;
+      if (dueToday) metaBits.push('Due today');
       overdue.push({
         name: b.name,
         amount: Number(b.amount ?? 0),
         dueDate: formatDueIso(b.due),
+        dueToday,
         note: metaBits.join(' · '),
       });
       continue;
