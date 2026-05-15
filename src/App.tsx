@@ -1,5 +1,4 @@
-import { useEffect, useSyncExternalStore } from 'react';
-import { AuthenticatedFinanceApp } from './AuthenticatedFinanceApp';
+import { lazy, Suspense, useEffect, useSyncExternalStore } from 'react';
 import { PublicLandingShell } from './landing/PublicLandingShell';
 import { ToastProvider } from './ui/toast/ToastProvider';
 import { pushToast } from './ui/toast/toastBus';
@@ -12,6 +11,10 @@ import {
 } from './utils/notifyRelayConfig';
 import { readHouseholdSession, subscribeHouseholdSessionChanged, writeHouseholdSession } from './utils/householdSession';
 import { clearLocalFinanceCache } from './utils/clearLocalFinanceCache';
+
+const AuthenticatedFinanceApp = lazy(() =>
+  import('./AuthenticatedFinanceApp').then((m) => ({ default: m.AuthenticatedFinanceApp })),
+);
 
 export default function App() {
   const householdSignedIn = useSyncExternalStore(
@@ -123,7 +126,19 @@ export default function App() {
   return (
     <>
       <ToastProvider />
-      {householdSignedIn ? <AuthenticatedFinanceApp /> : <PublicLandingShell />}
+      {householdSignedIn ? (
+        <Suspense
+          fallback={
+            <div className="flex min-h-svh items-center justify-center bg-gradient-to-br from-teal-50/90 via-[#f4f7fb] to-slate-100 text-sm font-medium text-slate-600 dark:from-moss-bg dark:via-moss-elevated dark:to-moss-bg dark:text-moss-muted">
+              Loading your workbook…
+            </div>
+          }
+        >
+          <AuthenticatedFinanceApp />
+        </Suspense>
+      ) : (
+        <PublicLandingShell />
+      )}
     </>
   );
 }

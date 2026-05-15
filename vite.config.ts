@@ -8,6 +8,16 @@ const apiProxyTarget = process.env.VITE_API_PROXY_TARGET ?? 'http://127.0.0.1:87
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/recharts')) return 'recharts';
+          if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/')) return 'react-vendor';
+        },
+      },
+    },
+  },
   server: {
     proxy: {
       '/v1': { target: apiProxyTarget, changeOrigin: true },

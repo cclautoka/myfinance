@@ -1,5 +1,6 @@
 import './load-env.mjs';
 import Fastify from 'fastify';
+import compress from '@fastify/compress';
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import nodemailer from 'nodemailer';
@@ -174,6 +175,12 @@ async function sendMail({ to, subject, text, html }) {
 }
 
 const fastify = Fastify({ logger: true });
+
+await fastify.register(compress, {
+  global: true,
+  encodings: ['br', 'gzip', 'deflate'],
+  threshold: 1024,
+});
 
 const origins = (process.env.NOTIFY_CORS_ORIGINS ?? '')
   .split(',')
@@ -1575,6 +1582,11 @@ if (serveSpa) {
   await fastify.register(fastifyStatic, {
     root: publicDir,
     prefix: '/',
+    setHeaders(res, filePath) {
+      if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    },
   });
   fastify.setNotFoundHandler((request, reply) => {
     const url = request.raw.url ?? '';
