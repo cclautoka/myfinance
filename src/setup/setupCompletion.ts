@@ -126,11 +126,47 @@ export function householdSetupMirrorsComplete(
 }
 
 /**
+ * After server rehydrate, mark setup done when the workbook is clearly already in use.
+ * Returns true when the blocking gate should open (main app, not wizard).
+ */
+export function syncHouseholdSetupFromServerState(state: FinanceState, cfg: NotifyRelayConfig): boolean {
+  maybeMigrateLegacyHouseholdSetup(state, cfg);
+
+  const completion = readHouseholdSetupCompletion();
+  if (completion) {
+    return householdSetupMirrorsComplete(state, cfg, completion);
+  }
+
+  const mode = readHouseholdMode();
+  if (!incomeOk(mode, state.income)) return false;
+
+  const hasEssentials = essentialsBaselineTotal(state) > 0;
+  const hasDebts = state.debts.length > 0;
+  if (hasEssentials || hasDebts) {
+    markHouseholdSetupFinished(!hasDebts);
+    const after = readHouseholdSetupCompletion();
+    return Boolean(after && householdSetupMirrorsComplete(state, cfg, after));
+  }
+
+  // Income already on server (e.g. $1600 / $1800) — returning user after login cache clear.
+  if (mode === 'couple' && state.income.husbandMonthly > 0 && state.income.wifeMonthly > 0) {
+    markHouseholdSetupFinished(state.debts.length === 0);
+    return true;
+  }
+  if (mode === 'single') {
+    const top = Math.max(state.income.husbandMonthly, state.income.wifeMonthly);
+    if (top > 0) {
+      markHouseholdSetupFinished(state.debts.length === 0);
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Blocking gate: show wizard until completion is recorded and mirrors still pass.
- * Legacy workbooks that already satisfy income/essentials/notify get a one-time migration record.
  */
 export function isHouseholdSetupComplete(state: FinanceState, cfg: NotifyRelayConfig): boolean {
-  maybeMigrateLegacyHouseholdSetup(state, cfg);
-  const completion = readHouseholdSetupCompletion();
-  return Boolean(completion && householdSetupMirrorsComplete(state, cfg, completion));
+  return syncHouseholdSetupFromServerState(state, cfg);
 }

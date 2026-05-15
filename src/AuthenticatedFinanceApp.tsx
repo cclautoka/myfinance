@@ -37,7 +37,11 @@ import {
 import { usePersistedFinance } from './hooks/usePersistedFinance';
 import { VerifyEmailGate } from './auth/VerifyEmailGate';
 import { HouseholdSetupWizard } from './setup/HouseholdSetupWizard';
-import { isHouseholdSetupComplete, maybeMigrateLegacyHouseholdSetup } from './setup/setupCompletion';
+import {
+  isHouseholdSetupComplete,
+  readHouseholdSetupCompletion,
+  syncHouseholdSetupFromServerState,
+} from './setup/setupCompletion';
 import { zLayers } from './ui/zLayers';
 import { requiresMonthCashflowOpening } from './utils/monthOpening';
 import { readHouseholdSession, subscribeHouseholdSessionChanged, writeHouseholdSession } from './utils/householdSession';
@@ -124,7 +128,11 @@ export function AuthenticatedFinanceApp() {
   const [emailVerified, setEmailVerified] = useState(() => !apiConfiguredForVerify);
 
   useEffect(() => {
-    maybeMigrateLegacyHouseholdSetup(state, readNotifyRelayConfig());
+    const cfg = readNotifyRelayConfig();
+    const hadCompletion = Boolean(readHouseholdSetupCompletion());
+    if (syncHouseholdSetupFromServerState(state, cfg) && !hadCompletion) {
+      setSetupTick((n) => n + 1);
+    }
   }, [state]);
 
   useEffect(() => {

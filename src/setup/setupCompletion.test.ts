@@ -77,6 +77,14 @@ describe('setupCompletion', () => {
     markHouseholdSetupFinished(true);
     expect(isHouseholdSetupComplete(s, baseNotify)).toBe(true);
   });
+
+  it('skips wizard when server already has couple income but no essentials', () => {
+    const s = defaultFinanceState();
+    s.income = { ...s.income, husbandMonthly: 1600, wifeMonthly: 1800 };
+    expect(localStorage.getItem(HOUSEHOLD_SETUP_STORAGE_KEY)).toBeNull();
+    expect(isHouseholdSetupComplete(s, baseNotify)).toBe(true);
+    expect(localStorage.getItem(HOUSEHOLD_SETUP_STORAGE_KEY)).not.toBeNull();
+  });
 });
 
 describe('setupSchema', () => {
