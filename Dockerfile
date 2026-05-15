@@ -18,6 +18,7 @@ COPY server/index.mjs ./
 COPY server/templates.mjs ./templates.mjs
 COPY server/snapshots.mjs ./snapshots.mjs
 COPY server/db.mjs ./db.mjs
+COPY server/emptyFinanceState.mjs ./emptyFinanceState.mjs
 COPY server/reminders.mjs ./reminders.mjs
 COPY server/scripts/db-migrate.mjs ./scripts/db-migrate.mjs
 COPY --from=frontend-build /web/dist ./public
