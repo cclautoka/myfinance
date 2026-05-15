@@ -14,10 +14,17 @@ import {
 import { allocationBreakdown } from './allocation';
 
 /** Passed from the timeline row when toggling handled / undo. */
-export type BillsTogglePayload = Pick<TimelineBill, 'billId' | 'due' | 'category'>;
+export type BillsTogglePayload = Pick<TimelineBill, 'billId' | 'due' | 'category'> & {
+  /** Display name for toast feedback */
+  label?: string;
+};
 
 /** Same as toggle row; include `actualPaid` when marking paid (defaults to planned in UI). */
-export type BillsPaidTogglePayload = BillsTogglePayload & { actualPaid?: number };
+export type BillsPaidTogglePayload = BillsTogglePayload & {
+  actualPaid?: number;
+  /** Display name for toast feedback */
+  label?: string;
+};
 
 /** Storage key per timeline row — weekly essentials get a day bucket; debts & monthly essentials use YYYY-MM. */
 export function billPaymentKey(state: FinanceState, row: BillsTogglePayload): string {

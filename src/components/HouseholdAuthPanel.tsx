@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   apiBaseFromNotifyUrl,
   ensureNotifyRelayHouseholdId,
-  parseInviteTokenFromHash,
   parseResetTokenFromHash,
   readNotifyRelayConfig,
 } from '../utils/notifyRelayConfig';
@@ -11,6 +10,9 @@ import { HOUSEHOLD_MODE_KEY, type HouseholdMode } from '../utils/householdMode';
 import { FieldError } from './ui/FieldError';
 import { fieldErrorId } from './ui/fieldErrorId';
 import { SegmentedChoice } from './ui/SegmentedChoice';
+import { pushToast } from '../ui/toast/toastBus';
+import { PartnerInviteModal } from './PartnerInviteModal';
+import { resolvePartnerEmailForInvite } from '../utils/resolvePartnerEmail';
 
 function isValidEmail(v: string) {
   const t = v.trim();
@@ -20,27 +22,32 @@ function isValidEmail(v: string) {
 type AuthFieldErrors = Partial<{
   email: string;
   password: string;
-  partnerEmail: string;
-  inviteToken: string;
-  pairDigits: string;
-  pairPassword: string;
   newPassword: string;
 }>;
+
+type ActivePairing = { code: string };
+
+function hasPairingCode(p: ActivePairing | null): p is ActivePairing {
+  return Boolean(p?.code);
+}
 
 export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void }) {
   const hid = useMemo(() => (typeof window !== 'undefined' ? ensureNotifyRelayHouseholdId() : ''), []);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [partnerEmail, setPartnerEmail] = useState('');
-  const [inviteToken, setInviteToken] = useState('');
-  const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [resetTokenFromHash, setResetTokenFromHash] = useState<string | null>(null);
   const [newPasswordAfterReset, setNewPasswordAfterReset] = useState('');
-  const [pairDigits, setPairDigits] = useState('');
-  const [pairPassword, setPairPassword] = useState('');
-  const [bearerKeysText, setBearerKeysText] = useState<string | null>(null);
   const [inlineErr, setInlineErr] = useState<AuthFieldErrors>({});
+  const [activePairing, setActivePairing] = useState<ActivePairing | null>(null);
+  const [pairingHighlight, setPairingHighlight] = useState(false);
+  const [inviteModalOpen, setInviteModalOpen] = useState(false);
+  const [inviteModalUrl, setInviteModalUrl] = useState('');
+  const [inviteModalPartnerEmail, setInviteModalPartnerEmail] = useState('');
+  const [inviteVerificationSent, setInviteVerificationSent] = useState(false);
+  const [securityOpen, setSecurityOpen] = useState(false);
+  const pairingSectionRef = useRef<HTMLDivElement>(null);
+
   const [mode, setMode] = useState<HouseholdMode>(() => {
     try {
       const v = localStorage.getItem(HOUSEHOLD_MODE_KEY);
@@ -51,13 +58,24 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
   });
 
   const session = typeof window !== 'undefined' ? readHouseholdSession() : null;
+  const isOwner = session?.role === 'owner';
+  const isPartner = session?.role === 'partner';
+  const signedIn = Boolean(session?.token);
 
   useEffect(() => {
-    const t = parseInviteTokenFromHash();
-    if (t) setInviteToken(t);
+    if (session?.email) setEmail(session.email);
+  }, [session?.email]);
+
+  useEffect(() => {
     const rt = parseResetTokenFromHash();
     if (rt) setResetTokenFromHash(rt);
   }, []);
+
+  useEffect(() => {
+    if (!pairingHighlight) return;
+    const t = window.setTimeout(() => setPairingHighlight(false), 4000);
+    return () => clearTimeout(t);
+  }, [pairingHighlight]);
 
   const persistMode = (m: HouseholdMode) => {
     setMode(m);
@@ -110,7 +128,6 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
     }
     setInlineErr({});
     setBusy(true);
-    setMsg(null);
     try {
       const j = (await postJson('/v1/household/auth/register', {
         householdId: hid,
@@ -122,7 +139,10 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
         member?: { email?: string; role?: string; householdId?: string };
       };
       if (j.needsEmailVerification) {
-        setMsg('Check your email to verify, then sign in here with the same password.');
+        pushToast({
+          type: 'success',
+          message: 'Check your email to verify, then sign in here with the same password.',
+        });
       } else if (j.token && j.member?.householdId) {
         writeHouseholdSession({
           token: j.token,
@@ -130,11 +150,11 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
           email: j.member.email,
           role: j.member.role,
         });
-        setMsg('Registered and signed in on this device.');
+        pushToast({ type: 'success', message: 'Registered and signed in on this device.' });
         onAuthChange?.();
       }
     } catch (e) {
-      setMsg(String((e as Error)?.message ?? e));
+      pushToast({ type: 'error', message: String((e as Error)?.message ?? e) });
     } finally {
       setBusy(false);
     }
@@ -151,7 +171,6 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
     }
     setInlineErr({});
     setBusy(true);
-    setMsg(null);
     try {
       const j = (await postJson('/v1/household/auth/login', {
         householdId: hid,
@@ -166,29 +185,60 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
           role: j.member.role,
         });
       }
-      setMsg('Signed in.');
+      pushToast({ type: 'success', message: 'Signed in.' });
       onAuthChange?.();
     } catch (e) {
-      setMsg(String((e as Error)?.message ?? e));
+      pushToast({ type: 'error', message: String((e as Error)?.message ?? e) });
     } finally {
       setBusy(false);
     }
   };
 
-  const invite = async () => {
+  const createPairing = useCallback(async (): Promise<ActivePairing | null> => {
+    const body: Record<string, unknown> = { householdId: hid };
+    const { secret } = readNotifyRelayConfig();
+    const sess = readHouseholdSession();
+    if (!sess?.token && secret.trim()) {
+      body.ownerEmail = email.trim() || readNotifyRelayConfig().husbandEmail;
+    }
+    const j = (await postJson('/v1/household/pairing/create', body, true)) as {
+      code?: string;
+    };
+    if (!j.code) return null;
+    const next: ActivePairing = { code: j.code };
+    setActivePairing(next);
+    return next;
+  }, [email, hid, postJson]);
+
+  const highlightPairingSection = () => {
+    setPairingHighlight(true);
+    pairingSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
+  const invitePartner = async () => {
     setBusy(true);
-    setMsg(null);
     try {
-      const body: Record<string, unknown> = { householdId: hid };
-      const { secret } = readNotifyRelayConfig();
-      const sess = readHouseholdSession();
-      if (!sess?.token && secret.trim()) {
-        body.ownerEmail = email.trim() || readNotifyRelayConfig().husbandEmail;
+      let pairing = hasPairingCode(activePairing) ? activePairing : await createPairing();
+      if (!pairing) {
+        highlightPairingSection();
+        pushToast({ type: 'error', message: 'Generate a pairing code first, then try again.' });
+        return;
       }
+      const partnerEmail = resolvePartnerEmailForInvite(session?.email);
+      if (!partnerEmail) {
+        pushToast({
+          type: 'error',
+          message: 'Set both partner emails under Email summaries (or complete setup) before inviting.',
+        });
+        return;
+      }
+      const body: Record<string, unknown> = { householdId: hid, partnerEmail };
       const j = (await postJson('/v1/household/auth/invite', body, true)) as {
         inviteUrl?: string | null;
         token?: string;
         inviteHashFragment?: string;
+        partnerEmail?: string;
+        verificationEmailSent?: boolean;
       };
       const link =
         j.inviteUrl ||
@@ -197,49 +247,23 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
           : j.token
             ? `${window.location.origin}${window.location.pathname}#invite=${encodeURIComponent(j.token)}`
             : '');
-      setMsg(link ? `Invite link (copy): ${link}` : 'Invite created.');
-      if (link) void navigator.clipboard?.writeText(link);
-    } catch (e) {
-      setMsg(String((e as Error)?.message ?? e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const accept = async () => {
-    const next: AuthFieldErrors = {};
-    if (!inviteToken.trim()) next.inviteToken = 'Paste the invite token from your link.';
-    if (!partnerEmail.trim()) next.partnerEmail = 'Enter your email.';
-    else if (!isValidEmail(partnerEmail)) next.partnerEmail = 'Enter a valid email address.';
-    if (Object.keys(next).length) {
-      setInlineErr(next);
-      return;
-    }
-    setInlineErr({});
-    setBusy(true);
-    setMsg(null);
-    try {
-      const j = (await postJson('/v1/household/auth/accept-invite', {
-        token: inviteToken.trim(),
-        email: partnerEmail.trim(),
-      })) as { token?: string; member?: { email?: string; role?: string; householdId?: string } };
-      if (j.token && j.member?.householdId) {
-        writeHouseholdSession({
-          token: j.token,
-          householdId: j.member.householdId,
-          email: j.member.email,
-          role: j.member.role,
+      if (!link) {
+        pushToast({ type: 'error', message: 'Could not build invite link.' });
+        return;
+      }
+      setInviteModalUrl(link);
+      setInviteModalPartnerEmail(j.partnerEmail ?? partnerEmail);
+      setInviteVerificationSent(Boolean(j.verificationEmailSent));
+      setInviteModalOpen(true);
+      if (j.verificationEmailSent) {
+        pushToast({
+          type: 'success',
+          message: `Verification email sent to ${j.partnerEmail ?? partnerEmail}.`,
         });
       }
-      setMsg('Joined household. Session saved on this device.');
-      try {
-        history.replaceState(null, '', window.location.pathname + window.location.search);
-      } catch {
-        /* ignore */
-      }
-      onAuthChange?.();
     } catch (e) {
-      setMsg(String((e as Error)?.message ?? e));
+      pushToast({ type: 'error', message: String((e as Error)?.message ?? e) });
+      highlightPairingSection();
     } finally {
       setBusy(false);
     }
@@ -247,38 +271,48 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
 
   const requestVerifyEmail = async () => {
     setBusy(true);
-    setMsg(null);
     try {
       await postJson('/v1/household/auth/request-verify-email', {}, true);
-      setMsg('Verification email sent (if mail is configured).');
+      pushToast({ type: 'success', message: 'Verification email sent (if mail is configured).' });
     } catch (e) {
-      setMsg(String((e as Error)?.message ?? e));
+      pushToast({ type: 'error', message: String((e as Error)?.message ?? e) });
     } finally {
       setBusy(false);
     }
   };
 
   const requestForgotPassword = async () => {
+    const addr = (session?.email ?? email).trim();
+    if (!addr) {
+      pushToast({ type: 'error', message: 'No email on file for this account.' });
+      return;
+    }
     setBusy(true);
-    setMsg(null);
     try {
-      await postJson('/v1/household/auth/request-password-reset', { householdId: hid, email: email.trim() });
-      setMsg('If that primary email exists, a reset link was sent.');
+      await postJson('/v1/household/auth/request-password-reset', { householdId: hid, email: addr });
+      pushToast({ type: 'success', message: 'If that primary email exists, a reset link was sent.' });
     } catch (e) {
-      setMsg(String((e as Error)?.message ?? e));
+      pushToast({ type: 'error', message: String((e as Error)?.message ?? e) });
     } finally {
       setBusy(false);
     }
   };
 
   const requestMagicLogin = async () => {
+    const addr = (session?.email ?? email).trim();
+    if (!addr) {
+      pushToast({ type: 'error', message: 'Enter your email first.' });
+      return;
+    }
     setBusy(true);
-    setMsg(null);
     try {
-      await postJson('/v1/household/auth/request-magic-login', { householdId: hid, email: email.trim() });
-      setMsg('If that email is registered for this household, a sign-in link was sent (15 min).');
+      await postJson('/v1/household/auth/request-magic-login', { householdId: hid, email: addr });
+      pushToast({
+        type: 'success',
+        message: 'If that email is registered for this household, a sign-in link was sent (15 min).',
+      });
     } catch (e) {
-      setMsg(String((e as Error)?.message ?? e));
+      pushToast({ type: 'error', message: String((e as Error)?.message ?? e) });
     } finally {
       setBusy(false);
     }
@@ -292,13 +326,15 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
     }
     setInlineErr({});
     setBusy(true);
-    setMsg(null);
     try {
       await postJson('/v1/household/auth/reset-password', {
         token: resetTokenFromHash,
         newPassword: newPasswordAfterReset,
       });
-      setMsg('Password updated. You can sign in with the new password.');
+      pushToast({
+        type: 'success',
+        message: 'Password updated — sign in with your new password.',
+      });
       setResetTokenFromHash(null);
       setNewPasswordAfterReset('');
       try {
@@ -307,135 +343,52 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
         /* ignore */
       }
     } catch (e) {
-      setMsg(String((e as Error)?.message ?? e));
+      pushToast({ type: 'error', message: String((e as Error)?.message ?? e) });
     } finally {
       setBusy(false);
     }
   };
 
-  const createPairing = async () => {
-    setBusy(true);
-    setMsg(null);
+  const copyHouseholdId = async () => {
+    if (!hid) return;
     try {
-      const body: Record<string, unknown> = { householdId: hid };
-      const { secret } = readNotifyRelayConfig();
-      const sess = readHouseholdSession();
-      if (!sess?.token && secret.trim()) {
-        body.ownerEmail = email.trim() || readNotifyRelayConfig().husbandEmail;
-      }
-      const j = (await postJson('/v1/household/pairing/create', body, true)) as { code?: string };
-      if (j.code) {
-        setMsg(`Pairing code (15 min): ${j.code} — share with your partner on this household only.`);
-      }
-    } catch (e) {
-      setMsg(String((e as Error)?.message ?? e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const redeemPairing = async () => {
-    const digits = pairDigits.replace(/\D/g, '');
-    const next: AuthFieldErrors = {};
-    if (digits.length !== 6) next.pairDigits = 'Enter the 6-digit code.';
-    if (!partnerEmail.trim()) next.partnerEmail = 'Enter your email.';
-    else if (!isValidEmail(partnerEmail)) next.partnerEmail = 'Enter a valid email address.';
-    if (pairPassword.length < 8) next.pairPassword = 'Password must be at least 8 characters.';
-    if (Object.keys(next).length) {
-      setInlineErr(next);
-      return;
-    }
-    setInlineErr({});
-    setBusy(true);
-    setMsg(null);
-    try {
-      const j = (await postJson('/v1/household/pairing/redeem', {
-        householdId: hid,
-        code: pairDigits.replace(/\D/g, ''),
-        email: partnerEmail.trim(),
-        password: pairPassword,
-      })) as { token?: string; member?: { email?: string; role?: string; householdId?: string } };
-      if (j.token && j.member?.householdId) {
-        writeHouseholdSession({
-          token: j.token,
-          householdId: j.member.householdId,
-          email: j.member.email,
-          role: j.member.role,
-        });
-      }
-      setMsg('Joined via pairing code. Session saved on this device.');
-      setPairDigits('');
-      setPairPassword('');
-      onAuthChange?.();
-    } catch (e) {
-      setMsg(String((e as Error)?.message ?? e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const refreshBearerKeys = async () => {
-    setBusy(true);
-    setMsg(null);
-    try {
-      const body: Record<string, unknown> = { householdId: hid, action: 'list' };
-      const { secret } = readNotifyRelayConfig();
-      const sess = readHouseholdSession();
-      if (!sess?.token && secret.trim()) {
-        body.ownerEmail = email.trim() || readNotifyRelayConfig().husbandEmail;
-      }
-      const j = (await postJson('/v1/household/bearer-keys', body, true)) as {
-        keys?: { id: string; label: string; createdAt: string; revoked: boolean }[];
-      };
-      const lines = (j.keys ?? []).map((k) => `${k.revoked ? 'revoked' : 'active'}\t${k.label || '(no label)'}\t${k.id}`);
-      setBearerKeysText(lines.length ? lines.join('\n') : 'No keys yet.');
-    } catch (e) {
-      setMsg(String((e as Error)?.message ?? e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const mintBearerKey = async () => {
-    setBusy(true);
-    setMsg(null);
-    try {
-      const body: Record<string, unknown> = { householdId: hid, action: 'create', label: 'device' };
-      const { secret } = readNotifyRelayConfig();
-      const sess = readHouseholdSession();
-      if (!sess?.token && secret.trim()) {
-        body.ownerEmail = email.trim() || readNotifyRelayConfig().husbandEmail;
-      }
-      const j = (await postJson('/v1/household/bearer-keys', body, true)) as { key?: string };
-      if (j.key) {
-        void navigator.clipboard?.writeText(j.key);
-        setMsg(`New household API key copied once — store it safely (hk_…). Server cannot show it again.`);
-      }
-    } catch (e) {
-      setMsg(String((e as Error)?.message ?? e));
-    } finally {
-      setBusy(false);
+      await navigator.clipboard.writeText(hid);
+      pushToast({ type: 'success', message: 'Household id copied.' });
+    } catch {
+      pushToast({ type: 'error', message: 'Could not copy household id.' });
     }
   };
 
   const logout = () => {
     clearHouseholdSession();
-    setMsg('Signed out (session cleared). Use shared secret or sign in again.');
+    pushToast({ type: 'success', message: 'Signed out.' });
     onAuthChange?.();
+  };
+
+  const generatePairingClick = async () => {
+    setBusy(true);
+    try {
+      const p = await createPairing();
+      if (p) {
+        pushToast({
+          type: 'success',
+          message: `Pairing code: ${p.code} — does not expire. Share with your partner.`,
+        });
+      }
+    } catch (e) {
+      pushToast({ type: 'error', message: String((e as Error)?.message ?? e) });
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
     <div className="max-w-3xl rounded-xl border-2 border-slate-200/90 border-t-teal-600 bg-white p-5 text-slate-900 shadow-md shadow-slate-900/10 dark:border-moss-border dark:border-t-teal-500 dark:bg-moss-surface dark:text-moss-fg dark:shadow-black/30">
       <h4 className="font-display text-base font-bold text-sage-900 dark:text-moss-fg">Household sign-in (server)</h4>
       <p className="mt-2 text-sm leading-relaxed text-sage-700 dark:text-moss-subtle">
-        Primary owner: email + password, or use <strong className="font-semibold">Email sign-in link</strong> for a one-time
-        magic link (any member on this household id). Partners join with an invite link, pairing code, or magic link. Server
-        needs <code className="rounded-md border border-slate-200/80 bg-slate-50 px-1.5 py-0.5 text-xs dark:border-moss-border dark:bg-moss-bg">DATABASE_URL</code> and{' '}
-        <code className="rounded-md border border-slate-200/80 bg-slate-50 px-1.5 py-0.5 text-xs dark:border-moss-border dark:bg-moss-bg">SESSION_SECRET</code>. With{' '}
-        <code className="rounded-md border border-slate-200/80 bg-slate-50 px-1.5 py-0.5 text-xs dark:border-moss-border dark:bg-moss-bg">NOTIFY_LEGACY_SECRET_DISABLED=1</code>, the API accepts only signed-in sessions (
-        <code className="rounded-md border border-slate-200/80 bg-slate-50 px-1.5 py-0.5 text-xs dark:border-moss-border dark:bg-moss-bg">fm_sess_…</code>) and household keys (
-        <code className="rounded-md border border-slate-200/80 bg-slate-50 px-1.5 py-0.5 text-xs dark:border-moss-border dark:bg-moss-bg">hk_…</code>) — no{' '}
-        <code className="rounded-md border border-slate-200/80 bg-slate-50 px-1.5 py-0.5 text-xs dark:border-moss-border dark:bg-moss-bg">NOTIFY_API_SECRET</code>.
+        Owners sign in with email and password (or a magic link). Partners join with an invite link plus a pairing code —
+        no password required. When email verification is enabled on the server, both owner and partner must verify their
+        inbox before full access.
       </p>
 
       <fieldset className="mt-5">
@@ -459,10 +412,19 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
         </p>
       </fieldset>
 
-      <p className="mt-2 text-xs text-sage-600 dark:text-moss-muted">
-        Household id: <code className="font-semibold">{hid || '…'}</code> · API base:{' '}
-        <code className="font-semibold">{baseUrl || 'set notify URL'}</code>
-      </p>
+      <div className="mt-4 rounded-lg border border-slate-200/90 bg-slate-50/80 px-3 py-2.5 dark:border-moss-border dark:bg-moss-bg/50">
+        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-sage-600 dark:text-moss-muted">
+          Household id
+        </p>
+        <p className="mt-1 break-all font-mono text-sm font-semibold text-sage-900 dark:text-moss-fg">{hid || '…'}</p>
+        <p className="mt-1 text-xs text-sage-600 dark:text-moss-muted">
+          Same id for everyone in this household. API:{' '}
+          <code className="font-semibold">{baseUrl || 'set notify URL'}</code>
+        </p>
+        <button type="button" className="btn-secondary btn-secondary-sm mt-2 font-bold" disabled={!hid} onClick={() => void copyHouseholdId()}>
+          Copy household id
+        </button>
+      </div>
 
       {session ? (
         <p className="mt-3 text-sm font-semibold text-teal-900 dark:text-teal-200">
@@ -477,77 +439,142 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
         </p>
       ) : null}
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <label className="block text-xs font-semibold uppercase tracking-wide text-sage-600 dark:text-moss-muted">
-          Email
-          <input
-            className="mt-1 w-full rounded-lg border border-sage-300 bg-white px-3 py-2 text-sm dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
-            value={email}
-            aria-invalid={Boolean(inlineErr.email)}
-            aria-describedby={inlineErr.email ? fieldErrorId('ha-email') : undefined}
-            onChange={(e) => {
-              setEmail(e.target.value);
-              setInlineErr((p) => ({ ...p, email: undefined }));
-            }}
-            autoComplete="email"
-          />
-          <FieldError id={fieldErrorId('ha-email')} message={inlineErr.email} />
-        </label>
-        <label className="block text-xs font-semibold uppercase tracking-wide text-sage-600 dark:text-moss-muted">
-          Password (min 8)
-          <input
-            type="password"
-            className="mt-1 w-full rounded-lg border border-sage-300 bg-white px-3 py-2 text-sm dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
-            value={password}
-            aria-invalid={Boolean(inlineErr.password)}
-            aria-describedby={inlineErr.password ? fieldErrorId('ha-password') : undefined}
-            onChange={(e) => {
-              setPassword(e.target.value);
-              setInlineErr((p) => ({ ...p, password: undefined }));
-            }}
-            autoComplete="new-password"
-          />
-          <FieldError id={fieldErrorId('ha-password')} message={inlineErr.password} />
-        </label>
-      </div>
+      {!signedIn ? (
+        <>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="block text-xs font-semibold uppercase tracking-wide text-sage-600 dark:text-moss-muted">
+              Email
+              <input
+                className="mt-1 w-full rounded-lg border border-sage-300 bg-white px-3 py-2 text-sm dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
+                value={email}
+                aria-invalid={Boolean(inlineErr.email)}
+                aria-describedby={inlineErr.email ? fieldErrorId('ha-email') : undefined}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setInlineErr((p) => ({ ...p, email: undefined }));
+                }}
+                autoComplete="email"
+              />
+              <FieldError id={fieldErrorId('ha-email')} message={inlineErr.email} />
+            </label>
+            <label className="block text-xs font-semibold uppercase tracking-wide text-sage-600 dark:text-moss-muted">
+              Password (min 8)
+              <input
+                type="password"
+                className="mt-1 w-full rounded-lg border border-sage-300 bg-white px-3 py-2 text-sm dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
+                value={password}
+                aria-invalid={Boolean(inlineErr.password)}
+                aria-describedby={inlineErr.password ? fieldErrorId('ha-password') : undefined}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setInlineErr((p) => ({ ...p, password: undefined }));
+                }}
+                autoComplete="new-password"
+              />
+              <FieldError id={fieldErrorId('ha-password')} message={inlineErr.password} />
+            </label>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" className="btn-primary btn-primary-sm font-bold" disabled={busy} onClick={() => void register()}>
+              Register primary
+            </button>
+            <button type="button" className="btn-secondary btn-secondary-sm font-bold" disabled={busy} onClick={() => void login()}>
+              Sign in
+            </button>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="btn-secondary btn-secondary-sm font-bold"
+              disabled={busy || !email.trim()}
+              onClick={() => void requestForgotPassword()}
+            >
+              Forgot password
+            </button>
+            <button
+              type="button"
+              className="btn-secondary btn-secondary-sm font-bold"
+              disabled={busy || !email.trim()}
+              onClick={() => void requestMagicLogin()}
+            >
+              Email sign-in link
+            </button>
+          </div>
+        </>
+      ) : null}
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button type="button" className="btn-primary btn-primary-sm font-bold" disabled={busy} onClick={() => void register()}>
-          Register primary
-        </button>
-        <button type="button" className="btn-secondary btn-secondary-sm font-bold" disabled={busy} onClick={() => void login()}>
-          Sign in
-        </button>
-        {session?.role === 'owner' ? (
-          <button type="button" className="btn-secondary btn-secondary-sm font-bold" disabled={busy} onClick={() => void invite()}>
-            Create partner invite
-          </button>
-        ) : null}
-      </div>
+      {signedIn && isOwner ? (
+        <div
+          ref={pairingSectionRef}
+          id="household-partner-access"
+          className={`mt-8 border-t border-violet-200/80 pt-5 transition-shadow dark:border-violet-900/40 ${
+            pairingHighlight ? 'rounded-xl ring-2 ring-amber-400 ring-offset-2 ring-offset-white dark:ring-offset-moss-surface' : ''
+          }`}
+        >
+          <p className="text-sm font-bold text-sage-900 dark:text-moss-fg">Partner access</p>
+          <p className="mt-1 text-xs text-sage-600 dark:text-moss-muted">
+            Generate a pairing code, then create an invite link. Your partner opens the link and enters their email plus this
+            code.
+          </p>
+          {hasPairingCode(activePairing) ? (
+            <p className="mt-3 font-mono text-xl font-bold tracking-[0.3em] text-teal-800 dark:text-teal-200">
+              {activePairing.code}
+              <span className="ml-3 text-xs font-sans font-medium tracking-normal text-sage-600 dark:text-moss-muted">
+                does not expire
+              </span>
+            </p>
+          ) : (
+            <p className="mt-2 text-xs text-amber-800 dark:text-amber-200/90">No pairing code yet — generate one below.</p>
+          )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="btn-secondary btn-secondary-sm font-bold"
+              disabled={busy}
+              onClick={() => void generatePairingClick()}
+            >
+              Generate pairing code
+            </button>
+            <button type="button" className="btn-primary btn-primary-sm font-bold" disabled={busy} onClick={() => void invitePartner()}>
+              Invite partner
+            </button>
+          </div>
+        </div>
+      ) : null}
 
-      <div className="mt-2 flex flex-wrap gap-2">
-        <button
-          type="button"
-          className="btn-secondary btn-secondary-sm font-bold"
-          disabled={busy || !email.trim()}
-          onClick={() => void requestForgotPassword()}
-        >
-          Forgot password (primary)
-        </button>
-        {session?.role === 'owner' ? (
-          <button type="button" className="btn-secondary btn-secondary-sm font-bold" disabled={busy} onClick={() => void requestVerifyEmail()}>
-            Send verify email
+      {signedIn && isPartner ? (
+        <div className="mt-6 rounded-xl border border-teal-200/80 bg-teal-50/40 p-4 dark:border-teal-900/40 dark:bg-teal-950/25">
+          <p className="text-sm font-semibold text-teal-950 dark:text-teal-100">Partner account</p>
+          <p className="mt-1 text-xs text-teal-900/90 dark:text-teal-200/85">
+            You joined without a password. Use a one-time email link to sign in on other devices.
+          </p>
+          <button
+            type="button"
+            className="btn-primary btn-primary-sm mt-3 font-bold"
+            disabled={busy}
+            onClick={() => void requestMagicLogin()}
+          >
+            Email me a sign-in link
           </button>
-        ) : null}
-        <button
-          type="button"
-          className="btn-secondary btn-secondary-sm font-bold"
-          disabled={busy || !email.trim()}
-          onClick={() => void requestMagicLogin()}
-        >
-          Email sign-in link
-        </button>
-      </div>
+        </div>
+      ) : null}
+
+      {signedIn && isOwner ? (
+        <details className="mt-6 group" open={securityOpen} onToggle={(e) => setSecurityOpen((e.target as HTMLDetailsElement).open)}>
+          <summary className="cursor-pointer text-sm font-bold text-sage-900 dark:text-moss-fg">Account security</summary>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" className="btn-secondary btn-secondary-sm font-bold" disabled={busy} onClick={() => void requestForgotPassword()}>
+              Forgot password
+            </button>
+            <button type="button" className="btn-secondary btn-secondary-sm font-bold" disabled={busy} onClick={() => void requestVerifyEmail()}>
+              Send verify email
+            </button>
+            <button type="button" className="btn-secondary btn-secondary-sm font-bold" disabled={busy} onClick={() => void requestMagicLogin()}>
+              Email sign-in link
+            </button>
+          </div>
+        </details>
+      ) : null}
 
       {resetTokenFromHash ? (
         <div className="mt-6 rounded-2xl border border-amber-200/70 bg-amber-50/50 p-4 dark:border-amber-900/40 dark:bg-amber-950/20">
@@ -578,119 +605,14 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
         </div>
       ) : null}
 
-      <div className="mt-8 border-t border-violet-200/80 pt-5 dark:border-violet-900/40">
-        <p className="text-sm font-bold text-sage-900 dark:text-moss-fg">Accept partner invite</p>
-        <p className="mt-1 text-xs text-sage-600 dark:text-moss-muted">
-          Open the invite link on this device or paste the token. Hash clears after accept.
-        </p>
-        <input
-          className="mt-2 w-full rounded-lg border border-sage-300 bg-white px-3 py-2 font-mono text-xs dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
-          placeholder="Invite token"
-          value={inviteToken}
-          aria-invalid={Boolean(inlineErr.inviteToken)}
-          aria-describedby={inlineErr.inviteToken ? fieldErrorId('ha-invite') : undefined}
-          onChange={(e) => {
-            setInviteToken(e.target.value);
-            setInlineErr((p) => ({ ...p, inviteToken: undefined }));
-          }}
-        />
-        <FieldError id={fieldErrorId('ha-invite')} message={inlineErr.inviteToken} />
-        <input
-          className="mt-2 w-full rounded-lg border border-sage-300 bg-white px-3 py-2 text-sm dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
-          placeholder="Your email (partner)"
-          value={partnerEmail}
-          aria-invalid={Boolean(inlineErr.partnerEmail)}
-          aria-describedby={inlineErr.partnerEmail ? fieldErrorId('ha-partner') : undefined}
-          onChange={(e) => {
-            setPartnerEmail(e.target.value);
-            setInlineErr((p) => ({ ...p, partnerEmail: undefined }));
-          }}
-          autoComplete="email"
-        />
-        <FieldError id={fieldErrorId('ha-partner')} message={inlineErr.partnerEmail} />
-        <button type="button" className="btn-primary btn-primary-sm mt-2 font-bold" disabled={busy} onClick={() => void accept()}>
-          Accept invite
-        </button>
-      </div>
-
-      <div className="mt-8 border-t border-amber-200/80 pt-5 dark:border-amber-900/40">
-        <p className="text-sm font-bold text-sage-900 dark:text-moss-fg">Pairing code</p>
-        <p className="mt-1 text-xs text-sage-600 dark:text-moss-muted">
-          Owner generates a 6-digit code (15 minutes). Partner enters code with their email and password to join the same household id
-          as above.
-        </p>
-        {session?.role === 'owner' ? (
-          <button type="button" className="btn-secondary btn-secondary-sm mt-2 font-bold" disabled={busy} onClick={() => void createPairing()}>
-            Generate pairing code
-          </button>
-        ) : null}
-        <input
-          className="mt-3 w-full rounded-lg border border-sage-300 bg-white px-3 py-2 font-mono text-sm tracking-widest dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
-          placeholder="6-digit code"
-          inputMode="numeric"
-          value={pairDigits}
-          aria-invalid={Boolean(inlineErr.pairDigits)}
-          aria-describedby={inlineErr.pairDigits ? fieldErrorId('ha-pair-digits') : undefined}
-          onChange={(e) => {
-            setPairDigits(e.target.value.replace(/\D/g, '').slice(0, 6));
-            setInlineErr((p) => ({ ...p, pairDigits: undefined }));
-          }}
-        />
-        <FieldError id={fieldErrorId('ha-pair-digits')} message={inlineErr.pairDigits} />
-        <input
-          className="mt-2 w-full rounded-lg border border-sage-300 bg-white px-3 py-2 text-sm dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
-          placeholder="Your email (partner)"
-          value={partnerEmail}
-          aria-invalid={Boolean(inlineErr.partnerEmail)}
-          aria-describedby={inlineErr.partnerEmail ? fieldErrorId('ha-partner-pair') : undefined}
-          onChange={(e) => {
-            setPartnerEmail(e.target.value);
-            setInlineErr((p) => ({ ...p, partnerEmail: undefined }));
-          }}
-          autoComplete="email"
-        />
-        <FieldError id={fieldErrorId('ha-partner-pair')} message={inlineErr.partnerEmail} />
-        <input
-          type="password"
-          className="mt-2 w-full rounded-lg border border-sage-300 bg-white px-3 py-2 text-sm dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
-          placeholder="Choose password (min 8)"
-          value={pairPassword}
-          aria-invalid={Boolean(inlineErr.pairPassword)}
-          aria-describedby={inlineErr.pairPassword ? fieldErrorId('ha-pair-pwd') : undefined}
-          onChange={(e) => {
-            setPairPassword(e.target.value);
-            setInlineErr((p) => ({ ...p, pairPassword: undefined }));
-          }}
-          autoComplete="new-password"
-        />
-        <FieldError id={fieldErrorId('ha-pair-pwd')} message={inlineErr.pairPassword} />
-        <button type="button" className="btn-primary btn-primary-sm mt-2 font-bold" disabled={busy} onClick={() => void redeemPairing()}>
-          Join with pairing code
-        </button>
-      </div>
-
-      {session?.role === 'owner' ? (
-        <div className="mt-8 border-t border-slate-200/90 pt-5 dark:border-moss-border">
-          <p className="text-sm font-bold text-sage-900 dark:text-moss-fg">Household API keys</p>
-          <p className="mt-1 text-xs text-sage-600 dark:text-moss-muted">
-            Scoped <code className="text-xs">hk_…</code> bearer for notify/state/snapshot on this household. Session still required for
-            invites, pairing, and email actions.
-          </p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <button type="button" className="btn-secondary btn-secondary-sm font-bold" disabled={busy} onClick={() => void mintBearerKey()}>
-              Mint new key
-            </button>
-            <button type="button" className="btn-secondary btn-secondary-sm font-bold" disabled={busy} onClick={() => void refreshBearerKeys()}>
-              List keys
-            </button>
-          </div>
-          {bearerKeysText ? (
-            <pre className="mt-2 max-h-40 overflow-auto rounded-lg bg-slate-900/90 p-3 font-mono text-[11px] text-teal-100">{bearerKeysText}</pre>
-          ) : null}
-        </div>
-      ) : null}
-
-      {msg ? <p className="mt-3 text-sm text-sage-800 dark:text-moss-subtle">{msg}</p> : null}
+      <PartnerInviteModal
+        open={inviteModalOpen}
+        onClose={() => setInviteModalOpen(false)}
+        inviteUrl={inviteModalUrl}
+        pairingCode={hasPairingCode(activePairing) ? activePairing.code : ''}
+        partnerEmail={inviteModalPartnerEmail}
+        verificationEmailSent={inviteVerificationSent}
+      />
     </div>
   );
 }

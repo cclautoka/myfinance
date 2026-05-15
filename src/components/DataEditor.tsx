@@ -24,6 +24,7 @@ import { HoverTip } from './ui/HoverTip';
 import { ListboxSelect } from './ui/ListboxSelect';
 import { SegmentedChoice } from './ui/SegmentedChoice';
 import { ScheduledPayAutomationFields } from './ScheduledPayAutomationFields';
+import { pushToast } from '../ui/toast/toastBus';
 
 const PAY_SCHEDULE_SEGMENT: { id: PaySchedule; label: string }[] = [
   { id: 'weekly', label: 'Weekly' },
@@ -95,6 +96,7 @@ export function DataEditor({
       ...state.essentials,
       { id: newId('ess'), name: 'New expense / savings target', amount: 0, cadence: 'month' },
     ]);
+    pushToast({ type: 'success', message: 'Essential expense added.' });
   };
 
   const removeEssential = (id: string) => {
@@ -117,7 +119,10 @@ export function DataEditor({
       confirmLabel: 'Remove row',
       cancelLabel: 'Cancel',
       showCancel: true,
-      onConfirm: () => onEssentials(state.essentials.filter((x) => x.id !== id)),
+      onConfirm: () => {
+        onEssentials(state.essentials.filter((x) => x.id !== id));
+        pushToast({ type: 'success', message: `Removed “${rowLabel}”.` });
+      },
     });
   };
 
@@ -136,6 +141,7 @@ export function DataEditor({
         annualInterestApr: 0,
       },
     ]);
+    pushToast({ type: 'success', message: 'Debt row added.' });
   };
 
   const removeDebt = (id: string) => {
@@ -147,7 +153,10 @@ export function DataEditor({
       confirmLabel: 'Remove debt row',
       cancelLabel: 'Cancel',
       showCancel: true,
-      onConfirm: () => onDebts(state.debts.filter((x) => x.id !== id)),
+      onConfirm: () => {
+        onDebts(state.debts.filter((x) => x.id !== id));
+        pushToast({ type: 'success', message: `Removed “${rowLabel}”.` });
+      },
     });
   };
 

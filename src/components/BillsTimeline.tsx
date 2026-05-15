@@ -118,7 +118,12 @@ export function BillsTimeline({
                 const inGrace = billIsInGraceAfterDue(state, b);
                 const isChecked = billOccurrenceIsPaid(state, b);
                 const displayPaid = billOccurrencePaidDisplayAmount(state, b, b.amount);
-                const toggleTarget = { billId: b.billId, due: b.due, category: b.category };
+                const toggleTarget = {
+                  billId: b.billId,
+                  due: b.due,
+                  category: b.category,
+                  label: b.name,
+                };
                 return (
                   <li
                     key={b.id}

@@ -1,6 +1,8 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { AuthenticatedFinanceApp } from './AuthenticatedFinanceApp';
 import { PublicLandingShell } from './landing/PublicLandingShell';
+import { ToastProvider } from './ui/toast/ToastProvider';
+import { pushToast } from './ui/toast/toastBus';
 import { bootstrapPublicApiConfig } from './utils/publicApiBootstrap';
 import {
   parseMagicLoginTokenFromHash,
@@ -18,8 +20,6 @@ export default function App() {
     () => false,
   );
 
-  const [authBanner, setAuthBanner] = useState<string | null>(null);
-
   useEffect(() => {
     bootstrapPublicApiConfig();
   }, []);
@@ -32,10 +32,23 @@ export default function App() {
       try {
         const j = (await postNotifyRelayPublicJson('/v1/household/auth/verify-email', { token: vt })) as {
           token?: string;
+          verified?: boolean;
+          finishInviteWithPairingCode?: boolean;
           member?: { email?: string; role?: string; householdId?: string };
         };
         if (cancelled) return;
-        if (j.token && j.member?.householdId) {
+        if (j.finishInviteWithPairingCode) {
+          pushToast({
+            type: 'success',
+            message:
+              'Email verified. Open your partner invite link again (from email), reload if needed, then enter the pairing code.',
+          });
+          try {
+            history.replaceState(null, '', window.location.pathname + window.location.search);
+          } catch {
+            /* ignore */
+          }
+        } else if (j.token && j.member?.householdId) {
           clearLocalFinanceCache();
           setNotifyRelayHouseholdId(j.member.householdId);
           writeHouseholdSession({
@@ -44,15 +57,24 @@ export default function App() {
             email: j.member.email,
             role: j.member.role,
           });
-        }
-        setAuthBanner('Email verified — welcome.');
-        try {
-          history.replaceState(null, '', window.location.pathname + window.location.search);
-        } catch {
-          /* ignore */
+          pushToast({ type: 'success', message: 'Email verified — welcome.' });
+          try {
+            history.replaceState(null, '', window.location.pathname + window.location.search);
+          } catch {
+            /* ignore */
+          }
+        } else if (j.verified) {
+          pushToast({ type: 'success', message: 'Email verified.' });
+          try {
+            history.replaceState(null, '', window.location.pathname + window.location.search);
+          } catch {
+            /* ignore */
+          }
         }
       } catch (e) {
-        if (!cancelled) setAuthBanner(String((e as Error)?.message ?? e));
+        if (!cancelled) {
+          pushToast({ type: 'error', message: String((e as Error)?.message ?? e) });
+        }
       }
     })();
     return () => {
@@ -81,14 +103,16 @@ export default function App() {
             role: j.member.role,
           });
         }
-        setAuthBanner('Signed in via email link.');
+        pushToast({ type: 'success', message: 'Signed in via email link.' });
         try {
           history.replaceState(null, '', window.location.pathname + window.location.search);
         } catch {
           /* ignore */
         }
       } catch (e) {
-        if (!cancelled) setAuthBanner(String((e as Error)?.message ?? e));
+        if (!cancelled) {
+          pushToast({ type: 'error', message: String((e as Error)?.message ?? e) });
+        }
       }
     })();
     return () => {
@@ -96,23 +120,10 @@ export default function App() {
     };
   }, []);
 
-  if (!householdSignedIn) {
-    return (
-      <>
-        {authBanner ? (
-          <div className="fixed inset-x-0 top-0 z-[100] flex justify-center px-4 pt-3">
-            <div className="flex w-full max-w-lg items-center justify-between gap-3 rounded-xl border border-teal-400/70 bg-teal-50/95 px-4 py-2 text-sm text-slate-900 shadow-lg dark:bg-teal-950/90 dark:text-teal-50">
-              <p className="min-w-0 break-words">{authBanner}</p>
-              <button type="button" className="shrink-0 text-xs font-bold underline" onClick={() => setAuthBanner(null)}>
-                Dismiss
-              </button>
-            </div>
-          </div>
-        ) : null}
-        <PublicLandingShell />
-      </>
-    );
-  }
-
-  return <AuthenticatedFinanceApp />;
+  return (
+    <>
+      <ToastProvider />
+      {householdSignedIn ? <AuthenticatedFinanceApp /> : <PublicLandingShell />}
+    </>
+  );
 }

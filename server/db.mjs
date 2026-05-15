@@ -129,6 +129,12 @@ export async function initDbIfNeeded(log) {
       create index if not exists household_bearer_key_household_idx
         on household_bearer_key (household_id) where revoked_at is null;
     `);
+    await pool.query(`alter table household_invite add column if not exists partner_email text;`);
+    await pool.query(`
+      alter table household_invite add column if not exists partner_member_id uuid
+        references household_member(id) on delete set null;
+    `);
+    await pool.query(`alter table household_pairing add column if not exists code_plain text;`);
     log?.info?.('Postgres ready (finance_state + household platform)');
   })();
   return initPromise;
@@ -213,13 +219,22 @@ export async function getMemberById(memberId) {
   return r.rows[0] ?? null;
 }
 
-export async function insertInvite({ tokenHash, householdId, inviterMemberId, expiresAt }) {
+export async function insertInvite({
+  tokenHash,
+  householdId,
+  inviterMemberId,
+  expiresAt,
+  partnerEmail = null,
+  partnerMemberId = null,
+}) {
   if (!pool) throw new Error('DB not initialized');
   const r = await pool.query(
-    `insert into household_invite (token_hash, household_id, inviter_member_id, expires_at)
-     values ($1, $2, $3, $4)
-     returning id, token_hash, household_id, expires_at`,
-    [tokenHash, householdId, inviterMemberId, expiresAt],
+    `insert into household_invite (
+       token_hash, household_id, inviter_member_id, expires_at, partner_email, partner_member_id
+     )
+     values ($1, $2, $3, $4, $5, $6)
+     returning id, token_hash, household_id, expires_at, partner_email, partner_member_id`,
+    [tokenHash, householdId, inviterMemberId, expiresAt, partnerEmail, partnerMemberId],
   );
   return r.rows[0];
 }
@@ -227,7 +242,8 @@ export async function insertInvite({ tokenHash, householdId, inviterMemberId, ex
 export async function getActiveInviteByTokenHash(tokenHash) {
   if (!pool) throw new Error('DB not initialized');
   const r = await pool.query(
-    `select id, household_id, inviter_member_id, expires_at, used_at from household_invite
+    `select id, household_id, inviter_member_id, expires_at, used_at, partner_email, partner_member_id
+     from household_invite
      where token_hash = $1 and used_at is null limit 1`,
     [tokenHash],
   );
@@ -313,15 +329,26 @@ export async function updateMemberPassword(memberId, passwordHash) {
   await pool.query(`update household_member set password_hash = $2 where id = $1`, [memberId, passwordHash]);
 }
 
-export async function insertPairing({ codeHash, householdId, inviterMemberId, expiresAt }) {
+export async function insertPairing({ codeHash, householdId, inviterMemberId, expiresAt, codePlain }) {
   if (!pool) throw new Error('DB not initialized');
   const r = await pool.query(
-    `insert into household_pairing (code_hash, household_id, inviter_member_id, expires_at)
-     values ($1, $2, $3, $4)
-     returning id`,
-    [codeHash, householdId, inviterMemberId, expiresAt],
+    `insert into household_pairing (code_hash, household_id, inviter_member_id, expires_at, code_plain)
+     values ($1, $2, $3, $4, $5)
+     returning id, code_plain`,
+    [codeHash, householdId, inviterMemberId, expiresAt, codePlain ?? null],
   );
   return r.rows[0];
+}
+
+export async function getLatestUnusedPairingForHousehold(householdId) {
+  if (!pool) throw new Error('DB not initialized');
+  const r = await pool.query(
+    `select id, household_id, code_plain, expires_at from household_pairing
+     where household_id = $1 and used_at is null and code_plain is not null
+     order by created_at desc limit 1`,
+    [householdId],
+  );
+  return r.rows[0] ?? null;
 }
 
 export async function getActivePairingByHouseholdAndCodeHash(householdId, codeHash) {

@@ -33,6 +33,7 @@ import {
 import { readHouseholdSession } from '../utils/householdSession';
 import { readNotifyRelayConfig } from '../utils/notifyRelayConfig';
 import { maybeMigrateLegacyHouseholdSetup } from '../setup/setupCompletion';
+import { pushToast } from '../ui/toast/toastBus';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -84,21 +85,29 @@ export function usePersistedFinance() {
 
   const reloadFromServer = useCallback(async () => {
     const cfg = getServerStorageConfig({ force: true });
-    if (!cfg.enabled) return { ok: false as const, error: 'Server storage not configured yet (URL + secret + household id).' };
+    if (!cfg.enabled) {
+      const error = 'Server storage not configured yet (URL + secret + household id).';
+      pushToast({ type: 'error', message: error });
+      return { ok: false as const, error };
+    }
     const remote = await fetchServerFinanceState({ force: true });
     if (!remote.ok) {
-      if (remote.status === 404) {
-        return { ok: false as const, error: 'No server data found for this household id yet.' };
-      }
-      return { ok: false as const, error: remote.error || 'Failed to load server data.' };
+      const error =
+        remote.status === 404
+          ? 'No server data found for this household id yet.'
+          : remote.error || 'Failed to load server data.';
+      pushToast({ type: 'error', message: error });
+      return { ok: false as const, error };
     }
     setState(remote.state);
     maybeMigrateLegacyHouseholdSetup(remote.state, readNotifyRelayConfig());
+    pushToast({ type: 'success', message: 'Synced from server.' });
     return { ok: true as const, updatedAt: remote.updatedAt };
   }, []);
 
   /** Server persistence (debounced) — local cache is written in saveFinanceState above. */
   const serverSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSaveErrorToastRef = useRef<{ message: string; at: number } | null>(null);
   useEffect(() => {
     if (!readHouseholdSession()?.token) return;
     const cfg = getServerStorageConfig();
@@ -106,7 +115,19 @@ export function usePersistedFinance() {
     if (serverSaveRef.current !== null) clearTimeout(serverSaveRef.current);
     serverSaveRef.current = setTimeout(() => {
       serverSaveRef.current = null;
-      void putServerFinanceState(stateRef.current);
+      void (async () => {
+        const result = await putServerFinanceState(stateRef.current);
+        if (result.ok) {
+          lastSaveErrorToastRef.current = null;
+          return;
+        }
+        const message = 'Could not save to server. Changes are stored on this device.';
+        const now = Date.now();
+        const prev = lastSaveErrorToastRef.current;
+        if (prev && prev.message === message && now - prev.at < 10_000) return;
+        lastSaveErrorToastRef.current = { message, at: now };
+        pushToast({ type: 'error', message });
+      })();
     }, 1500);
     return () => {
       if (serverSaveRef.current !== null) clearTimeout(serverSaveRef.current);
@@ -169,11 +190,13 @@ export function usePersistedFinance() {
 
   /** One timeline row at a time — weekly essentials use one key per due day; debts use YYYY-MM. */
   const toggleBillPaid = useCallback((row: BillsPaidTogglePayload) => {
+    const label = row.label?.trim() || 'Bill';
+    const payKeyPreview = billPaymentKey(stateRef.current, row);
+    const wasPaid = (stateRef.current.billsPaid[row.billId] ?? []).includes(payKeyPreview);
     setState((s) => {
       const payKey = billPaymentKey(s, row);
       const { billId, actualPaid } = row;
       const cur = new Set(s.billsPaid[billId] ?? []);
-      const wasPaid = cur.has(payKey);
       if (wasPaid) cur.delete(payKey);
       else cur.add(payKey);
 
@@ -205,33 +228,70 @@ export function usePersistedFinance() {
         billPaidAmounts,
       };
     });
+    pushToast({
+      type: 'success',
+      message: wasPaid ? `Unmarked “${label}”.` : `Marked “${label}” as paid.`,
+    });
   }, []);
 
   const addExtraIncome = useCallback((entry: ExtraIncomeEntry) => {
     setState((s) => ({ ...s, extraIncome: [entry, ...s.extraIncome] }));
+    const label = entry.label?.trim();
+    pushToast({
+      type: 'success',
+      message: label ? `Added extra income “${label}”.` : 'Added extra income.',
+    });
   }, []);
 
   const removeExtraIncome = useCallback((id: string) => {
+    const entry = stateRef.current.extraIncome.find((e) => e.id === id);
     setState((s) => ({ ...s, extraIncome: s.extraIncome.filter((e) => e.id !== id) }));
+    const label = entry?.label?.trim();
+    pushToast({
+      type: 'success',
+      message: label ? `Removed extra income “${label}”.` : 'Removed extra income.',
+    });
   }, []);
 
   const addSurpriseExpense = useCallback((entry: SurpriseExpenseEntry) => {
     setState((s) => ({ ...s, surpriseExpenses: [entry, ...s.surpriseExpenses] }));
+    const label = entry.label?.trim();
+    pushToast({
+      type: 'success',
+      message: label ? `Added surprise expense “${label}”.` : 'Added surprise expense.',
+    });
   }, []);
 
   const removeSurpriseExpense = useCallback((id: string) => {
+    const entry = stateRef.current.surpriseExpenses.find((e) => e.id === id);
     setState((s) => ({
       ...s,
       surpriseExpenses: s.surpriseExpenses.filter((e) => e.id !== id),
     }));
+    const label = entry?.label?.trim();
+    pushToast({
+      type: 'success',
+      message: label ? `Removed surprise expense “${label}”.` : 'Removed surprise expense.',
+    });
   }, []);
 
   const addIncomeLog = useCallback((entry: IncomeLogEntry) => {
     setState((s) => ({ ...s, incomeLog: [entry, ...s.incomeLog] }));
+    const label = entry.label?.trim();
+    pushToast({
+      type: 'success',
+      message: label ? `Logged paycheque “${label}”.` : 'Logged paycheque.',
+    });
   }, []);
 
   const removeIncomeLog = useCallback((id: string) => {
+    const entry = stateRef.current.incomeLog.find((e) => e.id === id);
     setState((s) => ({ ...s, incomeLog: s.incomeLog.filter((e) => e.id !== id) }));
+    const label = entry?.label?.trim();
+    pushToast({
+      type: 'success',
+      message: label ? `Removed paycheque “${label}”.` : 'Removed paycheque.',
+    });
   }, []);
 
   const updateIncomeLog = useCallback((id: string, patch: Partial<IncomeLogEntry>) => {

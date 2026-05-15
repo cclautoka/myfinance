@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   applySetupFromUrlHash,
-  buildShareSetupLink,
   readNotifyRelayConfig,
   resolveNotifyRelayUrl,
   setNotifyRelayHouseholdId,
@@ -18,6 +17,7 @@ import {
 import type { FinanceState } from '../types/finance';
 import { HouseholdAuthPanel } from './HouseholdAuthPanel';
 import { readHouseholdSession } from '../utils/householdSession';
+import { readHouseholdMode } from '../setup/setupCompletion';
 import { FieldError } from './ui/FieldError';
 import { fieldErrorId } from './ui/fieldErrorId';
 
@@ -49,7 +49,6 @@ export function NotifyRelaySettings({
   });
   const [busy, setBusy] = useState(false);
   const [authTick, setAuthTick] = useState(0);
-  const sessionHouseholdId = readHouseholdSession()?.householdId?.trim() ?? '';
   const stateRef = useRef(state);
   const snapshotPushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -121,18 +120,13 @@ export function NotifyRelaySettings({
   const husbandEmailErr = emailErr(cfg.husbandEmail, 'Husband email');
   const wifeEmailErr = emailErr(cfg.wifeEmail, 'Wife email');
 
-  const shareLink = useMemo(() => {
-    if (typeof window === 'undefined') return '';
-    const base = window.location.origin + window.location.pathname;
-    const hid = (sessionHouseholdId || cfg.householdId || '').trim();
-    if (!hid) return '';
-    return buildShareSetupLink({
-      baseUrl: base,
-      householdId: hid,
-      husbandEmail: cfg.husbandEmail,
-      wifeEmail: cfg.wifeEmail,
-    });
-  }, [cfg.householdId, cfg.husbandEmail, cfg.wifeEmail, sessionHouseholdId]);
+  const householdMode = readHouseholdMode();
+  const husbandTrim = cfg.husbandEmail.trim();
+  const wifeTrim = cfg.wifeEmail.trim();
+  const notifyEmailsLocked =
+    householdMode === 'couple'
+      ? husbandTrim.includes('@') && wifeTrim.includes('@')
+      : husbandTrim.includes('@') || wifeTrim.includes('@');
 
   return (
     <div
@@ -180,62 +174,77 @@ export function NotifyRelaySettings({
         </div>
         <p className="border-t border-slate-200/80 px-4 py-2.5 text-[11px] leading-snug text-sage-600 dark:border-moss-border dark:text-moss-muted sm:px-5">
           <strong className="text-sage-900 dark:text-moss-fg">Server storage</strong> uses your account session on this site.
-          Recipient emails below are saved into the server snapshot for scheduled reminder mail.
+          Recipient emails from setup are used for scheduled reminder mail. Use{' '}
+          <strong className="text-sage-900 dark:text-moss-fg">Partner access</strong> above to invite your partner.
         </p>
       </div>
 
       <div className="mt-4 space-y-3">
-        {sessionHouseholdId && shareLink ? (
-          <p className="rounded-lg border border-slate-200/80 bg-slate-50/85 px-3 py-2 text-xs text-slate-700 dark:border-moss-border dark:bg-moss-surface/80 dark:text-moss-subtle">
-            Invite a partner:{' '}
-            <button
-              type="button"
-              className="font-bold text-teal-800 underline underline-offset-2 dark:text-teal-300"
-              onClick={() => {
-                void navigator.clipboard?.writeText(shareLink);
-                setMsg('Partner setup link copied.');
-              }}
-            >
-              Copy setup link
-            </button>
+        {notifyEmailsLocked ? (
+          <p className="rounded-lg border border-slate-200/80 bg-slate-50/85 px-3 py-2.5 text-sm text-slate-800 dark:border-moss-border dark:bg-moss-surface/80 dark:text-moss-subtle">
+            <span className="text-xs font-bold uppercase tracking-wide text-sage-600 dark:text-moss-muted">
+              Summary recipients
+            </span>
+            <span className="mt-1 block">
+              {householdMode === 'couple' ? (
+                <>
+                  {husbandTrim}
+                  <span className="text-sage-500 dark:text-moss-muted"> · </span>
+                  {wifeTrim}
+                </>
+              ) : (
+                husbandTrim || wifeTrim
+              )}
+            </span>
           </p>
-        ) : null}
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className="text-xs font-semibold uppercase tracking-wide text-sage-600 dark:text-moss-muted" htmlFor="notify-email-h">
-              Husband email (recipient)
-            </label>
-            <input
-              id="notify-email-h"
-              aria-invalid={Boolean(husbandEmailErr)}
-              aria-describedby={husbandEmailErr ? fieldErrorId('notify-h-email') : undefined}
-              className="mt-1 w-full rounded-lg border border-sage-300 bg-white px-3 py-2 text-sm dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
-              placeholder="husband@example.com"
-              value={cfg.husbandEmail}
-              onChange={(e) => persist({ ...cfg, husbandEmail: e.target.value })}
-              autoComplete="email"
-              inputMode="email"
-            />
-            <FieldError id={fieldErrorId('notify-h-email')} message={husbandEmailErr} />
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {!husbandTrim.includes('@') ? (
+              <div>
+                <label
+                  className="text-xs font-semibold uppercase tracking-wide text-sage-600 dark:text-moss-muted"
+                  htmlFor="notify-email-h"
+                >
+                  {householdMode === 'single' ? 'Your email (recipient)' : 'Husband email (recipient)'}
+                </label>
+                <input
+                  id="notify-email-h"
+                  aria-invalid={Boolean(husbandEmailErr)}
+                  aria-describedby={husbandEmailErr ? fieldErrorId('notify-h-email') : undefined}
+                  className="mt-1 w-full rounded-lg border border-sage-300 bg-white px-3 py-2 text-sm dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
+                  placeholder="husband@example.com"
+                  value={cfg.husbandEmail}
+                  onChange={(e) => persist({ ...cfg, husbandEmail: e.target.value })}
+                  autoComplete="email"
+                  inputMode="email"
+                />
+                <FieldError id={fieldErrorId('notify-h-email')} message={husbandEmailErr} />
+              </div>
+            ) : null}
+            {householdMode === 'couple' && !wifeTrim.includes('@') ? (
+              <div>
+                <label
+                  className="text-xs font-semibold uppercase tracking-wide text-sage-600 dark:text-moss-muted"
+                  htmlFor="notify-email-w"
+                >
+                  Wife email (recipient)
+                </label>
+                <input
+                  id="notify-email-w"
+                  aria-invalid={Boolean(wifeEmailErr)}
+                  aria-describedby={wifeEmailErr ? fieldErrorId('notify-w-email') : undefined}
+                  className="mt-1 w-full rounded-lg border border-sage-300 bg-white px-3 py-2 text-sm dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
+                  placeholder="wife@example.com"
+                  value={cfg.wifeEmail}
+                  onChange={(e) => persist({ ...cfg, wifeEmail: e.target.value })}
+                  autoComplete="email"
+                  inputMode="email"
+                />
+                <FieldError id={fieldErrorId('notify-w-email')} message={wifeEmailErr} />
+              </div>
+            ) : null}
           </div>
-          <div>
-            <label className="text-xs font-semibold uppercase tracking-wide text-sage-600 dark:text-moss-muted" htmlFor="notify-email-w">
-              Wife email (recipient)
-            </label>
-            <input
-              id="notify-email-w"
-              aria-invalid={Boolean(wifeEmailErr)}
-              aria-describedby={wifeEmailErr ? fieldErrorId('notify-w-email') : undefined}
-              className="mt-1 w-full rounded-lg border border-sage-300 bg-white px-3 py-2 text-sm dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
-              placeholder="wife@example.com"
-              value={cfg.wifeEmail}
-              onChange={(e) => persist({ ...cfg, wifeEmail: e.target.value })}
-              autoComplete="email"
-              inputMode="email"
-            />
-            <FieldError id={fieldErrorId('notify-w-email')} message={wifeEmailErr} />
-          </div>
-        </div>
+        )}
         {cfg.enabled && !cfg.husbandEmail.trim() && !cfg.wifeEmail.trim() ? (
           <div
             role="status"

@@ -440,7 +440,12 @@ export function PastMonthInsights({
                     </div>
                     <BillPaymentMarkControls
                       occurrenceKey={b.id}
-                      toggleTarget={{ billId: b.billId, due: b.due, category: b.category }}
+                      toggleTarget={{
+                        billId: b.billId,
+                        due: b.due,
+                        category: b.category,
+                        label: b.name,
+                      }}
                       plannedAmount={b.amount}
                       isPaid={false}
                       displayPaidAmount={b.amount}

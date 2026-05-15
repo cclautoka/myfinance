@@ -4,6 +4,8 @@ import {
   parseResetTokenFromHash,
   postNotifyRelayPublicJson,
   setNotifyRelayHouseholdId,
+  readNotifyRelayConfig,
+  writeNotifyRelayConfig,
 } from '../utils/notifyRelayConfig';
 import { writeHouseholdSession } from '../utils/householdSession';
 import { HOUSEHOLD_MODE_KEY, type HouseholdMode } from '../utils/householdMode';
@@ -15,6 +17,7 @@ import { fieldErrorId } from '../components/ui/fieldErrorId';
 import { SegmentedButtonGroup } from '../components/ui/SegmentedButtonGroup';
 import { SegmentedChoice } from '../components/ui/SegmentedChoice';
 import { THEME_SEGMENT_OPTIONS } from '../components/ui/themeSegmentedOptions';
+import { pushToast } from '../ui/toast/toastBus';
 
 type Tab = 'signin' | 'register';
 type AuthPanel = 'default' | 'forgot' | 'reset';
@@ -50,12 +53,19 @@ export function HouseholdAuthForm({
 }) {
   const [tab, setTab] = useState<Tab>(initialTab);
   const [email, setEmail] = useState('');
+  const [registerPartnerEmail, setRegisterPartnerEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [householdIdField, setHouseholdIdField] = useState('');
-  const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [inviteToken, setInviteToken] = useState('');
   const [partnerEmail, setPartnerEmail] = useState('');
+  const [pairDigits, setPairDigits] = useState('');
+  const [invitePreviewLoading, setInvitePreviewLoading] = useState(false);
+  const [invitePreview, setInvitePreview] = useState<{
+    valid: boolean;
+    partnerEmail?: string;
+    needsEmailVerification?: boolean;
+    emailVerified?: boolean;
+  } | null>(null);
   const [resetTokenFromHash, setResetTokenFromHash] = useState<string | null>(null);
   const [newPasswordAfterReset, setNewPasswordAfterReset] = useState('');
   const [authPanel, setAuthPanel] = useState<AuthPanel>('default');
@@ -94,11 +104,48 @@ export function HouseholdAuthForm({
     return () => window.removeEventListener('hashchange', syncHashTokens);
   }, [syncHashTokens]);
 
-  const loginHouseholdId = () => householdIdField.trim().slice(0, 64);
+  useEffect(() => {
+    const token = inviteToken.trim();
+    if (!token) {
+      setInvitePreview(null);
+      return;
+    }
+    let cancelled = false;
+    setInvitePreviewLoading(true);
+    void (async () => {
+      try {
+        const j = (await postNotifyRelayPublicJson('/v1/household/auth/invite-preview', { token })) as {
+          valid?: boolean;
+          partnerEmail?: string;
+          needsEmailVerification?: boolean;
+          emailVerified?: boolean;
+        };
+        if (cancelled) return;
+        if (j.valid && j.partnerEmail) setPartnerEmail(j.partnerEmail);
+        setInvitePreview({
+          valid: Boolean(j.valid),
+          partnerEmail: j.partnerEmail,
+          needsEmailVerification: j.needsEmailVerification,
+          emailVerified: j.emailVerified,
+        });
+      } catch {
+        if (!cancelled) setInvitePreview({ valid: false });
+      } finally {
+        if (!cancelled) setInvitePreviewLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [inviteToken]);
+
+  const partnerInviteMode = Boolean(inviteToken.trim());
+  const partnerCanJoin =
+    invitePreview?.valid &&
+    (!invitePreview.needsEmailVerification || invitePreview.emailVerified);
 
   const register = async () => {
     setBusy(true);
-    setMsg(null);
     try {
       const newHid = generateHouseholdId();
       setNotifyRelayHouseholdId(newHid);
@@ -106,19 +153,43 @@ export function HouseholdAuthForm({
         householdId: newHid,
         email,
         password,
+        householdMode: mode,
+        ...(mode === 'couple' && registerPartnerEmail.trim()
+          ? { partnerEmail: registerPartnerEmail.trim() }
+          : {}),
       })) as {
         needsEmailVerification?: boolean;
+        partnerVerificationSent?: boolean;
+        notifyEmails?: { husbandEmail?: string; wifeEmail?: string };
         token?: string;
         member?: { email?: string; role?: string; householdId?: string };
       };
+      const he = (j.notifyEmails?.husbandEmail ?? email).trim();
+      const we = (j.notifyEmails?.wifeEmail ?? (mode === 'couple' ? registerPartnerEmail : '')).trim();
+      writeNotifyRelayConfig({
+        ...readNotifyRelayConfig(),
+        householdId: newHid,
+        husbandEmail: he,
+        wifeEmail: we,
+      });
       if (j.needsEmailVerification) {
-        setMsg('Check your inbox for a verification link. After you verify, sign in with the same email and password.');
+        const partnerNote =
+          mode === 'couple' && registerPartnerEmail.trim()
+            ? j.partnerVerificationSent
+              ? ' Your partner was emailed a verification link too.'
+              : ' Add your partner’s email in Tools after you sign in.'
+            : '';
+        pushToast({
+          type: 'success',
+          message: `Check your inbox for a verification link. After you verify, sign in with the same email and password.${partnerNote}`,
+        });
         setTab('signin');
       } else if (j.token && j.member?.householdId) {
+        pushToast({ type: 'success', message: 'Account created — welcome.' });
         finishAuth(j.member, j.token as string, onAuthed);
       }
     } catch (e) {
-      setMsg(String((e as Error)?.message ?? e));
+      pushToast({ type: 'error', message: String((e as Error)?.message ?? e) });
     } finally {
       setBusy(false);
     }
@@ -126,11 +197,8 @@ export function HouseholdAuthForm({
 
   const login = async () => {
     setBusy(true);
-    setMsg(null);
     try {
-      const hid = loginHouseholdId();
       const j = (await postNotifyRelayPublicJson('/v1/household/auth/login', {
-        ...(hid ? { householdId: hid } : {}),
         email,
         password,
       })) as { token?: string; member?: { email?: string; role?: string; householdId?: string } };
@@ -140,27 +208,11 @@ export function HouseholdAuthForm({
         } catch {
           /* ignore */
         }
+        pushToast({ type: 'success', message: 'Signed in.' });
         finishAuth(j.member, j.token, onAuthed);
       }
     } catch (e) {
-      setMsg(String((e as Error)?.message ?? e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const requestMagic = async () => {
-    setBusy(true);
-    setMsg(null);
-    try {
-      const hid = loginHouseholdId();
-      await postNotifyRelayPublicJson('/v1/household/auth/request-magic-login', {
-        ...(hid ? { householdId: hid } : {}),
-        email,
-      });
-      setMsg('If that email is registered, a sign-in link was sent (check spam).');
-    } catch (e) {
-      setMsg(String((e as Error)?.message ?? e));
+      pushToast({ type: 'error', message: String((e as Error)?.message ?? e) });
     } finally {
       setBusy(false);
     }
@@ -168,21 +220,21 @@ export function HouseholdAuthForm({
 
   const requestForgot = async () => {
     if (!email.trim()) {
-      setMsg('Enter your account email first.');
+      pushToast({ type: 'error', message: 'Enter your account email first.' });
       return;
     }
     setBusy(true);
-    setMsg(null);
     try {
-      const hid = loginHouseholdId();
       await postNotifyRelayPublicJson('/v1/household/auth/request-password-reset', {
-        ...(hid ? { householdId: hid } : {}),
         email: email.trim(),
       });
-      setMsg('If an owner account exists for that email, a reset link was sent (check spam).');
+      pushToast({
+        type: 'success',
+        message: 'If an owner account exists for that email, a reset link was sent (check spam).',
+      });
       setAuthPanel('default');
     } catch (e) {
-      setMsg(String((e as Error)?.message ?? e));
+      pushToast({ type: 'error', message: String((e as Error)?.message ?? e) });
     } finally {
       setBusy(false);
     }
@@ -191,13 +243,15 @@ export function HouseholdAuthForm({
   const resetPassword = async () => {
     if (!resetTokenFromHash) return;
     setBusy(true);
-    setMsg(null);
     try {
       await postNotifyRelayPublicJson('/v1/household/auth/reset-password', {
         token: resetTokenFromHash,
         newPassword: newPasswordAfterReset,
       });
-      setMsg('Password updated — you can sign in.');
+      pushToast({
+        type: 'success',
+        message: 'Password updated — sign in with your new password. Check your inbox for a confirmation email.',
+      });
       setResetTokenFromHash(null);
       setAuthPanel('default');
       setNewPasswordAfterReset('');
@@ -207,28 +261,69 @@ export function HouseholdAuthForm({
         /* ignore */
       }
     } catch (e) {
-      setMsg(String((e as Error)?.message ?? e));
+      pushToast({ type: 'error', message: String((e as Error)?.message ?? e) });
     } finally {
       setBusy(false);
     }
   };
 
-  const acceptInvite = async () => {
+  const joinAsPartner = async () => {
+    const digits = pairDigits.replace(/\D/g, '');
+    if (!partnerEmail.trim().includes('@')) {
+      pushToast({ type: 'error', message: 'Enter your email address.' });
+      return;
+    }
+    if (digits.length !== 6) {
+      pushToast({ type: 'error', message: 'Enter the 6-digit pairing code from your partner.' });
+      return;
+    }
     setBusy(true);
-    setMsg(null);
     try {
       const j = (await postNotifyRelayPublicJson('/v1/household/auth/accept-invite', {
         token: inviteToken.trim(),
         email: partnerEmail.trim(),
-      })) as { token?: string; member?: { email?: string; role?: string; householdId?: string } };
+        code: digits,
+      })) as {
+        token?: string;
+        needsEmailVerification?: boolean;
+        member?: { email?: string; role?: string; householdId?: string };
+      };
+      if (j.needsEmailVerification) {
+        pushToast({
+          type: 'success',
+          message: 'Check your email to verify, then reload this page and enter the pairing code.',
+        });
+        return;
+      }
       if (j.token && j.member?.householdId) {
+        try {
+          history.replaceState(null, '', window.location.pathname + window.location.search);
+        } catch {
+          /* ignore */
+        }
+        pushToast({ type: 'success', message: 'Joined household — welcome.' });
         finishAuth(j.member, j.token, onAuthed);
       }
     } catch (e) {
-      setMsg(String((e as Error)?.message ?? e));
+      const err = e as Error & { message?: string };
+      const msg = String(err?.message ?? e);
+      if (msg.includes('EMAIL_NOT_VERIFIED') || msg.toLowerCase().includes('verify your email')) {
+        pushToast({
+          type: 'error',
+          message: 'Verify your email first, then reload this page and enter the pairing code.',
+        });
+      } else {
+        pushToast({ type: 'error', message: msg });
+      }
     } finally {
       setBusy(false);
     }
+  };
+
+  const reloadInvitePage = () => {
+    const token = inviteToken.trim();
+    const path = window.location.pathname + window.location.search;
+    window.location.href = token ? `${path}#invite=${encodeURIComponent(token)}` : path;
   };
 
   const emailErr = email.trim() && !email.includes('@') ? 'Enter a valid email.' : null;
@@ -249,11 +344,18 @@ export function HouseholdAuthForm({
                 : 'mt-1 font-display text-2xl font-bold text-slate-950 dark:text-moss-fg'
             }
           >
-            {compact ? 'Sign in or register' : 'Household sign-in'}
+            {partnerInviteMode ? 'Join household' : compact ? 'Sign in or register' : 'Household sign-in'}
           </h2>
-          {!compact ? (
+          {!compact && !partnerInviteMode ? (
             <p className="mt-2 text-xs text-slate-600 dark:text-moss-muted">
-              Sign in with your email — household id is optional if you only have one account.
+              {tab === 'register'
+                ? 'Create your household account. Couple mode lets you add your partner’s email for verification.'
+                : 'Sign in with the email and password you registered.'}
+            </p>
+          ) : null}
+          {partnerInviteMode ? (
+            <p className="mt-2 text-xs text-slate-600 dark:text-moss-muted">
+              Enter your email and the pairing code your partner shared with the invite link.
             </p>
           ) : null}
         </div>
@@ -268,17 +370,19 @@ export function HouseholdAuthForm({
         </div>
       </div>
 
-      <div className={compact ? 'mt-4' : 'mt-6 max-w-md'}>
-        <SegmentedButtonGroup
-          aria-label="Sign in or register"
-          value={tab}
-          onChange={setTab}
-          options={[
-            { id: 'signin', label: 'Sign in' },
-            { id: 'register', label: 'Register' },
-          ]}
-        />
-      </div>
+      {!partnerInviteMode ? (
+        <div className={compact ? 'mt-4' : 'mt-6 max-w-md'}>
+          <SegmentedButtonGroup
+            aria-label="Sign in or register"
+            value={tab}
+            onChange={setTab}
+            options={[
+              { id: 'signin', label: 'Sign in' },
+              { id: 'register', label: 'Register' },
+            ]}
+          />
+        </div>
+      ) : null}
 
       <div
         className={
@@ -287,64 +391,135 @@ export function HouseholdAuthForm({
             : 'mt-6 space-y-4 rounded-xl border-2 border-slate-200/90 border-t-teal-600 bg-white p-5 shadow-md dark:border-moss-border dark:border-t-teal-500 dark:bg-moss-surface dark:shadow-black/25'
         }
       >
-        <fieldset>
-          <legend className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-600 dark:text-moss-muted">
-            Household mode
-          </legend>
-          <div className="mt-2 max-w-md">
-            <SegmentedChoice
-              name="household-mode-auth-form"
-              aria-label="Household mode"
-              value={mode}
-              onChange={persistMode}
-              options={[
-                { id: 'single', label: 'Single' },
-                { id: 'couple', label: 'Couple / shared' },
-              ]}
-            />
+        {!partnerInviteMode && tab === 'register' ? (
+          <fieldset>
+            <legend className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-600 dark:text-moss-muted">
+              Household mode
+            </legend>
+            <div className="mt-2 max-w-md">
+              <SegmentedChoice
+                name="household-mode-auth-form"
+                aria-label="Household mode"
+                value={mode}
+                onChange={persistMode}
+                options={[
+                  { id: 'single', label: 'Single' },
+                  { id: 'couple', label: 'Couple / shared' },
+                ]}
+              />
+            </div>
+          </fieldset>
+        ) : null}
+
+        {partnerInviteMode ? (
+          <div className="space-y-3 rounded-xl border border-teal-200/80 bg-teal-50/50 p-3 dark:border-teal-900/40 dark:bg-teal-950/25">
+            <p className="text-sm font-semibold text-teal-950 dark:text-teal-100">Partner join</p>
+            <p className="text-xs text-teal-900/90 dark:text-teal-200/85">
+              This invite link does not expire. Check your inbox for a partner verification email first.
+            </p>
+            {invitePreviewLoading ? (
+              <p className="text-xs text-slate-600 dark:text-moss-muted">Checking invite…</p>
+            ) : null}
+            {!invitePreviewLoading && invitePreview && !invitePreview.valid ? (
+              <p className="rounded-lg border border-red-300/80 bg-red-50/90 px-3 py-2 text-sm text-red-950 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100">
+                This invite link is invalid or was already used. Ask your partner for a new invite.
+              </p>
+            ) : null}
+            {!invitePreviewLoading && invitePreview?.valid && invitePreview.needsEmailVerification && !invitePreview.emailVerified ? (
+              <div
+                className="rounded-lg border border-amber-400/90 bg-amber-50/95 px-3 py-3 text-sm text-amber-950 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-100"
+                role="status"
+              >
+                <p className="font-semibold">Verify your email first</p>
+                <p className="mt-1 text-xs leading-relaxed">
+                  We sent a verification message to{' '}
+                  <strong>{invitePreview.partnerEmail ?? partnerEmail}</strong>. Open that email, click verify, then
+                  reload this page to enter your pairing code.
+                </p>
+                <button type="button" className="btn-secondary btn-secondary-sm mt-3 font-bold" onClick={reloadInvitePage}>
+                  Reload page
+                </button>
+              </div>
+            ) : null}
+            {partnerCanJoin ? (
+              <>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
+                  Your email
+                  <input
+                    className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm dark:border-moss-border dark:bg-moss-bg/80"
+                    value={partnerEmail}
+                    readOnly
+                    autoComplete="email"
+                  />
+                </label>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
+                  Pairing code (6 digits)
+                  <input
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm tracking-widest dark:border-moss-border dark:bg-moss-bg"
+                    placeholder="000000"
+                    inputMode="numeric"
+                    value={pairDigits}
+                    onChange={(e) => setPairDigits(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    autoComplete="one-time-code"
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="btn-primary btn-primary-sm font-bold"
+                  disabled={busy}
+                  onClick={() => void joinAsPartner()}
+                >
+                  Join household
+                </button>
+              </>
+            ) : null}
           </div>
-        </fieldset>
+        ) : (
+          <>
+            <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
+              Email
+              <input
+                className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+                aria-invalid={Boolean(emailErr)}
+                aria-describedby={emailErr ? fieldErrorId('auth-email') : undefined}
+              />
+              <FieldError id={fieldErrorId('auth-email')} message={emailErr} />
+            </label>
+            {authPanel !== 'forgot' ? (
+              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
+                Password {tab === 'register' ? '(min 8)' : ''}
+                <input
+                  type="password"
+                  className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete={tab === 'register' ? 'new-password' : 'current-password'}
+                />
+                <FieldError id={fieldErrorId('auth-password')} message={pwdErr} />
+              </label>
+            ) : null}
+            {tab === 'register' && mode === 'couple' ? (
+              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
+                Partner&apos;s email
+                <input
+                  className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
+                  value={registerPartnerEmail}
+                  onChange={(e) => setRegisterPartnerEmail(e.target.value)}
+                  autoComplete="email"
+                  placeholder="They’ll get a verification email"
+                />
+                <p className="mt-1 text-[11px] font-normal normal-case text-slate-500 dark:text-moss-muted">
+                  Optional now — pre-fills Tools and lets them verify before you send a pairing invite.
+                </p>
+              </label>
+            ) : null}
+          </>
+        )}
 
-        <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
-          Email
-          <input
-            className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
-            aria-invalid={Boolean(emailErr)}
-            aria-describedby={emailErr ? fieldErrorId('auth-email') : undefined}
-          />
-          <FieldError id={fieldErrorId('auth-email')} message={emailErr} />
-        </label>
-        {authPanel !== 'forgot' ? (
-          <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
-            Password {tab === 'register' ? '(min 8)' : ''}
-            <input
-              type="password"
-              className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete={tab === 'register' ? 'new-password' : 'current-password'}
-            />
-            <FieldError id={fieldErrorId('auth-password')} message={pwdErr} />
-          </label>
-        ) : null}
-
-        {tab === 'signin' && authPanel === 'default' ? (
-          <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
-            Household id <span className="font-normal normal-case text-slate-500">(optional)</span>
-            <input
-              className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 font-mono text-sm dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
-              value={householdIdField}
-              onChange={(e) => setHouseholdIdField(e.target.value)}
-              placeholder="Leave blank if unsure"
-              autoComplete="off"
-            />
-          </label>
-        ) : null}
-
-        {authPanel === 'forgot' ? (
+        {authPanel === 'forgot' && !partnerInviteMode ? (
           <div className="rounded-xl border border-slate-200/90 bg-slate-50/80 p-3 dark:border-moss-border dark:bg-moss-bg/50">
             <p className="text-sm font-semibold text-slate-900 dark:text-moss-fg">Reset your password</p>
             <p className="mt-1 text-xs text-slate-600 dark:text-moss-muted">
@@ -363,10 +538,7 @@ export function HouseholdAuthForm({
                 type="button"
                 className="btn-ghost text-xs font-semibold"
                 disabled={busy}
-                onClick={() => {
-                  setAuthPanel('default');
-                  setMsg(null);
-                }}
+                onClick={() => setAuthPanel('default')}
               >
                 Back to sign in
               </button>
@@ -404,22 +576,7 @@ export function HouseholdAuthForm({
           </form>
         ) : null}
 
-        {inviteToken ? (
-          <div className="space-y-2 rounded-xl border border-teal-200/80 bg-teal-50/50 p-3 dark:border-teal-900/40 dark:bg-teal-950/25">
-            <p className="text-sm font-semibold text-teal-950 dark:text-teal-100">Accept partner invite</p>
-            <input
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-moss-border dark:bg-moss-bg"
-              placeholder="Your email on the invite"
-              value={partnerEmail}
-              onChange={(e) => setPartnerEmail(e.target.value)}
-            />
-            <button type="button" className="btn-primary btn-primary-sm font-bold" disabled={busy} onClick={() => void acceptInvite()}>
-              Join household
-            </button>
-          </div>
-        ) : null}
-
-        {authPanel === 'default' ? (
+        {authPanel === 'default' && !partnerInviteMode ? (
           <div className="flex flex-wrap gap-2">
             {tab === 'register' ? (
               <button type="button" className="btn-primary btn-primary-sm font-bold" disabled={busy} onClick={() => void register()}>
@@ -431,39 +588,25 @@ export function HouseholdAuthForm({
               </button>
             )}
             {tab === 'signin' ? (
-              <>
-                <button
-                  type="button"
-                  className="btn-secondary btn-secondary-sm font-bold"
-                  disabled={busy || !email.trim()}
-                  onClick={() => void requestMagic()}
-                >
-                  Email me a link
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary btn-secondary-sm font-bold"
-                  disabled={busy}
-                  onClick={() => {
-                    setAuthPanel('forgot');
-                    setMsg(null);
-                  }}
-                >
-                  Forgot password
-                </button>
-              </>
+              <button
+                type="button"
+                className="btn-secondary btn-secondary-sm font-bold"
+                disabled={busy}
+                onClick={() => setAuthPanel('forgot')}
+              >
+                Forgot password
+              </button>
             ) : null}
           </div>
         ) : null}
 
-        {msg ? <p className="text-sm font-medium text-slate-800 dark:text-moss-fg">{msg}</p> : null}
         {compact ? (
           <p className="text-xs text-slate-500 dark:text-moss-muted">
             New accounts start with a blank worksheet. Your data stays private to your household.
           </p>
         ) : (
           <p className="text-xs text-slate-500 dark:text-moss-muted">
-            Advanced account tools (invites, pairing, API keys) remain under{' '}
+            Partner invites and pairing codes are under{' '}
             <strong className="text-slate-700 dark:text-moss-subtle">Tools</strong> after you enter the dashboard.
           </p>
         )}

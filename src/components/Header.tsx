@@ -13,8 +13,9 @@ export function Header({
 }: {
   theme: ThemePreference;
   onTheme: (t: ThemePreference) => void;
-  /** When set, shows Sign in and routes to `#auth` (see App). */
+  /** When true, shows Sign out in the header. */
   householdSignedIn?: boolean;
+  /** When set and not signed in, shows Sign in (e.g. public shell). */
   onOpenAccount?: () => void;
 }) {
   const [buildOpen, setBuildOpen] = useState(false);
@@ -55,27 +56,25 @@ export function Header({
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:gap-3">
-          {onOpenAccount ? (
-            householdSignedIn ? (
-              <button
-                type="button"
-                className="rounded-xl border border-slate-300/90 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 shadow-sm hover:bg-slate-50 dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg dark:hover:bg-moss-elevated"
-                onClick={() => {
-                  clearHouseholdSession();
-                  window.location.reload();
-                }}
-              >
-                Sign out
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="rounded-xl border border-teal-500/40 bg-teal-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-teal-700 dark:bg-teal-700 dark:hover:bg-teal-600"
-                onClick={() => onOpenAccount()}
-              >
-                Sign in
-              </button>
-            )
+          {householdSignedIn ? (
+            <button
+              type="button"
+              className="rounded-xl border border-slate-300/90 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 shadow-sm hover:bg-slate-50 dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg dark:hover:bg-moss-elevated"
+              onClick={() => {
+                clearHouseholdSession();
+                window.location.reload();
+              }}
+            >
+              Sign out
+            </button>
+          ) : onOpenAccount ? (
+            <button
+              type="button"
+              className="rounded-xl border border-teal-500/40 bg-teal-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-teal-700 dark:bg-teal-700 dark:hover:bg-teal-600"
+              onClick={() => onOpenAccount()}
+            >
+              Sign in
+            </button>
           ) : null}
           <div className="w-full max-w-[11.5rem] shrink-0 sm:max-w-[13rem]">
             <SegmentedButtonGroup

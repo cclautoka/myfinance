@@ -241,8 +241,9 @@ export function buildReminderEmailTemplate({ monthKey, dueSoon = [], overdue = [
 }
 
 /** Branded transactional mail for verify / reset / magic (uses same shell as digest emails). */
-export function buildAuthActionEmail({ kind, actionLink }) {
+export function buildAuthActionEmail({ kind, actionLink, inviteLink }) {
   const safeLink = String(actionLink ?? '');
+  const safeInviteLink = String(inviteLink ?? '');
   const configs = {
     verify: {
       subject: 'Household finances · verify your email',
@@ -317,6 +318,44 @@ export function buildAuthActionEmail({ kind, actionLink }) {
       ],
       footerHint: 'If you did not request this link, ignore the message — it will expire on its own.',
     },
+    partner_verify: {
+      subject: 'Household finances · confirm your partner invite',
+      title: 'Verify to join your household',
+      preheader: 'Confirm your email, then open your invite link to enter the pairing code.',
+      ctaLabel: 'Verify my email',
+      sections: [
+        {
+          heading: 'Step 1 — Verify this address',
+          items: [
+            {
+              title: 'Confirm your email',
+              body: 'Click the button below. After you verify, reload your partner invite page (or use the invite link in step 2) and enter the pairing code your partner shared — that code does not expire either.',
+            },
+          ],
+        },
+        {
+          heading: 'Step 2 — Open your invite link',
+          items: [
+            {
+              title: 'Join with pairing code',
+              body: 'After verifying, open this invite link in the same browser. Enter the 6-digit pairing code your partner shared with you.',
+              meta: safeInviteLink.slice(0, 2000),
+            },
+          ],
+        },
+        {
+          heading: 'Button not working?',
+          items: [
+            {
+              title: 'Copy verify link',
+              meta: safeLink.slice(0, 2000),
+            },
+          ],
+        },
+      ],
+      footerHint:
+        'Your partner invite link does not expire. If you did not expect this invitation, you can ignore this message.',
+    },
   };
   const c = configs[kind] ?? configs.verify;
   return {
@@ -326,6 +365,39 @@ export function buildAuthActionEmail({ kind, actionLink }) {
     sections: c.sections,
     footerHint: c.footerHint,
     primaryCta: safeLink.trim() ? { label: c.ctaLabel, href: safeLink } : undefined,
+  };
+}
+
+/** Sent after a password reset completes (no action link). */
+export function buildPasswordChangedEmail({ appBase }) {
+  const base = String(appBase ?? '').trim().replace(/\/$/, '');
+  const signInHint = base ? `Sign in at ${base}` : 'Sign in at your usual Household finances URL';
+  return {
+    subject: 'Household finances · password changed',
+    title: 'Your password was changed',
+    preheader: 'Your household account password was updated successfully.',
+    sections: [
+      {
+        heading: 'What happened',
+        items: [
+          {
+            title: 'Password updated',
+            body: `Your sign-in password for Household finances was changed. ${signInHint} using your new password.`,
+          },
+        ],
+      },
+      {
+        heading: 'Did not change your password?',
+        items: [
+          {
+            title: 'Secure your account',
+            body: 'Use “Forgot password” on the sign-in page to set a new password immediately. If you need help, contact your household owner.',
+          },
+        ],
+      },
+    ],
+    footerHint: 'This is an automated security notice from Household finances.',
+    primaryCta: base ? { label: 'Open Household finances', href: base } : undefined,
   };
 }
 
