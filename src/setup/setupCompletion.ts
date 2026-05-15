@@ -79,12 +79,11 @@ function debtsOk(state: FinanceState, completion: HouseholdSetupCompletion | nul
   return Boolean(completion?.noDebtsClaim);
 }
 
-/** Pre-wizard households: enough real data to skip the gate once (does not require debt/no-debt choice). */
-function legacyHouseholdLooksComplete(state: FinanceState, cfg: NotifyRelayConfig): boolean {
+/** Pre-wizard households: enough real data to skip the gate once (income + essentials only). */
+function legacyHouseholdLooksComplete(state: FinanceState, _cfg: NotifyRelayConfig): boolean {
   const mode = readHouseholdMode();
   if (!incomeOk(mode, state.income)) return false;
   if (essentialsBaselineTotal(state) <= 0) return false;
-  if (!notifyOk(cfg)) return false;
   return true;
 }
 
@@ -101,10 +100,12 @@ function notifyOk(cfg: NotifyRelayConfig): boolean {
   if (!cfg.enabled) return true;
   const url = cfg.url.trim();
   const hid = cfg.householdId.trim();
+  if (!url || !hid) return false;
   const he = cfg.husbandEmail.trim();
   const we = cfg.wifeEmail.trim();
-  if (!url || !hid) return false;
-  return Boolean(he.includes('@') || we.includes('@'));
+  // Same-origin bootstrap turns relay on before Tools emails exist — don't block setup forever.
+  if (!he && !we) return true;
+  return he.includes('@') || we.includes('@');
 }
 
 /**

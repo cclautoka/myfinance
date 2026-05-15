@@ -32,6 +32,7 @@ import {
 } from '../utils/notifyRelay';
 import { readHouseholdSession } from '../utils/householdSession';
 import { readNotifyRelayConfig } from '../utils/notifyRelayConfig';
+import { maybeMigrateLegacyHouseholdSetup } from '../setup/setupCompletion';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -70,6 +71,7 @@ export function usePersistedFinance() {
       if (cancelled) return;
       if (remote.ok) {
         setState(remote.state);
+        maybeMigrateLegacyHouseholdSetup(remote.state, readNotifyRelayConfig());
       }
     })().catch(() => {
       /* offline / ignore */
@@ -91,6 +93,7 @@ export function usePersistedFinance() {
       return { ok: false as const, error: remote.error || 'Failed to load server data.' };
     }
     setState(remote.state);
+    maybeMigrateLegacyHouseholdSetup(remote.state, readNotifyRelayConfig());
     return { ok: true as const, updatedAt: remote.updatedAt };
   }, []);
 
