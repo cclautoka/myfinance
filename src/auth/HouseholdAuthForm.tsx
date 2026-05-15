@@ -157,8 +157,24 @@ export function HouseholdAuthForm({
     };
   }, [inviteToken]);
 
-  const partnerInviteMode = Boolean(inviteToken.trim());
+  const hasInviteToken = Boolean(inviteToken.trim());
+  /** Invite UI only while loading preview or when the link is still usable (join or return sign-in). */
+  const partnerInviteMode =
+    hasInviteToken && (invitePreviewLoading || Boolean(invitePreview?.valid));
   const partnerInviteSignInMode = partnerInviteMode && invitePreview?.valid && invitePreview.mode === 'signin';
+  const inviteLinkInvalid = hasInviteToken && !invitePreviewLoading && invitePreview?.valid === false;
+
+  const clearInviteHashAndOpenPartnerSignIn = () => {
+    setInviteToken('');
+    setInvitePreview(null);
+    setTab('partner');
+    try {
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    } catch {
+      /* ignore */
+    }
+  };
+
   const partnerCanJoin =
     invitePreview?.valid &&
     invitePreview.mode !== 'signin' &&
@@ -400,6 +416,17 @@ export function HouseholdAuthForm({
   const emailErr = email.trim() && !email.includes('@') ? 'Enter a valid email.' : null;
   const pwdErr = tab === 'register' && password.length > 0 && password.length < 8 ? 'Password must be at least 8 characters.' : null;
   const compact = variant === 'embedded';
+  const authTabOptions = compact
+    ? ([
+        { id: 'signin' as const, label: 'Owner' },
+        { id: 'register' as const, label: 'Register' },
+        { id: 'partner' as const, label: 'Partner' },
+      ] as const)
+    : ([
+        { id: 'signin' as const, label: 'Owner sign in' },
+        { id: 'register' as const, label: 'Register' },
+        { id: 'partner' as const, label: 'Partner sign-in' },
+      ] as const);
 
   return (
     <div className={compact ? 'flex flex-col' : 'mx-auto flex min-h-svh w-full max-w-lg flex-col px-4 py-10 sm:px-6'}>
@@ -455,17 +482,34 @@ export function HouseholdAuthForm({
       </div>
 
       {!partnerInviteMode ? (
-        <div className={compact ? 'mt-4' : 'mt-6 max-w-md'}>
+        <div className={compact ? 'mt-4 w-full min-w-0' : 'mt-6 max-w-md'}>
           <SegmentedButtonGroup
             aria-label="Sign in or register"
             value={tab}
             onChange={setTab}
-            options={[
-              { id: 'signin', label: 'Owner sign in' },
-              { id: 'register', label: 'Register' },
-              { id: 'partner', label: 'Partner sign-in' },
-            ]}
+            options={[...authTabOptions]}
+            size={compact ? 'compact' : 'default'}
           />
+        </div>
+      ) : null}
+
+      {inviteLinkInvalid ? (
+        <div
+          className="mt-4 rounded-xl border border-amber-400/90 bg-amber-50/95 px-3 py-3 text-sm text-amber-950 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-100"
+          role="status"
+        >
+          <p className="font-semibold">This invite link was already used</p>
+          <p className="mt-1 text-xs leading-relaxed">
+            First-time join needs a fresh invite from your partner. If you already joined, use partner sign-in with your
+            email and the current pairing code.
+          </p>
+          <button
+            type="button"
+            className="btn-primary btn-primary-sm mt-3 font-bold"
+            onClick={clearInviteHashAndOpenPartnerSignIn}
+          >
+            Partner sign-in
+          </button>
         </div>
       ) : null}
 
@@ -657,6 +701,18 @@ export function HouseholdAuthForm({
                 <FieldError id={fieldErrorId('auth-password')} message={pwdErr} />
               </label>
             ) : null}
+            {tab === 'signin' && authPanel === 'default' ? (
+              <p className="text-xs text-slate-600 dark:text-moss-muted">
+                Joined as a partner?{' '}
+                <button
+                  type="button"
+                  className="font-semibold text-teal-800 underline underline-offset-2 dark:text-teal-300"
+                  onClick={() => setTab('partner')}
+                >
+                  Sign in with pairing code
+                </button>
+              </p>
+            ) : null}
             {tab === 'register' && mode === 'couple' ? (
               <fieldset>
                 <legend className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-600 dark:text-moss-muted">
@@ -786,7 +842,9 @@ export function HouseholdAuthForm({
 
         {compact ? (
           <p className="text-xs text-slate-500 dark:text-moss-muted">
-            New accounts start with a blank worksheet. Your data stays private to your household.
+            {tab === 'partner'
+              ? 'Use the email you joined with and the 6-digit pairing code from your partner (Tools on their account).'
+              : 'New accounts start with a blank worksheet. Partners: tap the Partner tab above.'}
           </p>
         ) : (
           <p className="text-xs text-slate-500 dark:text-moss-muted">
