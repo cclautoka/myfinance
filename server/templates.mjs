@@ -241,9 +241,10 @@ export function buildReminderEmailTemplate({ monthKey, dueSoon = [], overdue = [
 }
 
 /** Branded transactional mail for verify / reset / magic (uses same shell as digest emails). */
-export function buildAuthActionEmail({ kind, actionLink, inviteLink }) {
+export function buildAuthActionEmail({ kind, actionLink, inviteLink, pairingCode }) {
   const safeLink = String(actionLink ?? '');
   const safeInviteLink = String(inviteLink ?? '');
+  const safePairingCode = String(pairingCode ?? '').replace(/\D/g, '').slice(0, 6);
   const configs = {
     verify: {
       subject: 'Household finances · verify your email',
@@ -355,6 +356,42 @@ export function buildAuthActionEmail({ kind, actionLink, inviteLink }) {
       ],
       footerHint:
         'Your partner invite link does not expire. If you did not expect this invitation, you can ignore this message.',
+    },
+    partner_join: {
+      subject: 'Household finances · join your partner’s household',
+      title: 'Join your household',
+      preheader: 'Open your invite link and enter the pairing code your partner shared.',
+      ctaLabel: 'Open invite link',
+      sections: [
+        {
+          heading: 'What to do',
+          items: [
+            {
+              title: 'Open the invite link',
+              body: 'Use the button below (or copy the link). Enter your email on that page so we know it is you.',
+            },
+            ...(safePairingCode
+              ? [
+                  {
+                    title: 'Enter the pairing code',
+                    body: `When prompted, enter this 6-digit code: ${safePairingCode}. It does not expire.`,
+                  },
+                ]
+              : [
+                  {
+                    title: 'Enter the pairing code',
+                    body: 'Your partner will share a 6-digit pairing code with you. Enter it on the invite page to finish joining.',
+                  },
+                ]),
+          ],
+        },
+        {
+          heading: 'Button not working?',
+          items: [{ title: 'Copy invite link', meta: safeInviteLink.slice(0, 2000) }],
+        },
+      ],
+      footerHint:
+        'This invite link does not expire. If you did not expect this message, you can ignore it.',
     },
   };
   const c = configs[kind] ?? configs.verify;

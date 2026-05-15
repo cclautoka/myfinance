@@ -135,6 +135,7 @@ export async function initDbIfNeeded(log) {
         references household_member(id) on delete set null;
     `);
     await pool.query(`alter table household_pairing add column if not exists code_plain text;`);
+    await pool.query(`alter table household_invite add column if not exists token_plain text;`);
     log?.info?.('Postgres ready (finance_state + household platform)');
   })();
   return initPromise;
@@ -238,17 +239,33 @@ export async function insertInvite({
   expiresAt,
   partnerEmail = null,
   partnerMemberId = null,
+  tokenPlain = null,
 }) {
   if (!pool) throw new Error('DB not initialized');
   const r = await pool.query(
     `insert into household_invite (
-       token_hash, household_id, inviter_member_id, expires_at, partner_email, partner_member_id
+       token_hash, household_id, inviter_member_id, expires_at, partner_email, partner_member_id, token_plain
      )
-     values ($1, $2, $3, $4, $5, $6)
-     returning id, token_hash, household_id, expires_at, partner_email, partner_member_id`,
-    [tokenHash, householdId, inviterMemberId, expiresAt, partnerEmail, partnerMemberId],
+     values ($1, $2, $3, $4, $5, $6, $7)
+     returning id, token_hash, household_id, expires_at, partner_email, partner_member_id, token_plain`,
+    [tokenHash, householdId, inviterMemberId, expiresAt, partnerEmail, partnerMemberId, tokenPlain],
   );
   return r.rows[0];
+}
+
+/** Latest unused invite for a partner email (link can be rebuilt from token_plain). */
+export async function getLatestUnusedInviteForPartner(householdId, partnerEmail) {
+  if (!pool) throw new Error('DB not initialized');
+  const r = await pool.query(
+    `select id, household_id, partner_email, partner_member_id, token_plain, expires_at
+     from household_invite
+     where household_id = $1 and used_at is null and token_plain is not null
+       and lower(partner_email) = lower($2)
+     order by created_at desc
+     limit 1`,
+    [householdId, partnerEmail.trim()],
+  );
+  return r.rows[0] ?? null;
 }
 
 export async function getActiveInviteByTokenHash(tokenHash) {

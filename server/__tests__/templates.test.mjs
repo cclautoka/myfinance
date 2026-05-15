@@ -37,6 +37,18 @@ describe('buildAuthActionEmail', () => {
     assert.match(html, /#verify=abc123/);
   });
 
+  it('partner_join template includes invite CTA and pairing code', () => {
+    const tpl = buildAuthActionEmail({
+      kind: 'partner_join',
+      actionLink: 'https://finance.solofi.cloud/#invite=xyz',
+      inviteLink: 'https://finance.solofi.cloud/#invite=xyz',
+      pairingCode: '262418',
+    });
+    assert.match(tpl.subject, /join/i);
+    assert.equal(tpl.primaryCta?.label, 'Open invite link');
+    assert.ok(tpl.sections.some((s) => s.items?.some((it) => (it.body ?? '').includes('262418'))));
+  });
+
   it('partner_verify template includes verify CTA and invite link copy', () => {
     const tpl = buildAuthActionEmail({
       kind: 'partner_verify',

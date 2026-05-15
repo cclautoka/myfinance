@@ -32,6 +32,7 @@ import {
   getMemberById,
   insertInvite,
   getActiveInviteByTokenHash,
+  getLatestUnusedInviteForPartner,
   markInviteUsed,
   ensureHouseholdRow,
   insertEmailToken,
@@ -424,6 +425,62 @@ async function sendPartnerInviteEmail({ to, verifyRawToken, inviteRawToken, requ
     primaryCta: tpl.primaryCta,
   });
   await sendMail({ to, subject: tpl.subject.slice(0, 200), text, html });
+}
+
+async function sendPartnerJoinEmail({ to, inviteRawToken, pairingCode, request }) {
+  const base = publicAppBase(request);
+  if (!base) {
+    throw new Error(
+      'APP_PUBLIC_URL or SITE_URL is not set (and request Origin was unavailable). Cannot build email links.',
+    );
+  }
+  const inviteLink = `${base}/#invite=${encodeURIComponent(inviteRawToken)}`;
+  const tpl = buildAuthActionEmail({
+    kind: 'partner_join',
+    actionLink: inviteLink,
+    inviteLink,
+    pairingCode,
+  });
+  const html = renderEmailHtml({
+    title: tpl.title,
+    preheader: tpl.preheader,
+    sections: tpl.sections,
+    footerHint: tpl.footerHint,
+    primaryCta: tpl.primaryCta,
+  });
+  const text = renderEmailText({
+    title: tpl.title,
+    preheader: tpl.preheader,
+    sections: tpl.sections,
+    footerHint: tpl.footerHint,
+    primaryCta: tpl.primaryCta,
+  });
+  await sendMail({ to, subject: tpl.subject.slice(0, 200), text, html });
+}
+
+async function ensurePartnerInviteToken({
+  householdId,
+  inviterMemberId,
+  partnerEmail,
+  partnerMemberId,
+  regenerate = false,
+}) {
+  if (!regenerate) {
+    const existing = await getLatestUnusedInviteForPartner(householdId, partnerEmail);
+    if (existing?.token_plain) return existing.token_plain;
+  }
+  const raw = crypto.randomBytes(24).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(raw).digest('hex');
+  await insertInvite({
+    tokenHash,
+    householdId,
+    inviterMemberId,
+    expiresAt: NEVER_EXPIRES_AT,
+    partnerEmail,
+    partnerMemberId,
+    tokenPlain: raw,
+  });
+  return raw;
 }
 
 function sessionTokenTtlSeconds() {
@@ -821,9 +878,8 @@ fastify.post('/v1/household/auth/invite', async (request, reply) => {
   if (existingPartner?.role === 'owner') {
     return reply.code(400).send({ error: 'That email is already the primary owner for this household.' });
   }
-  if (existingPartner?.role === 'partner' && existingPartner.email_verified_at) {
-    return reply.code(409).send({ error: 'A verified partner already uses that email on this household.' });
-  }
+  const sendEmail = body.sendEmail === true;
+  const regenerate = body.regenerate === true;
 
   let partnerMember = existingPartner;
   if (!partnerMember) {
@@ -844,54 +900,68 @@ fastify.post('/v1/household/auth/invite', async (request, reply) => {
     partnerMember = await getMemberById(partnerMember.id);
   }
 
-  const raw = crypto.randomBytes(24).toString('hex');
-  const tokenHash = crypto.createHash('sha256').update(raw).digest('hex');
-  await insertInvite({
-    tokenHash,
+  const token = await ensurePartnerInviteToken({
     householdId,
     inviterMemberId: inviter.id,
-    expiresAt: NEVER_EXPIRES_AT,
     partnerEmail,
     partnerMemberId: partnerMember.id,
+    regenerate,
   });
 
   let verificationEmailSent = false;
-  if (emailVerificationRequired() && !partnerMember.email_verified_at) {
+  let joinEmailSent = false;
+  const partnerEmailVerified = Boolean(partnerMember.email_verified_at);
+
+  if (sendEmail) {
     try {
-      await deleteUnusedEmailTokens(partnerMember.id, 'verify');
-      const verifyRaw = crypto.randomBytes(32).toString('hex');
-      const verifyHash = hashUtf8Sha256Hex(verifyRaw);
-      const expires = new Date(Date.now() + 1000 * 60 * 60 * 24);
-      await insertEmailToken({
-        memberId: partnerMember.id,
-        tokenHash: verifyHash,
-        kind: 'verify',
-        expiresAt: expires.toISOString(),
-      });
-      await sendPartnerInviteEmail({
-        to: partnerEmail,
-        verifyRawToken: verifyRaw,
-        inviteRawToken: raw,
-        request,
-      });
-      verificationEmailSent = true;
+      if (emailVerificationRequired() && !partnerEmailVerified) {
+        await deleteUnusedEmailTokens(partnerMember.id, 'verify');
+        const verifyRaw = crypto.randomBytes(32).toString('hex');
+        const verifyHash = hashUtf8Sha256Hex(verifyRaw);
+        const expires = new Date(Date.now() + 1000 * 60 * 60 * 24);
+        await insertEmailToken({
+          memberId: partnerMember.id,
+          tokenHash: verifyHash,
+          kind: 'verify',
+          expiresAt: expires.toISOString(),
+        });
+        await sendPartnerInviteEmail({
+          to: partnerEmail,
+          verifyRawToken: verifyRaw,
+          inviteRawToken: token,
+          request,
+        });
+        verificationEmailSent = true;
+      } else {
+        const pairing = await getLatestUnusedPairingForHousehold(householdId);
+        await sendPartnerJoinEmail({
+          to: partnerEmail,
+          inviteRawToken: token,
+          pairingCode: pairing?.code_plain ?? '',
+          request,
+        });
+        joinEmailSent = true;
+      }
     } catch (e) {
       request.log.error(e);
       return reply.code(502).send({
-        error: 'Invite created but could not send partner verification email',
+        error: 'Invite link ready but could not send email',
         detail: process.env.NODE_ENV === 'development' ? String(e?.message ?? e) : undefined,
+        token,
+        partnerEmail,
+        partnerEmailVerified,
       });
     }
   }
 
   const base = publicAppBase(request);
-  const token = raw;
   return reply.send({
     ok: true,
     token,
     partnerEmail,
     verificationEmailSent,
-    partnerEmailVerified: Boolean(partnerMember.email_verified_at),
+    joinEmailSent,
+    partnerEmailVerified,
     inviteUrl: base ? `${base}/#invite=${encodeURIComponent(token)}` : null,
     inviteHashFragment: `invite=${encodeURIComponent(token)}`,
   });

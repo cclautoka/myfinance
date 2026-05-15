@@ -46,6 +46,8 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
   const [inviteModalUrl, setInviteModalUrl] = useState('');
   const [inviteModalPartnerEmail, setInviteModalPartnerEmail] = useState('');
   const [inviteVerificationSent, setInviteVerificationSent] = useState(false);
+  const [inviteJoinEmailSent, setInviteJoinEmailSent] = useState(false);
+  const [pairingCopied, setPairingCopied] = useState(false);
   const [securityOpen, setSecurityOpen] = useState(false);
   const pairingSectionRef = useRef<HTMLDivElement>(null);
 
@@ -77,6 +79,12 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
     const t = window.setTimeout(() => setPairingHighlight(false), 4000);
     return () => clearTimeout(t);
   }, [pairingHighlight]);
+
+  useEffect(() => {
+    if (!pairingCopied) return;
+    const t = window.setTimeout(() => setPairingCopied(false), 2000);
+    return () => clearTimeout(t);
+  }, [pairingCopied]);
 
   const persistMode = (m: HouseholdMode) => {
     setMode(m);
@@ -117,6 +125,22 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
     if (!res.ok) throw new Error((j.error as string) || text || `HTTP ${res.status}`);
     return j;
   }, []);
+
+  useEffect(() => {
+    if (!signedIn || !isOwner || !hid) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const j = (await postJson('/v1/household/pairing/create', { householdId: hid }, true)) as { code?: string };
+        if (!cancelled && j.code) setActivePairing({ code: String(j.code) });
+      } catch {
+        /* ignore — owner can generate manually */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [signedIn, isOwner, hid, postJson]);
 
   const register = async () => {
     const next: AuthFieldErrors = {};
@@ -221,10 +245,34 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
     pairingSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
-  const invitePartner = async () => {
+  const buildInviteLink = (j: {
+    inviteUrl?: string | null;
+    token?: string;
+    inviteHashFragment?: string;
+  }) =>
+    j.inviteUrl ||
+    (j.inviteHashFragment
+      ? `${window.location.origin}${window.location.pathname}#${j.inviteHashFragment}`
+      : j.token
+        ? `${window.location.origin}${window.location.pathname}#invite=${encodeURIComponent(j.token)}`
+        : '');
+
+  const openInviteModal = (
+    link: string,
+    partnerEmail: string,
+    opts: { verificationEmailSent?: boolean; joinEmailSent?: boolean },
+  ) => {
+    setInviteModalUrl(link);
+    setInviteModalPartnerEmail(partnerEmail);
+    setInviteVerificationSent(Boolean(opts.verificationEmailSent));
+    setInviteJoinEmailSent(Boolean(opts.joinEmailSent));
+    setInviteModalOpen(true);
+  };
+
+  const fetchPartnerInvite = async (sendEmail: boolean) => {
     setBusy(true);
     try {
-      let pairing = hasPairingCode(activePairing) ? activePairing : await createPairing();
+      const pairing = hasPairingCode(activePairing) ? activePairing : await createPairing();
       if (!pairing) {
         highlightPairingSection();
         pushToast({ type: 'error', message: 'Generate a pairing code first, then try again.' });
@@ -234,44 +282,59 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
       if (!partnerEmail) {
         pushToast({
           type: 'error',
-          message: 'Set both partner emails under Email summaries (or complete setup) before inviting.',
+          message: 'Set both partner emails under Email summaries before sharing a partner link.',
         });
         return;
       }
-      const body: Record<string, unknown> = { householdId: hid, partnerEmail };
-      const j = (await postJson('/v1/household/auth/invite', body, true)) as {
+      const j = (await postJson(
+        '/v1/household/auth/invite',
+        { householdId: hid, partnerEmail, sendEmail },
+        true,
+      )) as {
         inviteUrl?: string | null;
         token?: string;
         inviteHashFragment?: string;
         partnerEmail?: string;
         verificationEmailSent?: boolean;
+        joinEmailSent?: boolean;
       };
-      const link =
-        j.inviteUrl ||
-        (j.inviteHashFragment
-          ? `${window.location.origin}${window.location.pathname}#${j.inviteHashFragment}`
-          : j.token
-            ? `${window.location.origin}${window.location.pathname}#invite=${encodeURIComponent(j.token)}`
-            : '');
+      const link = buildInviteLink(j);
       if (!link) {
         pushToast({ type: 'error', message: 'Could not build invite link.' });
         return;
       }
-      setInviteModalUrl(link);
-      setInviteModalPartnerEmail(j.partnerEmail ?? partnerEmail);
-      setInviteVerificationSent(Boolean(j.verificationEmailSent));
-      setInviteModalOpen(true);
-      if (j.verificationEmailSent) {
-        pushToast({
-          type: 'success',
-          message: `Verification email sent to ${j.partnerEmail ?? partnerEmail}.`,
-        });
+      openInviteModal(link, j.partnerEmail ?? partnerEmail, {
+        verificationEmailSent: j.verificationEmailSent,
+        joinEmailSent: j.joinEmailSent,
+      });
+      if (sendEmail) {
+        if (j.verificationEmailSent) {
+          pushToast({
+            type: 'success',
+            message: `Verification email sent to ${j.partnerEmail ?? partnerEmail}.`,
+          });
+        } else if (j.joinEmailSent) {
+          pushToast({
+            type: 'success',
+            message: `Partner invite email sent to ${j.partnerEmail ?? partnerEmail}.`,
+          });
+        }
       }
     } catch (e) {
       pushToast({ type: 'error', message: String((e as Error)?.message ?? e) });
       highlightPairingSection();
     } finally {
       setBusy(false);
+    }
+  };
+
+  const copyPairingCode = async () => {
+    if (!hasPairingCode(activePairing)) return;
+    try {
+      await navigator.clipboard.writeText(activePairing.code);
+      setPairingCopied(true);
+    } catch {
+      pushToast({ type: 'error', message: 'Could not copy pairing code.' });
     }
   };
 
@@ -483,12 +546,20 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
             code.
           </p>
           {hasPairingCode(activePairing) ? (
-            <p className="mt-3 font-mono text-xl font-bold tracking-[0.3em] text-teal-800 dark:text-teal-200">
-              {activePairing.code}
-              <span className="ml-3 text-xs font-sans font-medium tracking-normal text-sage-600 dark:text-moss-muted">
-                does not expire
-              </span>
-            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <p className="font-mono text-xl font-bold tracking-[0.3em] text-teal-800 dark:text-teal-200">
+                {activePairing.code}
+              </p>
+              <button
+                type="button"
+                className="btn-secondary btn-secondary-sm font-bold"
+                disabled={busy}
+                onClick={() => void copyPairingCode()}
+              >
+                {pairingCopied ? 'Copied' : 'Copy code'}
+              </button>
+              <span className="text-xs font-medium text-sage-600 dark:text-moss-muted">does not expire</span>
+            </div>
           ) : (
             <p className="mt-2 text-xs text-amber-800 dark:text-amber-200/90">No pairing code yet — generate one below.</p>
           )}
@@ -501,8 +572,21 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
             >
               Generate pairing code
             </button>
-            <button type="button" className="btn-primary btn-primary-sm font-bold" disabled={busy} onClick={() => void invitePartner()}>
-              Invite partner
+            <button
+              type="button"
+              className="btn-secondary btn-secondary-sm font-bold"
+              disabled={busy}
+              onClick={() => void fetchPartnerInvite(false)}
+            >
+              Show partner link
+            </button>
+            <button
+              type="button"
+              className="btn-primary btn-primary-sm font-bold"
+              disabled={busy}
+              onClick={() => void fetchPartnerInvite(true)}
+            >
+              Email partner link
             </button>
           </div>
         </div>
@@ -564,6 +648,7 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
         pairingCode={hasPairingCode(activePairing) ? activePairing.code : ''}
         partnerEmail={inviteModalPartnerEmail}
         verificationEmailSent={inviteVerificationSent}
+        joinEmailSent={inviteJoinEmailSent}
       />
     </div>
   );

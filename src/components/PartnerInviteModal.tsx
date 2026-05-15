@@ -11,6 +11,7 @@ export function PartnerInviteModal({
   pairingCode,
   partnerEmail,
   verificationEmailSent,
+  joinEmailSent,
 }: {
   open: boolean;
   onClose: () => void;
@@ -18,6 +19,7 @@ export function PartnerInviteModal({
   pairingCode: string;
   partnerEmail?: string;
   verificationEmailSent?: boolean;
+  joinEmailSent?: boolean;
 }) {
   const titleId = useId();
   const descId = useId();
@@ -97,6 +99,10 @@ export function PartnerInviteModal({
             {verificationEmailSent ? (
               <span className="mt-1 block text-xs font-medium text-teal-900/90 dark:text-teal-200/90">
                 Verification email sent — they must confirm before joining.
+              </span>
+            ) : joinEmailSent ? (
+              <span className="mt-1 block text-xs font-medium text-teal-900/90 dark:text-teal-200/90">
+                Invite email sent with the link and pairing code.
               </span>
             ) : null}
           </p>
