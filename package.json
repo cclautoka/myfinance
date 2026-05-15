@@ -11,7 +11,8 @@
     "test": "vitest run",
     "server:start": "npm --prefix server start",
     "server:db:migrate": "npm --prefix server run db:migrate",
-    "server:seed:shahil": "npm --prefix server run seed:shahil"
+    "server:seed:shahil": "npm --prefix server run seed:shahil",
+    "server:list:households": "npm --prefix server run list:households"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.0",

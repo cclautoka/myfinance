@@ -221,9 +221,9 @@ export const getServerStorageConfig = (
         ? url.replace(/\/v1\/notify$/, '')
         : url.replace(/\/$/, '');
 
-  const householdId = ensureNotifyRelayHouseholdId();
   const sess = readHouseholdSession();
-  const sessionOk = Boolean(sess?.token && sess.householdId === householdId);
+  const householdId = (sess?.householdId?.trim() || ensureNotifyRelayHouseholdId());
+  const sessionOk = Boolean(sess?.token && sess.householdId);
   const secretOk = Boolean((cfg.secret ?? '').trim());
   const canAuth = secretOk || sessionOk;
   const ready = Boolean(url) && Boolean(householdId) && canAuth;

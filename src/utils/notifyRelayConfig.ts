@@ -1,5 +1,17 @@
 /** localStorage keys for optional Dokploy (or any) notify relay — never stores finance data, only URL + secret. */
 
+/** Same-origin notify endpoint (single Docker service serves UI + API). */
+export const DEFAULT_NOTIFY_RELAY_PATH = '/v1/notify';
+
+/** Fixed notify URL for this deployment (optional build override for split-host setups). */
+export function resolveNotifyRelayUrl(): string {
+  const env =
+    typeof import.meta.env.VITE_PUBLIC_NOTIFY_URL === 'string'
+      ? import.meta.env.VITE_PUBLIC_NOTIFY_URL.trim()
+      : '';
+  return env || DEFAULT_NOTIFY_RELAY_PATH;
+}
+
 export const NOTIFY_RELAY_ENABLED_KEY = 'finance-notify-relay-enabled';
 export const NOTIFY_RELAY_URL_KEY = 'finance-notify-relay-url';
 export const NOTIFY_RELAY_SECRET_KEY = 'finance-notify-relay-secret';
@@ -17,29 +29,41 @@ export type NotifyRelayConfig = {
 };
 
 export function readNotifyRelayConfig(): NotifyRelayConfig {
+  const url = resolveNotifyRelayUrl();
   try {
     return {
       enabled: localStorage.getItem(NOTIFY_RELAY_ENABLED_KEY) === '1',
-      url: (localStorage.getItem(NOTIFY_RELAY_URL_KEY) ?? '').trim(),
+      url,
       secret: (localStorage.getItem(NOTIFY_RELAY_SECRET_KEY) ?? '').trim(),
       husbandEmail: (localStorage.getItem(NOTIFY_RELAY_EMAIL_HUSBAND_KEY) ?? '').trim(),
       wifeEmail: (localStorage.getItem(NOTIFY_RELAY_EMAIL_WIFE_KEY) ?? '').trim(),
       householdId: (localStorage.getItem(NOTIFY_RELAY_HOUSEHOLD_ID_KEY) ?? '').trim(),
     };
   } catch {
-    return { enabled: false, url: '', secret: '', husbandEmail: '', wifeEmail: '', householdId: '' };
+    return { enabled: false, url, secret: '', husbandEmail: '', wifeEmail: '', householdId: '' };
   }
 }
 
 export function writeNotifyRelayConfig(c: NotifyRelayConfig): void {
+  const url = resolveNotifyRelayUrl();
   try {
     if (c.enabled) localStorage.setItem(NOTIFY_RELAY_ENABLED_KEY, '1');
     else localStorage.removeItem(NOTIFY_RELAY_ENABLED_KEY);
-    localStorage.setItem(NOTIFY_RELAY_URL_KEY, c.url.trim());
+    localStorage.setItem(NOTIFY_RELAY_URL_KEY, url);
     localStorage.setItem(NOTIFY_RELAY_SECRET_KEY, c.secret);
     localStorage.setItem(NOTIFY_RELAY_EMAIL_HUSBAND_KEY, c.husbandEmail.trim());
     localStorage.setItem(NOTIFY_RELAY_EMAIL_WIFE_KEY, c.wifeEmail.trim());
     if (c.householdId.trim()) localStorage.setItem(NOTIFY_RELAY_HOUSEHOLD_ID_KEY, c.householdId.trim());
+  } catch {
+    /* ignore */
+  }
+}
+
+export function setNotifyRelayHouseholdId(householdId: string): void {
+  try {
+    const id = householdId.trim();
+    if (id) localStorage.setItem(NOTIFY_RELAY_HOUSEHOLD_ID_KEY, id);
+    else localStorage.removeItem(NOTIFY_RELAY_HOUSEHOLD_ID_KEY);
   } catch {
     /* ignore */
   }
@@ -63,13 +87,13 @@ export function ensureNotifyRelayHouseholdId(): string {
 
 export function buildShareSetupLink(input: {
   baseUrl: string;
-  notifyUrl: string;
   householdId: string;
   husbandEmail?: string;
   wifeEmail?: string;
 }): string {
-  const { baseUrl, notifyUrl, householdId, husbandEmail, wifeEmail } = input;
+  const { baseUrl, householdId, husbandEmail, wifeEmail } = input;
   const u = new URL(baseUrl);
+  const notifyUrl = resolveNotifyRelayUrl();
   // Never include secrets in links. Emails are okay to include.
   const he = (husbandEmail ?? '').trim();
   const we = (wifeEmail ?? '').trim();
@@ -85,14 +109,13 @@ export function applySetupFromUrlHash(): Partial<NotifyRelayConfig> | null {
   if (!h.includes('setup=1')) return null;
   const params = new URLSearchParams(h);
   if (params.get('setup') !== '1') return null;
-  const notify = (params.get('notify') ?? '').trim();
   const hid = (params.get('hid') ?? '').trim();
   const he = (params.get('he') ?? '').trim();
   const we = (params.get('we') ?? '').trim();
-  if (!notify || !hid) return null;
+  if (!hid) return null;
   if (!/^[a-f0-9]{16,64}$/i.test(hid)) return null;
   return {
-    url: decodeURIComponent(notify),
+    url: resolveNotifyRelayUrl(),
     householdId: decodeURIComponent(hid),
     husbandEmail: decodeURIComponent(he),
     wifeEmail: decodeURIComponent(we),
@@ -158,7 +181,7 @@ export async function postNotifyRelayPublicJson(
 ): Promise<Record<string, unknown>> {
   const { url } = readNotifyRelayConfig();
   const base = apiBaseFromNotifyUrl(url);
-  if (!base) throw new Error('Set notify API URL first');
+  if (!base) throw new Error('API is not available on this host.');
   const res = await fetch(`${base}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

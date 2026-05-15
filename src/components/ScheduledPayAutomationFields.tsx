@@ -1,6 +1,7 @@
 import type { FinanceState } from '../types/finance';
 import { PAY_SCHEDULE_OPTIONS } from '../data/selectOptions';
 import { nearestWeekdayISO } from '../utils/payScheduleAnchors';
+import { SegmentedToggle } from './ui/SegmentedToggle';
 
 type EarnerKey = 'husband' | 'wife';
 
@@ -41,13 +42,20 @@ export function ScheduledPayAutomationFields({
         → +14; monthly → same calendar day (clamped). Nothing writes until{' '}
         <strong className="text-sage-800 dark:text-moss-subtle">12:00 local</strong> on pay day — no duplicate date + lane.
       </p>
-      <label className="mt-3 flex cursor-pointer flex-wrap items-start gap-2 text-sm text-sage-900 dark:text-moss-fg">
-        <input
-          type="checkbox"
-          className="mt-1 h-4 w-4 shrink-0 accent-moss-accent"
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <p className="min-w-0 flex-1 text-sm leading-snug text-sage-900 dark:text-moss-fg">
+          Auto-append to <strong className="text-sage-900 dark:text-moss-fg">Paycheque log</strong> on each payday starting from{' '}
+          <strong className="text-sage-900 dark:text-moss-fg">{earner}</strong>.
+        </p>
+        <SegmentedToggle
+          name={`${earner}-pay-auto-log`}
+          aria-label={`Auto-append paycheque log for ${earner}`}
+          size="compact"
+          offLabel="Off"
+          onLabel="Auto"
           checked={autoOn}
-          onChange={(e) => {
-            const on = e.target.checked;
+          className="w-full max-w-[11rem] shrink-0 sm:w-auto"
+          onCheckedChange={(on) => {
             if (earner === 'husband') {
               patch({
                 husbandPayAutoLog: on,
@@ -65,11 +73,7 @@ export function ScheduledPayAutomationFields({
             }
           }}
         />
-        <span className="leading-snug">
-          Auto-append to <strong className="text-sage-900 dark:text-moss-fg">Paycheque log</strong> on each payday starting from{' '}
-          <strong className="text-sage-900 dark:text-moss-fg">{earner}</strong>.
-        </span>
-      </label>
+      </div>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <label className="text-xs font-semibold text-sage-800 dark:text-moss-fg">
           Start date

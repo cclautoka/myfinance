@@ -16,6 +16,7 @@ import {
   readState,
   writeState,
   findMemberByHouseholdAndEmail,
+  findMembersByEmail,
   insertHouseholdMember,
   countOwnersForHousehold,
   getMemberById,
@@ -40,6 +41,7 @@ import {
 import { computeReminderEmailPayload } from './reminders.mjs';
 import { hashPassword, verifyPassword } from './password.mjs';
 import { signFinanceSession, verifyFinanceSession } from './sessionToken.mjs';
+import { buildEmptyFinanceState } from './emptyFinanceState.mjs';
 
 const port = Number(process.env.PORT ?? 8787);
 const notifyTo = process.env.NOTIFY_TO ?? '';
@@ -182,8 +184,22 @@ await fastify.register(cors, {
 
 fastify.get('/health', async () => ({ ok: true }));
 
-function publicAppBase() {
-  return (process.env.APP_PUBLIC_URL ?? process.env.SITE_URL ?? '').replace(/\/$/, '');
+function publicAppBase(request) {
+  const fromEnv = (process.env.APP_PUBLIC_URL ?? process.env.SITE_URL ?? '').replace(/\/$/, '');
+  if (fromEnv) return fromEnv;
+  const origin = request?.headers?.origin;
+  if (typeof origin === 'string' && /^https?:\/\//i.test(origin)) {
+    return origin.replace(/\/$/, '');
+  }
+  const referer = request?.headers?.referer;
+  if (typeof referer === 'string') {
+    try {
+      return new URL(referer).origin;
+    } catch {
+      /* ignore */
+    }
+  }
+  return '';
 }
 
 function hashUtf8Sha256Hex(s) {
@@ -266,22 +282,29 @@ function sessionTokenTtlSeconds() {
   return 60 * 60 * 24 * d;
 }
 
-async function sendAuthLinkEmail({ to, hashKey, rawToken, kind }) {
-  const base = publicAppBase();
+async function sendAuthLinkEmail({ to, hashKey, rawToken, kind, request }) {
+  const base = publicAppBase(request);
   const frag = `${hashKey}=${encodeURIComponent(rawToken)}`;
-  const link = base ? `${base}/#${frag}` : `Add this hash to your app URL: #${frag}`;
+  if (!base) {
+    throw new Error(
+      'APP_PUBLIC_URL or SITE_URL is not set (and request Origin was unavailable). Cannot build email links.',
+    );
+  }
+  const link = `${base}/#${frag}`;
   const tpl = buildAuthActionEmail({ kind, actionLink: link });
   const html = renderEmailHtml({
     title: tpl.title,
     preheader: tpl.preheader,
     sections: tpl.sections,
     footerHint: tpl.footerHint,
+    primaryCta: tpl.primaryCta,
   });
   const text = renderEmailText({
     title: tpl.title,
     preheader: tpl.preheader,
     sections: tpl.sections,
     footerHint: tpl.footerHint,
+    primaryCta: tpl.primaryCta,
   });
   await sendMail({ to, subject: tpl.subject.slice(0, 200), text, html });
 }
@@ -438,6 +461,7 @@ fastify.post('/v1/household/auth/register', async (request, reply) => {
     return reply.code(500).send({ error: 'Could not create account' });
   }
   await ensureHouseholdRow(householdId);
+  await writeState(householdId, buildEmptyFinanceState());
   try {
     await deleteUnusedEmailTokens(row.id, 'verify');
     const raw = crypto.randomBytes(32).toString('hex');
@@ -449,7 +473,7 @@ fastify.post('/v1/household/auth/register', async (request, reply) => {
       kind: 'verify',
       expiresAt: expires.toISOString(),
     });
-    await sendAuthLinkEmail({ to: row.email, hashKey: 'verify', rawToken: raw, kind: 'verify' });
+    await sendAuthLinkEmail({ to: row.email, hashKey: 'verify', rawToken: raw, kind: 'verify', request });
   } catch (e) {
     request.log.error(e);
     return reply.code(502).send({
@@ -480,23 +504,34 @@ fastify.post('/v1/household/auth/login', async (request, reply) => {
   const householdId = typeof body.householdId === 'string' ? body.householdId.trim().slice(0, 64) : '';
   const email = typeof body.email === 'string' ? body.email.trim() : '';
   const password = typeof body.password === 'string' ? body.password : '';
-  if (!householdId || !email || !password) {
-    return reply.code(400).send({ error: 'householdId, email, and password required.' });
+  if (!email || !password) {
+    return reply.code(400).send({ error: 'email and password required.' });
   }
-  const row = await findMemberByHouseholdAndEmail(householdId, email);
+  let row;
+  if (householdId) {
+    row = await findMemberByHouseholdAndEmail(householdId, email);
+  } else {
+    const rows = await findMembersByEmail(email);
+    if (rows.length > 1) {
+      return reply.code(400).send({ error: 'Multiple accounts found for this email. Contact support.' });
+    }
+    row = rows[0] ?? null;
+  }
   if (!row?.password_hash || !verifyPassword(password, row.password_hash)) {
     return reply.code(401).send({ error: 'Invalid credentials' });
   }
   const token = issueSessionToken(row);
+  const emailVerified = Boolean(row.email_verified_at);
   return reply.send({
     ok: true,
     token,
+    needsEmailVerification: emailVerificationRequired() && !emailVerified,
     member: {
       id: row.id,
       email: row.email,
       role: row.role,
       householdId: row.household_id,
-      emailVerified: Boolean(row.email_verified_at),
+      emailVerified,
     },
   });
 });
@@ -512,6 +547,20 @@ fastify.get('/v1/household/auth/me', async (request, reply) => {
   await initDbIfNeeded(request.log);
   const member = await getMemberById(v.memberId);
   if (!member) return reply.code(401).send({ error: 'Invalid session' });
+  const emailVerified = Boolean(member.email_verified_at);
+  if (emailVerificationRequired() && !emailVerified) {
+    return reply.code(403).send({
+      error: 'Email verification required',
+      code: 'EMAIL_NOT_VERIFIED',
+      member: {
+        id: member.id,
+        email: member.email,
+        role: member.role,
+        householdId: member.household_id,
+        emailVerified: false,
+      },
+    });
+  }
   return reply.send({
     ok: true,
     member: {
@@ -519,7 +568,7 @@ fastify.get('/v1/household/auth/me', async (request, reply) => {
       email: member.email,
       role: member.role,
       householdId: member.household_id,
-      emailVerified: Boolean(member.email_verified_at),
+      emailVerified,
     },
   });
 });
@@ -613,6 +662,38 @@ fastify.post('/v1/household/auth/accept-invite', async (request, reply) => {
     return reply.code(500).send({ error: 'Could not accept invite' });
   }
   await ensureHouseholdRow(inv.household_id);
+  if (emailVerificationRequired()) {
+    try {
+      await deleteUnusedEmailTokens(row.id, 'verify');
+      const raw = crypto.randomBytes(32).toString('hex');
+      const tokenHash = hashUtf8Sha256Hex(raw);
+      const expires = new Date(Date.now() + 1000 * 60 * 60 * 24);
+      await insertEmailToken({
+        memberId: row.id,
+        tokenHash,
+        kind: 'verify',
+        expiresAt: expires.toISOString(),
+      });
+      await sendAuthLinkEmail({ to: row.email, hashKey: 'verify', rawToken: raw, kind: 'verify', request });
+    } catch (e) {
+      request.log.error(e);
+      return reply.code(502).send({
+        error: 'Could not send verification email',
+        detail: process.env.NODE_ENV === 'development' ? String(e?.message ?? e) : undefined,
+      });
+    }
+    return reply.send({
+      ok: true,
+      needsEmailVerification: true,
+      member: {
+        id: row.id,
+        email: row.email,
+        role: row.role,
+        householdId: row.household_id,
+        emailVerified: false,
+      },
+    });
+  }
   const sessionTok = issueSessionToken(row);
   return reply.send({
     ok: true,
@@ -622,7 +703,7 @@ fastify.post('/v1/household/auth/accept-invite', async (request, reply) => {
       email: row.email,
       role: row.role,
       householdId: row.household_id,
-      emailVerified: false,
+      emailVerified: Boolean(row.email_verified_at),
     },
   });
 });
@@ -639,9 +720,6 @@ fastify.post('/v1/household/auth/request-verify-email', async (request, reply) =
   if (!v) return reply.code(401).send({ error: 'Invalid session' });
   const member = await getMemberById(v.memberId);
   if (!member) return reply.code(401).send({ error: 'Invalid session' });
-  if (member.role !== 'owner') {
-    return reply.code(403).send({ error: 'Only the primary owner can verify email through this flow.' });
-  }
   if (member.email_verified_at) {
     return reply.send({ ok: true, message: 'Already verified' });
   }
@@ -656,7 +734,7 @@ fastify.post('/v1/household/auth/request-verify-email', async (request, reply) =
       kind: 'verify',
       expiresAt: expires.toISOString(),
     });
-    await sendAuthLinkEmail({ to: member.email, hashKey: 'verify', rawToken: raw, kind: 'verify' });
+    await sendAuthLinkEmail({ to: member.email, hashKey: 'verify', rawToken: raw, kind: 'verify', request });
     return reply.send({ ok: true });
   } catch (e) {
     request.log.error(e);
@@ -708,10 +786,19 @@ fastify.post('/v1/household/auth/request-password-reset', async (request, reply)
   const body = request.body ?? {};
   const householdId = typeof body.householdId === 'string' ? body.householdId.trim().slice(0, 64) : '';
   const email = typeof body.email === 'string' ? body.email.trim() : '';
-  if (!householdId || !email) {
-    return reply.code(400).send({ error: 'householdId and email required' });
+  if (!email) {
+    return reply.code(400).send({ error: 'email required' });
   }
-  const row = await findMemberByHouseholdAndEmail(householdId, email);
+  let row;
+  if (householdId) {
+    row = await findMemberByHouseholdAndEmail(householdId, email);
+  } else {
+    const rows = await findMembersByEmail(email);
+    if (rows.length > 1) {
+      return reply.code(400).send({ error: 'Multiple accounts found for this email. Contact support.' });
+    }
+    row = rows[0] ?? null;
+  }
   const generic = { ok: true };
   if (!row || row.role !== 'owner' || !row.password_hash) {
     return reply.send(generic);
@@ -727,9 +814,13 @@ fastify.post('/v1/household/auth/request-password-reset', async (request, reply)
       kind: 'reset',
       expiresAt: expires.toISOString(),
     });
-    await sendAuthLinkEmail({ to: row.email, hashKey: 'reset', rawToken: raw, kind: 'reset' });
+    await sendAuthLinkEmail({ to: row.email, hashKey: 'reset', rawToken: raw, kind: 'reset', request });
   } catch (e) {
     request.log.error(e);
+    return reply.code(503).send({
+      error: 'Could not send password reset email. Check mail settings (RESEND_* or SMTP_*) and APP_PUBLIC_URL.',
+      detail: process.env.NODE_ENV === 'development' ? String(e?.message ?? e) : undefined,
+    });
   }
   return reply.send(generic);
 });
@@ -762,10 +853,19 @@ fastify.post('/v1/household/auth/request-magic-login', async (request, reply) =>
   const body = request.body ?? {};
   const householdId = typeof body.householdId === 'string' ? body.householdId.trim().slice(0, 64) : '';
   const email = typeof body.email === 'string' ? body.email.trim() : '';
-  if (!householdId || !email.includes('@')) {
-    return reply.code(400).send({ error: 'householdId and valid email required' });
+  if (!email.includes('@')) {
+    return reply.code(400).send({ error: 'valid email required' });
   }
-  const row = await findMemberByHouseholdAndEmail(householdId, email);
+  let row;
+  if (householdId) {
+    row = await findMemberByHouseholdAndEmail(householdId, email);
+  } else {
+    const rows = await findMembersByEmail(email);
+    if (rows.length > 1) {
+      return reply.code(400).send({ error: 'Multiple accounts found for this email. Contact support.' });
+    }
+    row = rows[0] ?? null;
+  }
   const generic = { ok: true };
   if (!row) {
     return reply.send(generic);
@@ -781,9 +881,13 @@ fastify.post('/v1/household/auth/request-magic-login', async (request, reply) =>
       kind: 'magic_login',
       expiresAt: expires.toISOString(),
     });
-    await sendAuthLinkEmail({ to: row.email, hashKey: 'login', rawToken: raw, kind: 'magic' });
+    await sendAuthLinkEmail({ to: row.email, hashKey: 'login', rawToken: raw, kind: 'magic', request });
   } catch (e) {
     request.log.error(e);
+    return reply.code(503).send({
+      error: 'Could not send sign-in link email. Check mail settings and APP_PUBLIC_URL.',
+      detail: process.env.NODE_ENV === 'development' ? String(e?.message ?? e) : undefined,
+    });
   }
   return reply.send(generic);
 });

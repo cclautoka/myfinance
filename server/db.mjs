@@ -173,6 +173,17 @@ export async function findMemberByHouseholdAndEmail(householdId, email) {
   return r.rows[0] ?? null;
 }
 
+/** Lookup by email when household id is unknown (e.g. fresh browser sign-in). */
+export async function findMembersByEmail(email) {
+  if (!pool) throw new Error('DB not initialized');
+  const r = await pool.query(
+    `select id, household_id, email, password_hash, role, email_verified_at from household_member
+     where lower(email) = lower($1)`,
+    [email.trim()],
+  );
+  return r.rows;
+}
+
 export async function insertHouseholdMember({ householdId, email, passwordHash, role }) {
   if (!pool) throw new Error('DB not initialized');
   const r = await pool.query(

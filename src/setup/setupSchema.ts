@@ -56,16 +56,12 @@ export const setupDebtsStepSchema = z
 export const setupAlertsStepSchema = z
   .object({
     enabled: z.boolean(),
-    url: z.string().trim(),
     householdId: z.string().trim(),
     husbandEmail: z.string().trim(),
     wifeEmail: z.string().trim(),
   })
   .superRefine((val, ctx) => {
     if (!val.enabled) return;
-    if (!val.url) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Notify URL is required when alerts are on.', path: ['url'] });
-    }
     if (!/^[a-f0-9]{16,64}$/i.test(val.householdId)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

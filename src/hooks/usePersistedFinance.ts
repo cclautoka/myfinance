@@ -30,6 +30,7 @@ import {
   postNotifyRelay,
   postSnapshotRelay,
 } from '../utils/notifyRelay';
+import { readHouseholdSession } from '../utils/householdSession';
 import { readNotifyRelayConfig } from '../utils/notifyRelayConfig';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -53,11 +54,13 @@ export function usePersistedFinance() {
   }, [state]);
 
   useEffect(() => {
+    if (!readHouseholdSession()?.token) return;
     saveFinanceState(state);
   }, [state]);
 
-  /** Server hydration + one-time import when server is empty. */
+  /** Server hydration when signed in (server is source of truth). */
   useEffect(() => {
+    if (!readHouseholdSession()?.token) return;
     const cfg = getServerStorageConfig();
     if (!cfg.enabled) return;
 
@@ -65,15 +68,6 @@ export function usePersistedFinance() {
     (async () => {
       const remote = await fetchServerFinanceState();
       if (cancelled) return;
-
-      if (!remote.ok && remote.status === 404) {
-        // Server empty; one-time import of current local/cache state.
-        await putServerFinanceState(stateRef.current);
-        const after = await fetchServerFinanceState();
-        if (!cancelled && after.ok) setState(after.state);
-        return;
-      }
-
       if (remote.ok) {
         setState(remote.state);
       }
@@ -103,6 +97,7 @@ export function usePersistedFinance() {
   /** Server persistence (debounced) — local cache is written in saveFinanceState above. */
   const serverSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
+    if (!readHouseholdSession()?.token) return;
     const cfg = getServerStorageConfig();
     if (!cfg.enabled) return;
     if (serverSaveRef.current !== null) clearTimeout(serverSaveRef.current);

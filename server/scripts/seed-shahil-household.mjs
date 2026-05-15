@@ -30,7 +30,7 @@ import { buildShahilFinanceState } from './shahil-seed-state.mjs';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: join(__dirname, '..', '.env') });
 
-const HOUSEHOLD_ID = (process.env.SEED_HOUSEHOLD_ID ?? '81c575ad5352b15bbb964349ed258cd8').trim().slice(0, 64);
+const HOUSEHOLD_ID = (process.env.SEED_HOUSEHOLD_ID ?? '61c575ad5352b15bbb964349ed258cd6').trim().slice(0, 64);
 const OWNER_EMAIL = (process.env.SEED_OWNER_EMAIL ?? 'shahilsunny18@gmail.com').trim().toLowerCase();
 const SNAPSHOT_MONTH = (process.env.SEED_SNAPSHOT_MONTH ?? '2026-05').trim();
 const password = (process.env.SEED_OWNER_PASSWORD ?? '').trim();

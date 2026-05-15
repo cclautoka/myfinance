@@ -60,7 +60,10 @@ export function Header({
               <button
                 type="button"
                 className="rounded-xl border border-slate-300/90 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 shadow-sm hover:bg-slate-50 dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg dark:hover:bg-moss-elevated"
-                onClick={() => clearHouseholdSession()}
+                onClick={() => {
+                  clearHouseholdSession();
+                  window.location.reload();
+                }}
               >
                 Sign out
               </button>

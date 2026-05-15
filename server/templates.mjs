@@ -21,6 +21,7 @@ export function renderEmailHtml({
   preheader,
   sections,
   footerHint,
+  primaryCta,
 }) {
   const safeTitle = escapeHtml(title);
   const safePreheader = escapeHtml(preheader ?? '');
@@ -61,6 +62,18 @@ export function renderEmailHtml({
     })
     .join('');
 
+  const ctaHref = primaryCta?.href ? String(primaryCta.href) : '';
+  const ctaLabel = primaryCta?.label ? String(primaryCta.label) : 'Open link';
+  const ctaHtml =
+    ctaHref.trim() &&
+    `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-top: 18px;">
+  <tr>
+    <td align="center">
+      <a href="${escapeHtml(ctaHref)}" style="display: inline-block; padding: 14px 28px; border-radius: 14px; background: linear-gradient(135deg, #0D9488, #059669); color: #FFFFFF; font-weight: 900; font-size: 15px; text-decoration: none; letter-spacing: -0.01em;">${escapeHtml(ctaLabel)}</a>
+    </td>
+  </tr>
+</table>`;
+
   // deterministic-ish id so some clients thread nicely
   const mid = crypto.createHash('sha1').update(`${title}-${Date.now()}`).digest('hex').slice(0, 10);
 
@@ -89,6 +102,7 @@ export function renderEmailHtml({
           <tr>
             <td style="padding: 18px 18px; background: #F9FAFB;">
               ${sectionHtml}
+              ${ctaHtml || ''}
               <div style="margin-top: 18px; padding: 14px 14px; border-radius: 16px; background: #EEF2FF; border: 1px solid #E0E7FF; color: #0F172A;">
                 <div style="font-weight: 900;">Tip</div>
                 <div style="margin-top: 6px; color:#334155; line-height: 1.55;">${escapeHtml(
@@ -109,11 +123,15 @@ export function renderEmailHtml({
 </html>`;
 }
 
-export function renderEmailText({ title, preheader, sections, footerHint }) {
+export function renderEmailText({ title, preheader, sections, footerHint, primaryCta }) {
   const lines = [];
   lines.push(`Household finances — ${title}`);
   if (preheader) lines.push(preheader);
   lines.push('');
+  if (primaryCta?.href) {
+    lines.push(`${primaryCta.label ?? 'Open link'}: ${primaryCta.href}`);
+    lines.push('');
+  }
   for (const s of sections) {
     lines.push(`== ${s.heading} ==`);
     if (Array.isArray(s.items) && s.items.length > 0) {
@@ -225,41 +243,89 @@ export function buildReminderEmailTemplate({ monthKey, dueSoon = [], overdue = [
 /** Branded transactional mail for verify / reset / magic (uses same shell as digest emails). */
 export function buildAuthActionEmail({ kind, actionLink }) {
   const safeLink = String(actionLink ?? '');
-  const titles = {
+  const configs = {
     verify: {
-      subject: 'Verify your email',
+      subject: 'Household finances · verify your email',
       title: 'Verify your email',
-      preheader: 'One tap to confirm this address for your household account.',
+      preheader: 'Confirm this address to unlock your household workbook.',
+      ctaLabel: 'Verify email',
+      sections: [
+        {
+          heading: 'What to do',
+          items: [
+            {
+              title: 'Confirm your address',
+              body: 'Use the button below in the same browser where you open Household finances. Links expire after 24 hours.',
+            },
+          ],
+        },
+        {
+          heading: 'Button not working?',
+          items: [
+            {
+              title: 'Copy the full link',
+              body: 'Paste it into your browser address bar if your mail app blocks buttons.',
+              meta: safeLink.slice(0, 2000),
+            },
+          ],
+        },
+      ],
+      footerHint:
+        'After you verify, return to the app — your worksheet will sync automatically. If you did not create an account, ignore this message.',
     },
     reset: {
-      subject: 'Reset your password',
+      subject: 'Household finances · reset your password',
       title: 'Reset your password',
-      preheader: 'Use the secure link below to choose a new password.',
+      preheader: 'Choose a new password for your household account.',
+      ctaLabel: 'Reset password',
+      sections: [
+        {
+          heading: 'What to do',
+          items: [
+            {
+              title: 'Set a new password',
+              body: 'Open the secure link below. It expires after 24 hours and works once.',
+            },
+          ],
+        },
+        {
+          heading: 'Button not working?',
+          items: [{ title: 'Copy the full link', meta: safeLink.slice(0, 2000) }],
+        },
+      ],
+      footerHint: 'If you did not request a reset, you can ignore this message.',
     },
     magic: {
-      subject: 'Sign in to your household',
+      subject: 'Household finances · sign-in link',
       title: 'Sign in link',
-      preheader: 'This one-time link signs you in on a new device or browser.',
+      preheader: 'One-time link to open your household workbook on this device.',
+      ctaLabel: 'Sign in',
+      sections: [
+        {
+          heading: 'What to do',
+          items: [
+            {
+              title: 'Open your workbook',
+              body: 'This link signs you in once. Use the same browser you normally use for the app.',
+            },
+          ],
+        },
+        {
+          heading: 'Button not working?',
+          items: [{ title: 'Copy the full link', meta: safeLink.slice(0, 2000) }],
+        },
+      ],
+      footerHint: 'If you did not request this link, ignore the message — it will expire on its own.',
     },
   };
-  const t = titles[kind] ?? titles.verify;
+  const c = configs[kind] ?? configs.verify;
   return {
-    subject: t.subject,
-    title: t.title,
-    preheader: t.preheader,
-    sections: [
-      {
-        heading: 'Your secure link',
-        items: [
-          {
-            title: 'Open in browser',
-            body: 'If the link does not open, copy the full URL into the same browser where you use the app.',
-            meta: safeLink.slice(0, 2000),
-          },
-        ],
-      },
-    ],
-    footerHint: 'If you did not request this, you can ignore this message. Links expire automatically.',
+    subject: c.subject,
+    title: c.title,
+    preheader: c.preheader,
+    sections: c.sections,
+    footerHint: c.footerHint,
+    primaryCta: safeLink.trim() ? { label: c.ctaLabel, href: safeLink } : undefined,
   };
 }
 

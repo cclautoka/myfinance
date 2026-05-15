@@ -2,7 +2,14 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import type { DebtAccount, FinanceState, IncomeConfig, ThemePreference } from '../types/finance';
 import { HOUSEHOLD_MODE_KEY, type HouseholdMode } from '../utils/householdMode';
 import type { NotifyRelayConfig } from '../utils/notifyRelayConfig';
-import { ensureNotifyRelayHouseholdId, readNotifyRelayConfig, writeNotifyRelayConfig } from '../utils/notifyRelayConfig';
+import {
+  ensureNotifyRelayHouseholdId,
+  readNotifyRelayConfig,
+  resolveNotifyRelayUrl,
+  writeNotifyRelayConfig,
+} from '../utils/notifyRelayConfig';
+import { readHouseholdSession } from '../utils/householdSession';
+import { SegmentedToggle } from '../components/ui/SegmentedToggle';
 import { FieldError } from '../components/ui/FieldError';
 import { fieldErrorId } from '../components/ui/fieldErrorId';
 import { FieldHelp } from '../components/ui/FieldHelp';
@@ -58,8 +65,10 @@ export function HouseholdSetupWizard({
   const [debtDue, setDebtDue] = useState('15');
   const cfg0 = useMemo(() => readNotifyRelayConfig(), []);
   const [alertsEnabled, setAlertsEnabled] = useState(cfg0.enabled);
-  const [relayUrl, setRelayUrl] = useState(cfg0.url);
-  const [householdId, setHouseholdId] = useState(() => cfg0.householdId.trim() || ensureNotifyRelayHouseholdId());
+  const [householdId] = useState(() => {
+    const sess = readHouseholdSession();
+    return (sess?.householdId?.trim() || cfg0.householdId.trim() || ensureNotifyRelayHouseholdId());
+  });
   const [hEmail, setHEmail] = useState(cfg0.husbandEmail);
   const [wEmail, setWEmail] = useState(cfg0.wifeEmail);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -154,7 +163,6 @@ export function HouseholdSetupWizard({
     if (step === 3) {
       const parsed = setupAlertsStepSchema.safeParse({
         enabled: alertsEnabled,
-        url: relayUrl,
         householdId,
         husbandEmail: hEmail,
         wifeEmail: wEmail,
@@ -165,7 +173,7 @@ export function HouseholdSetupWizard({
       }
       const nextCfg: NotifyRelayConfig = {
         enabled: parsed.data.enabled,
-        url: parsed.data.url.trim(),
+        url: resolveNotifyRelayUrl(),
         secret: cfg0.secret,
         husbandEmail: parsed.data.husbandEmail.trim(),
         wifeEmail: parsed.data.wifeEmail.trim(),
@@ -323,10 +331,21 @@ export function HouseholdSetupWizard({
 
           {step === 2 ? (
             <div className="space-y-4">
-              <label className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-moss-fg">
-                <input type="checkbox" checked={noDebts} onChange={() => setNoDebts((v) => !v)} />
-                We are not tracking loans or cards yet
-              </label>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                <p className="text-sm font-semibold text-slate-800 dark:text-moss-fg">
+                  We are not tracking loans or cards yet
+                </p>
+                <SegmentedToggle
+                  name="setup-no-debts"
+                  aria-label="Skip debt tracking"
+                  size="compact"
+                  offLabel="No"
+                  onLabel="Yes"
+                  checked={noDebts}
+                  className="w-full max-w-[11rem] shrink-0 sm:w-auto"
+                  onCheckedChange={setNoDebts}
+                />
+              </div>
               {!noDebts ? (
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted sm:col-span-2">
@@ -384,36 +403,24 @@ export function HouseholdSetupWizard({
 
           {step === 3 ? (
             <div className="space-y-4">
-              <label className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-moss-fg">
-                <input type="checkbox" checked={alertsEnabled} onChange={() => setAlertsEnabled((v) => !v)} />
-                Email heads-up from my relay (optional)
-              </label>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                <p className="text-sm font-semibold text-slate-800 dark:text-moss-fg">
+                  Email heads-up from my relay (optional)
+                </p>
+                <SegmentedToggle
+                  name="setup-alerts"
+                  aria-label="Email alert summaries"
+                  size="compact"
+                  checked={alertsEnabled}
+                  className="w-full max-w-[11rem] shrink-0 sm:w-auto"
+                  onCheckedChange={setAlertsEnabled}
+                />
+              </div>
               {alertsEnabled ? (
                 <div className="grid gap-3">
-                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
-                    Notify relay URL
-                    <input
-                      className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
-                      value={relayUrl}
-                      onChange={(e) => {
-                        setRelayUrl(e.target.value);
-                        clearErr('url');
-                      }}
-                    />
-                    <FieldError id={fieldErrorId('url')} message={errors.url} />
-                  </label>
-                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
-                    Household id (hex)
-                    <input
-                      className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 font-mono text-xs dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
-                      value={householdId}
-                      onChange={(e) => {
-                        setHouseholdId(e.target.value.trim());
-                        clearErr('householdId');
-                      }}
-                    />
-                    <FieldError id={fieldErrorId('householdId')} message={errors.householdId} />
-                  </label>
+                  <p className="rounded-xl border border-slate-200/80 bg-slate-50/80 px-3 py-2 text-xs text-slate-700 dark:border-moss-border dark:bg-moss-surface/80 dark:text-moss-subtle">
+                    Summaries use this site’s API at <code className="font-mono">{resolveNotifyRelayUrl()}</code> (same server as the app).
+                  </p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
                       Recipient email A

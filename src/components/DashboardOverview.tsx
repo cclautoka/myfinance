@@ -51,28 +51,47 @@ const METRIC_SUBHERO_SIZE =
 function MetricCard({
   children,
   className = '',
+  preview = false,
 }: {
   children: ReactNode;
   className?: string;
+  preview?: boolean;
 }) {
   return (
     <div
-      className={`min-w-0 w-full max-w-full [container-type:inline-size] rounded-2xl border border-sage-900/12 bg-white px-6 py-5 shadow-md sm:px-8 sm:py-6 dark:border-moss-border dark:bg-moss-elevated ${className}`}
+      className={`min-w-0 w-full max-w-full [container-type:inline-size] rounded-2xl border border-sage-900/12 bg-white shadow-md dark:border-moss-border dark:bg-moss-elevated ${
+        preview ? 'px-4 py-4' : 'px-6 py-5 sm:px-8 sm:py-6'
+      } ${className}`}
     >
       {children}
     </div>
   );
 }
 
-function MetricWithTip({ tip, children }: { tip: ReactNode; children: ReactNode }) {
+function MetricWithTip({
+  tip,
+  children,
+  preview = false,
+}: {
+  tip: ReactNode;
+  children: ReactNode;
+  preview?: boolean;
+}) {
   return (
     <HoverTip content={tip} interaction="auto" layout="corner" className="min-w-0 w-full">
-      <MetricCard>{children}</MetricCard>
+      <MetricCard preview={preview}>{children}</MetricCard>
     </HoverTip>
   );
 }
 
-export function DashboardOverview({ state }: { state: FinanceState }) {
+export function DashboardOverview({
+  state,
+  variant = 'default',
+}: {
+  state: FinanceState;
+  variant?: 'default' | 'preview';
+}) {
+  const preview = variant === 'preview';
   const income = combinedMonthlyIncome(state);
   const debt = totalDebtRemaining(state.debts);
   const mk = currentMonthKey();
@@ -104,24 +123,51 @@ export function DashboardOverview({ state }: { state: FinanceState }) {
           ? `Other income (month): ${formatMoney(extraIn)}`
           : `One-off expenses (month): ${formatMoney(surprises)}`;
 
+  const gridCols = preview ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2';
+  const splitCols = preview ? 'grid-cols-1 gap-4' : 'grid-cols-1 gap-8 sm:grid-cols-2';
+
   return (
-    <section className="overflow-hidden rounded-[1.75rem] border border-white/14 bg-gradient-to-br from-sage-900 via-sage-800 to-teal-900 text-white shadow-xl dark:border-white/12 dark:from-moss-bg dark:via-moss-surface dark:to-moss-bg dark:shadow-2xl">
-      <div className="relative min-w-0 px-5 pb-10 pt-10 sm:px-10">
+    <section
+      className={`overflow-hidden border border-white/14 bg-gradient-to-br from-sage-900 via-sage-800 to-teal-900 text-white shadow-xl dark:border-white/12 dark:from-moss-bg dark:via-moss-surface dark:to-moss-bg dark:shadow-2xl ${
+        preview ? 'rounded-xl' : 'rounded-[1.75rem]'
+      }`}
+    >
+      <div className={preview ? 'relative min-w-0 px-4 pb-6 pt-6' : 'relative min-w-0 px-5 pb-10 pt-10 sm:px-10'}>
         <p className="text-center text-xs font-semibold uppercase tracking-[0.2em] text-teal-200/90 dark:text-teal-300/85">
           Reporting period · {mk}
         </p>
-        <h2 className="mt-3 text-center font-display text-[2.125rem] font-semibold leading-[1.1] tracking-tight sm:text-[2.5rem]">
+        <h2
+          className={
+            preview
+              ? 'mt-2 text-center font-display text-[1.5rem] font-semibold leading-[1.1] tracking-tight'
+              : 'mt-3 text-center font-display text-[2.125rem] font-semibold leading-[1.1] tracking-tight sm:text-[2.5rem]'
+          }
+        >
           Financial snapshot
         </h2>
-        <p className="mx-auto mt-4 max-w-lg text-center text-sm leading-relaxed text-sage-100/95">
-          Hover or Tab a metric for definitions (tap <span className="font-semibold">i</span> on touch). Planned amounts follow{' '}
-          <span className="font-medium text-white underline decoration-teal-300/75 underline-offset-2">Income & recurring expenses</span>
-          {' · '}posted pay follows deposits you record this month.
+        <p
+          className={
+            preview
+              ? 'mx-auto mt-3 max-w-lg line-clamp-2 text-center text-xs leading-relaxed text-sage-100/95'
+              : 'mx-auto mt-4 max-w-lg text-center text-sm leading-relaxed text-sage-100/95'
+          }
+        >
+          {preview ? (
+            <>Tap a metric for definitions. Planned vs posted pay for {mk}.</>
+          ) : (
+            <>
+              Hover or Tab a metric for definitions (tap <span className="font-semibold">i</span> on touch). Planned amounts follow{' '}
+              <span className="font-medium text-white underline decoration-teal-300/75 underline-offset-2">
+                Income & recurring expenses
+              </span>
+              {' · '}posted pay follows deposits you record this month.
+            </>
+          )}
         </p>
 
-        <div className="mx-auto mt-10 grid min-w-0 w-full max-w-5xl gap-4 sm:grid-cols-2">
-          <MetricWithTip tip={dashboardIncomeTip()}>
-            <MetricCard className="text-sage-900 dark:text-moss-fg">
+        <div className={`mx-auto grid min-w-0 w-full max-w-5xl gap-4 ${gridCols} ${preview ? 'mt-6' : 'mt-10'}`}>
+          <MetricWithTip tip={dashboardIncomeTip()} preview={preview}>
+            <MetricCard className="text-sage-900 dark:text-moss-fg" preview={preview}>
               <p className="text-xs font-semibold uppercase tracking-wide text-sage-700 dark:text-moss-muted">
                 Combined monthly income (planned)
               </p>
@@ -145,8 +191,8 @@ export function DashboardOverview({ state }: { state: FinanceState }) {
               </div>
             </MetricCard>
           </MetricWithTip>
-          <MetricWithTip tip={dashboardIncomeLoggedVsPlannedTip(income, loggedPay)}>
-            <MetricCard className="text-sage-900 dark:text-moss-fg">
+          <MetricWithTip tip={dashboardIncomeLoggedVsPlannedTip(income, loggedPay)} preview={preview}>
+            <MetricCard className="text-sage-900 dark:text-moss-fg" preview={preview}>
               <p className="text-xs font-semibold uppercase tracking-wide text-sage-700 dark:text-moss-muted">
                 Deposits recorded ({mk})
               </p>
@@ -154,30 +200,38 @@ export function DashboardOverview({ state }: { state: FinanceState }) {
               <p className="mt-3 text-xs leading-snug text-sage-700 dark:text-moss-subtle">
                 {payLoggedVersusPlannedLine(income, loggedPay)}
               </p>
-              <button
-                type="button"
-                onClick={() =>
-                  document.getElementById('income-log-this-month')?.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'start',
-                  })
-                }
-                className="mt-3 text-left text-xs font-semibold text-sage-800 underline decoration-sage-400 decoration-2 underline-offset-2 hover:text-sage-950 dark:text-moss-tip dark:decoration-moss-muted dark:hover:text-moss-fg"
-              >
-                {loggedPay > 0 ? 'Show paycheque rows for this month' : 'Add pay deposits — opens log below'}
-              </button>
+              {!preview ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    document.getElementById('income-log-this-month')?.scrollIntoView({
+                      behavior: 'smooth',
+                      block: 'start',
+                    })
+                  }
+                  className="mt-3 text-left text-xs font-semibold text-sage-800 underline decoration-sage-400 decoration-2 underline-offset-2 hover:text-sage-950 dark:text-moss-tip dark:decoration-moss-muted dark:hover:text-moss-fg"
+                >
+                  {loggedPay > 0 ? 'Show paycheque rows for this month' : 'Add pay deposits — opens log below'}
+                </button>
+              ) : null}
             </MetricCard>
           </MetricWithTip>
         </div>
 
         <div className="mx-auto mt-6 min-w-0 w-full max-w-5xl">
-          <MetricWithTip tip={dashboardPlannedVsActualExpensesTip()}>
-            <MetricCard className="text-sage-900 dark:text-moss-fg">
+          <MetricWithTip tip={dashboardPlannedVsActualExpensesTip()} preview={preview}>
+            <MetricCard className="text-sage-900 dark:text-moss-fg" preview={preview}>
               <p className="text-xs font-semibold uppercase tracking-wide text-sage-700 dark:text-moss-muted">
                 Planned outflows vs counted this month ({mk})
               </p>
-              <div className="mt-6 grid min-w-0 gap-8 sm:grid-cols-2">
-                <div className="min-w-0 border-b border-sage-200/90 pb-6 sm:border-b-0 sm:border-r sm:border-sage-200/90 sm:pb-0 sm:pr-6 dark:border-moss-border">
+              <div className={`mt-4 grid min-w-0 ${splitCols}`}>
+                <div
+                  className={`min-w-0 dark:border-moss-border ${
+                    preview
+                      ? 'border-b border-sage-200/90 pb-4'
+                      : 'border-b border-sage-200/90 pb-6 sm:border-b-0 sm:border-r sm:border-sage-200/90 sm:pb-0 sm:pr-6'
+                  }`}
+                >
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-sage-600 dark:text-moss-muted">
                     Planned (Household + Plan dollars)
                   </p>
@@ -189,7 +243,7 @@ export function DashboardOverview({ state }: { state: FinanceState }) {
                     plan.
                   </p>
                 </div>
-                <div className="min-w-0 sm:pl-2">
+                <div className={`min-w-0 ${preview ? 'pt-1' : 'sm:pl-2'}`}>
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-sage-600 dark:text-moss-muted">
                     Actual this month · marked bills + surprises
                   </p>
@@ -210,8 +264,8 @@ export function DashboardOverview({ state }: { state: FinanceState }) {
           <p className="mx-auto mt-8 max-w-xl text-center text-sm font-medium text-teal-100">{extrasLine}</p>
         )}
 
-        <div className="mx-auto mt-10 grid min-w-0 w-full max-w-5xl gap-4 text-sage-950 sm:grid-cols-2">
-          <MetricWithTip tip={dashboardEmergencyTip()}>
+        <div className={`mx-auto grid min-w-0 w-full max-w-5xl gap-4 text-sage-950 ${gridCols} ${preview ? 'mt-6' : 'mt-10'}`}>
+          <MetricWithTip tip={dashboardEmergencyTip()} preview={preview}>
             <MetricCard>
               <p className="text-xs font-semibold uppercase tracking-wide text-sage-700 dark:text-moss-muted">
                 Emergency fund balance
@@ -220,7 +274,7 @@ export function DashboardOverview({ state }: { state: FinanceState }) {
               <p className="mt-1 text-[11px] text-sage-600 dark:text-moss-muted">Manually maintained</p>
             </MetricCard>
           </MetricWithTip>
-          <MetricWithTip tip={dashboardDebtTip()}>
+          <MetricWithTip tip={dashboardDebtTip()} preview={preview}>
             <MetricCard>
               <p className="text-xs font-semibold uppercase tracking-wide text-sage-700 dark:text-moss-muted">
                 Total debt balance (approx.)
@@ -229,7 +283,7 @@ export function DashboardOverview({ state }: { state: FinanceState }) {
               <p className="mt-1 text-[11px] text-sage-600 dark:text-moss-muted">From entered balances; not interest-accrual precise</p>
             </MetricCard>
           </MetricWithTip>
-          <MetricWithTip tip={dashboardNextBillTip()}>
+          <MetricWithTip tip={dashboardNextBillTip()} preview={preview}>
             <MetricCard
               className={
                 backlogOverdue
@@ -278,7 +332,7 @@ export function DashboardOverview({ state }: { state: FinanceState }) {
               </p>
             </MetricCard>
           </MetricWithTip>
-          <MetricWithTip tip={dashboardSafeSpendTip()}>
+          <MetricWithTip tip={dashboardSafeSpendTip()} preview={preview}>
             <MetricCard>
               <p className="text-xs font-semibold uppercase tracking-wide text-sage-700 dark:text-moss-muted">
                 Est. weekly discretionary buffer
@@ -291,9 +345,9 @@ export function DashboardOverview({ state }: { state: FinanceState }) {
           </MetricWithTip>
         </div>
 
-        <div className="mx-auto mt-8 grid min-w-0 w-full max-w-5xl gap-4 text-sage-950 sm:grid-cols-2">
-          <MetricWithTip tip={dashboardBillsTickedTip()}>
-            <MetricCard className="text-center sm:text-left">
+        <div className={`mx-auto grid min-w-0 w-full max-w-5xl gap-4 text-sage-950 ${gridCols} ${preview ? 'mt-6' : 'mt-8'}`}>
+          <MetricWithTip tip={dashboardBillsTickedTip()} preview={preview}>
+            <MetricCard className={preview ? 'text-center' : 'text-center sm:text-left'} preview={preview}>
               <p className="text-xs font-semibold uppercase tracking-wide text-sage-700 dark:text-moss-muted">
                 Payments marked complete (MTD)
               </p>
@@ -302,8 +356,8 @@ export function DashboardOverview({ state }: { state: FinanceState }) {
               </p>
             </MetricCard>
           </MetricWithTip>
-          <MetricWithTip tip={dashboardDebtFreeMonthsTip()}>
-            <MetricCard className="text-center sm:text-left">
+          <MetricWithTip tip={dashboardDebtFreeMonthsTip()} preview={preview}>
+            <MetricCard className={preview ? 'text-center' : 'text-center sm:text-left'} preview={preview}>
               <p className="text-xs font-semibold uppercase tracking-wide text-sage-700 dark:text-moss-muted">
                 Est. months to debt-free*
               </p>
@@ -312,9 +366,14 @@ export function DashboardOverview({ state }: { state: FinanceState }) {
               </p>
             </MetricCard>
           </MetricWithTip>
-          <div className="min-w-0 w-full sm:col-span-2">
-            <MetricWithTip tip={dashboardSavingsSliderTip()}>
-              <MetricCard className="text-center sm:grid sm:grid-cols-2 sm:gap-x-8 sm:gap-y-4 sm:text-left">
+          <div className={`min-w-0 w-full ${preview ? '' : 'sm:col-span-2'}`}>
+            <MetricWithTip tip={dashboardSavingsSliderTip()} preview={preview}>
+              <MetricCard
+                className={
+                  preview ? 'text-center' : 'text-center sm:grid sm:grid-cols-2 sm:gap-x-8 sm:gap-y-4 sm:text-left'
+                }
+                preview={preview}
+              >
                 <p className="text-xs font-semibold uppercase tracking-wide text-sage-700 dark:text-moss-muted sm:col-span-2">
                   Savings · plan vs achieved*
                 </p>
@@ -342,8 +401,20 @@ export function DashboardOverview({ state }: { state: FinanceState }) {
           *Straight-line projections from current plan inputs and balances; illustrative only—not lender or bank forecasts.
         </p>
 
-        <div className="mt-14 flex flex-wrap items-start justify-center gap-14 border-t border-white/15 pt-12">
-          <div className="mx-auto flex flex-wrap justify-center gap-14 rounded-3xl bg-white/95 px-8 py-10 shadow-lg dark:bg-moss-elevated/95">
+        <div
+          className={
+            preview
+              ? 'mt-8 flex flex-wrap items-start justify-center gap-6 border-t border-white/15 pt-8'
+              : 'mt-14 flex flex-wrap items-start justify-center gap-14 border-t border-white/15 pt-12'
+          }
+        >
+          <div
+            className={
+              preview
+                ? 'mx-auto flex flex-wrap justify-center gap-6 rounded-2xl bg-white/95 px-4 py-6 shadow-lg dark:bg-moss-elevated/95'
+                : 'mx-auto flex flex-wrap justify-center gap-14 rounded-3xl bg-white/95 px-8 py-10 shadow-lg dark:bg-moss-elevated/95'
+            }
+          >
             <ProgressRing
               value={fund1k}
               label={fund1k >= 1 ? '$1k reserve milestone met' : '$1k reserve milestone'}

@@ -13,6 +13,7 @@ import {
   WEEKLY_ESSENTIAL_DAY_OPTIONS,
 } from '../data/selectOptions';
 import { Card } from './ui/Card';
+import { SegmentedToggle } from './ui/SegmentedToggle';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import {
   NumericAmountInput,
@@ -486,12 +487,15 @@ export function DataEditor({
                         onValueChange={(n) => patchDebt(d.id, { dueDay: n })}
                       />
                     </td>
-                    <td className="py-2 pr-2 text-center">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 accent-moss-accent"
-                        checked={d.autoDeduction}
-                        onChange={(e) => patchDebt(d.id, { autoDeduction: e.target.checked })}
+                    <td className="min-w-[7.5rem] py-2 pr-2 align-middle">
+                      <SegmentedToggle
+                        name={`debt-auto-${d.id}`}
+                        aria-label={`Auto-deduct ${d.name || 'debt'}`}
+                        size="compact"
+                        offLabel="Off"
+                        onLabel="Auto"
+                        checked={Boolean(d.autoDeduction)}
+                        onCheckedChange={(on) => patchDebt(d.id, { autoDeduction: on })}
                       />
                     </td>
                     <td className="py-2 pr-2">

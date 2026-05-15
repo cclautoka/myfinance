@@ -6,7 +6,9 @@
     "start": "node index.mjs",
     "test": "node --test __tests__/*.test.mjs",
     "db:migrate": "node scripts/db-migrate.mjs",
-    "seed:shahil": "node scripts/seed-shahil-household.mjs"
+    "seed:shahil": "node scripts/seed-shahil-household.mjs",
+    "list:households": "node scripts/list-households.mjs",
+    "mark:verified": "node scripts/mark-email-verified.mjs"
   },
   "engines": {
     "node": ">=20"
