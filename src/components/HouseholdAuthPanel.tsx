@@ -13,6 +13,7 @@ import { SegmentedChoice } from './ui/SegmentedChoice';
 import { pushToast } from '../ui/toast/toastBus';
 import { PartnerInviteModal } from './PartnerInviteModal';
 import { resolvePartnerEmailForInvite } from '../utils/resolvePartnerEmail';
+import { applyNotifyEmails } from '../utils/applyNotifyEmails';
 
 function isValidEmail(v: string) {
   const t = v.trim();
@@ -176,8 +177,13 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
         householdId: hid,
         email,
         password,
-      })) as { token?: string; member?: { email?: string; role?: string; householdId?: string } };
+      })) as {
+        token?: string;
+        notifyEmails?: { husbandEmail?: string; wifeEmail?: string };
+        member?: { email?: string; role?: string; householdId?: string };
+      };
       if (j.token && j.member?.householdId) {
+        applyNotifyEmails(j.notifyEmails);
         writeHouseholdSession({
           token: j.token,
           householdId: j.member.householdId,
@@ -269,18 +275,6 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
     }
   };
 
-  const requestVerifyEmail = async () => {
-    setBusy(true);
-    try {
-      await postJson('/v1/household/auth/request-verify-email', {}, true);
-      pushToast({ type: 'success', message: 'Verification email sent (if mail is configured).' });
-    } catch (e) {
-      pushToast({ type: 'error', message: String((e as Error)?.message ?? e) });
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const requestForgotPassword = async () => {
     const addr = (session?.email ?? email).trim();
     if (!addr) {
@@ -291,26 +285,6 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
     try {
       await postJson('/v1/household/auth/request-password-reset', { householdId: hid, email: addr });
       pushToast({ type: 'success', message: 'If that primary email exists, a reset link was sent.' });
-    } catch (e) {
-      pushToast({ type: 'error', message: String((e as Error)?.message ?? e) });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const requestMagicLogin = async () => {
-    const addr = (session?.email ?? email).trim();
-    if (!addr) {
-      pushToast({ type: 'error', message: 'Enter your email first.' });
-      return;
-    }
-    setBusy(true);
-    try {
-      await postJson('/v1/household/auth/request-magic-login', { householdId: hid, email: addr });
-      pushToast({
-        type: 'success',
-        message: 'If that email is registered for this household, a sign-in link was sent (15 min).',
-      });
     } catch (e) {
       pushToast({ type: 'error', message: String((e as Error)?.message ?? e) });
     } finally {
@@ -386,9 +360,9 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
     <div className="max-w-3xl rounded-xl border-2 border-slate-200/90 border-t-teal-600 bg-white p-5 text-slate-900 shadow-md shadow-slate-900/10 dark:border-moss-border dark:border-t-teal-500 dark:bg-moss-surface dark:text-moss-fg dark:shadow-black/30">
       <h4 className="font-display text-base font-bold text-sage-900 dark:text-moss-fg">Household sign-in (server)</h4>
       <p className="mt-2 text-sm leading-relaxed text-sage-700 dark:text-moss-subtle">
-        Owners sign in with email and password (or a magic link). Partners join with an invite link plus a pairing code —
-        no password required. When email verification is enabled on the server, both owner and partner must verify their
-        inbox before full access.
+        Owners sign in with email and password. Partners join with an invite link plus a pairing code — no password
+        required. When email verification is enabled on the server, both owner and partner must verify their inbox before
+        full access.
       </p>
 
       <fieldset className="mt-5">
@@ -491,14 +465,6 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
             >
               Forgot password
             </button>
-            <button
-              type="button"
-              className="btn-secondary btn-secondary-sm font-bold"
-              disabled={busy || !email.trim()}
-              onClick={() => void requestMagicLogin()}
-            >
-              Email sign-in link
-            </button>
           </div>
         </>
       ) : null}
@@ -546,16 +512,8 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
         <div className="mt-6 rounded-xl border border-teal-200/80 bg-teal-50/40 p-4 dark:border-teal-900/40 dark:bg-teal-950/25">
           <p className="text-sm font-semibold text-teal-950 dark:text-teal-100">Partner account</p>
           <p className="mt-1 text-xs text-teal-900/90 dark:text-teal-200/85">
-            You joined without a password. Use a one-time email link to sign in on other devices.
+            You joined without a password. Open the invite link your partner shared to sign in on another device.
           </p>
-          <button
-            type="button"
-            className="btn-primary btn-primary-sm mt-3 font-bold"
-            disabled={busy}
-            onClick={() => void requestMagicLogin()}
-          >
-            Email me a sign-in link
-          </button>
         </div>
       ) : null}
 
@@ -565,12 +523,6 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
           <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" className="btn-secondary btn-secondary-sm font-bold" disabled={busy} onClick={() => void requestForgotPassword()}>
               Forgot password
-            </button>
-            <button type="button" className="btn-secondary btn-secondary-sm font-bold" disabled={busy} onClick={() => void requestVerifyEmail()}>
-              Send verify email
-            </button>
-            <button type="button" className="btn-secondary btn-secondary-sm font-bold" disabled={busy} onClick={() => void requestMagicLogin()}>
-              Email sign-in link
             </button>
           </div>
         </details>

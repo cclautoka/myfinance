@@ -85,24 +85,6 @@ export function ensureNotifyRelayHouseholdId(): string {
   }
 }
 
-export function buildShareSetupLink(input: {
-  baseUrl: string;
-  householdId: string;
-  husbandEmail?: string;
-  wifeEmail?: string;
-}): string {
-  const { baseUrl, householdId, husbandEmail, wifeEmail } = input;
-  const u = new URL(baseUrl);
-  const notifyUrl = resolveNotifyRelayUrl();
-  // Never include secrets in links. Emails are okay to include.
-  const he = (husbandEmail ?? '').trim();
-  const we = (wifeEmail ?? '').trim();
-  const emailPart =
-    he || we ? `&he=${encodeURIComponent(he)}&we=${encodeURIComponent(we)}` : '';
-  u.hash = `setup=1&notify=${encodeURIComponent(notifyUrl)}&hid=${encodeURIComponent(householdId)}${emailPart}`;
-  return u.toString();
-}
-
 export function applySetupFromUrlHash(): Partial<NotifyRelayConfig> | null {
   if (typeof window === 'undefined') return null;
   const h = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;

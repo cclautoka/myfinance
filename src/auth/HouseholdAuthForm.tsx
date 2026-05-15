@@ -18,6 +18,7 @@ import { SegmentedButtonGroup } from '../components/ui/SegmentedButtonGroup';
 import { SegmentedChoice } from '../components/ui/SegmentedChoice';
 import { THEME_SEGMENT_OPTIONS } from '../components/ui/themeSegmentedOptions';
 import { pushToast } from '../ui/toast/toastBus';
+import { applyNotifyEmails } from '../utils/applyNotifyEmails';
 
 type Tab = 'signin' | 'register';
 type AuthPanel = 'default' | 'forgot' | 'reset';
@@ -54,6 +55,7 @@ export function HouseholdAuthForm({
   const [tab, setTab] = useState<Tab>(initialTab);
   const [email, setEmail] = useState('');
   const [registerPartnerEmail, setRegisterPartnerEmail] = useState('');
+  const [registerOwnerSlot, setRegisterOwnerSlot] = useState<'husband' | 'wife'>('husband');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [inviteToken, setInviteToken] = useState('');
@@ -154,6 +156,7 @@ export function HouseholdAuthForm({
         email,
         password,
         householdMode: mode,
+        ...(mode === 'couple' ? { ownerSlot: registerOwnerSlot } : {}),
         ...(mode === 'couple' && registerPartnerEmail.trim()
           ? { partnerEmail: registerPartnerEmail.trim() }
           : {}),
@@ -164,13 +167,10 @@ export function HouseholdAuthForm({
         token?: string;
         member?: { email?: string; role?: string; householdId?: string };
       };
-      const he = (j.notifyEmails?.husbandEmail ?? email).trim();
-      const we = (j.notifyEmails?.wifeEmail ?? (mode === 'couple' ? registerPartnerEmail : '')).trim();
+      applyNotifyEmails(j.notifyEmails);
       writeNotifyRelayConfig({
         ...readNotifyRelayConfig(),
         householdId: newHid,
-        husbandEmail: he,
-        wifeEmail: we,
       });
       if (j.needsEmailVerification) {
         const partnerNote =
@@ -201,8 +201,13 @@ export function HouseholdAuthForm({
       const j = (await postNotifyRelayPublicJson('/v1/household/auth/login', {
         email,
         password,
-      })) as { token?: string; member?: { email?: string; role?: string; householdId?: string } };
+      })) as {
+        token?: string;
+        notifyEmails?: { husbandEmail?: string; wifeEmail?: string };
+        member?: { email?: string; role?: string; householdId?: string };
+      };
       if (j.token && j.member?.householdId) {
+        applyNotifyEmails(j.notifyEmails);
         try {
           history.replaceState(null, '', window.location.pathname + window.location.search);
         } catch {
@@ -500,6 +505,25 @@ export function HouseholdAuthForm({
                 />
                 <FieldError id={fieldErrorId('auth-password')} message={pwdErr} />
               </label>
+            ) : null}
+            {tab === 'register' && mode === 'couple' ? (
+              <fieldset>
+                <legend className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-600 dark:text-moss-muted">
+                  I am
+                </legend>
+                <div className="mt-2 max-w-md">
+                  <SegmentedChoice
+                    name="register-owner-slot"
+                    aria-label="Your role in the household"
+                    value={registerOwnerSlot}
+                    onChange={setRegisterOwnerSlot}
+                    options={[
+                      { id: 'husband', label: 'Husband' },
+                      { id: 'wife', label: 'Wife' },
+                    ]}
+                  />
+                </div>
+              </fieldset>
             ) : null}
             {tab === 'register' && mode === 'couple' ? (
               <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">

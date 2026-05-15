@@ -17,6 +17,7 @@ import {
 import type { FinanceState } from '../types/finance';
 import { HouseholdAuthPanel } from './HouseholdAuthPanel';
 import { readHouseholdSession } from '../utils/householdSession';
+import { fetchAndApplyNotifyEmails } from '../utils/applyNotifyEmails';
 import { readHouseholdMode } from '../setup/setupCompletion';
 import { FieldError } from './ui/FieldError';
 import { fieldErrorId } from './ui/fieldErrorId';
@@ -62,6 +63,15 @@ export function NotifyRelaySettings({
       history.replaceState(null, '', window.location.pathname + window.location.search);
     }
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const sess = readHouseholdSession();
+    if (!sess?.token) return;
+    void fetchAndApplyNotifyEmails().then(() => {
+      setCfg({ ...readNotifyRelayConfig(), url: resolveNotifyRelayUrl() });
+    });
+  }, [authTick]);
 
   useEffect(
     () => () => {

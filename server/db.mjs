@@ -210,6 +210,18 @@ export async function countOwnersForHousehold(householdId) {
   return r.rows[0]?.n ?? 0;
 }
 
+export async function listMembersForHousehold(householdId) {
+  if (!pool) throw new Error('DB not initialized');
+  const r = await pool.query(
+    `select id, household_id, email, role, email_verified_at, created_at
+     from household_member
+     where household_id = $1
+     order by created_at asc`,
+    [householdId],
+  );
+  return r.rows;
+}
+
 export async function getMemberById(memberId) {
   if (!pool) throw new Error('DB not initialized');
   const r = await pool.query(

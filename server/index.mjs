@@ -28,6 +28,7 @@ import {
   findMembersByEmail,
   insertHouseholdMember,
   countOwnersForHousehold,
+  listMembersForHousehold,
   getMemberById,
   insertInvite,
   getActiveInviteByTokenHash,
@@ -299,6 +300,45 @@ function normalizeEmail(v) {
   return typeof v === 'string' ? v.trim().toLowerCase() : '';
 }
 
+function parseOwnerSlot(v) {
+  return v === 'wife' ? 'wife' : 'husband';
+}
+
+function coupleNotifyEmailsFromOwnerSlot(ownerSlot, ownerEmail, partnerEmail) {
+  const owner = String(ownerEmail ?? '').trim();
+  const partner = String(partnerEmail ?? '').trim();
+  if (parseOwnerSlot(ownerSlot) === 'wife') {
+    return { husbandEmail: partner, wifeEmail: owner };
+  }
+  return { husbandEmail: owner, wifeEmail: partner };
+}
+
+async function resolveNotifyEmailsForHousehold(householdId) {
+  const snap = await readSnapshot(householdId).catch(() => null);
+  const data = snap?.data;
+  if (data?.notifyEmails && typeof data.notifyEmails === 'object') {
+    const he = String(data.notifyEmails.husbandEmail ?? '').trim();
+    const we = String(data.notifyEmails.wifeEmail ?? '').trim();
+    if (he || we) return { husbandEmail: he, wifeEmail: we };
+  }
+  const list = normalizeRecipientList(data?.notifyRecipientEmails);
+  if (list.length >= 2) {
+    return { husbandEmail: list[0], wifeEmail: list[1] };
+  }
+  if (list.length === 1) {
+    return { husbandEmail: list[0], wifeEmail: '' };
+  }
+  if (!getDbEnabled()) return { husbandEmail: '', wifeEmail: '' };
+  const members = await listMembersForHousehold(householdId);
+  const owner = members.find((m) => m.role === 'owner');
+  const partner = members.find((m) => m.role === 'partner');
+  if (owner?.email && partner?.email) {
+    return { husbandEmail: owner.email.trim(), wifeEmail: partner.email.trim() };
+  }
+  if (owner?.email) return { husbandEmail: owner.email.trim(), wifeEmail: '' };
+  return { husbandEmail: '', wifeEmail: '' };
+}
+
 /** Optional partner row + verification email during owner registration (couple households). */
 async function registerPartnerAtSignup({ householdId, ownerEmail, partnerEmail, request, log }) {
   const owner = normalizeEmail(ownerEmail);
@@ -341,15 +381,21 @@ async function registerPartnerAtSignup({ householdId, ownerEmail, partnerEmail, 
   return { partnerVerificationSent, partnerEmail: partner };
 }
 
-async function persistNotifyEmailsSnapshot(householdId, emails, log) {
-  const list = [...new Set(emails.map((e) => String(e).trim()).filter((e) => e.includes('@')))];
+async function persistNotifyEmailsSnapshot(householdId, notifyEmails, log) {
+  const husbandEmail = String(notifyEmails?.husbandEmail ?? '').trim();
+  const wifeEmail = String(notifyEmails?.wifeEmail ?? '').trim();
+  const list = [...new Set([husbandEmail, wifeEmail].filter((e) => e.includes('@')))];
   if (!list.length) return;
   try {
     const existing = await readSnapshot(householdId).catch(() => null);
     const data = existing?.data && typeof existing.data === 'object' ? existing.data : {};
-    await writeSnapshot(householdId, { ...data, notifyRecipientEmails: list });
+    await writeSnapshot(householdId, {
+      ...data,
+      notifyRecipientEmails: list,
+      notifyEmails: { husbandEmail, wifeEmail },
+    });
   } catch (e) {
-    log?.warn?.(e, 'Could not write notifyRecipientEmails snapshot at registration');
+    log?.warn?.(e, 'Could not write notify emails snapshot');
   }
 }
 
@@ -550,6 +596,7 @@ fastify.post('/v1/household/auth/register', async (request, reply) => {
   const email = typeof body.email === 'string' ? body.email.trim() : '';
   const password = typeof body.password === 'string' ? body.password : '';
   const householdMode = body.householdMode === 'single' ? 'single' : 'couple';
+  const ownerSlot = parseOwnerSlot(body.ownerSlot);
   const partnerEmailRaw = typeof body.partnerEmail === 'string' ? body.partnerEmail.trim() : '';
   if (!householdId || !email || password.length < 8) {
     return reply.code(400).send({ error: 'householdId, email, and password (min 8 chars) required.' });
@@ -610,20 +657,22 @@ fastify.post('/v1/household/auth/register', async (request, reply) => {
   }
 
   const notifyEmails =
-    householdMode === 'couple' && savedPartnerEmail
-      ? [email.trim(), savedPartnerEmail]
-      : [email.trim()];
+    householdMode === 'couple'
+      ? coupleNotifyEmailsFromOwnerSlot(
+          ownerSlot,
+          email,
+          savedPartnerEmail || partnerEmailRaw,
+        )
+      : { husbandEmail: email.trim(), wifeEmail: '' };
   await persistNotifyEmailsSnapshot(householdId, notifyEmails, request.log);
 
   return reply.send({
     ok: true,
     needsEmailVerification: true,
     householdMode,
+    ownerSlot: householdMode === 'couple' ? ownerSlot : undefined,
     partnerVerificationSent,
-    notifyEmails: {
-      husbandEmail: email.trim(),
-      wifeEmail: householdMode === 'couple' ? savedPartnerEmail || partnerEmailRaw : '',
-    },
+    notifyEmails,
     member: {
       id: row.id,
       email: row.email,
@@ -662,10 +711,12 @@ fastify.post('/v1/household/auth/login', async (request, reply) => {
   }
   const token = issueSessionToken(row);
   const emailVerified = Boolean(row.email_verified_at);
+  const notifyEmails = await resolveNotifyEmailsForHousehold(row.household_id);
   return reply.send({
     ok: true,
     token,
     needsEmailVerification: emailVerificationRequired() && !emailVerified,
+    notifyEmails,
     member: {
       id: row.id,
       email: row.email,
@@ -674,6 +725,13 @@ fastify.post('/v1/household/auth/login', async (request, reply) => {
       emailVerified,
     },
   });
+});
+
+fastify.get('/v1/household/notify-emails', async (request, reply) => {
+  const id = getHouseholdIdFromRequest(request);
+  if (!(await assertAuthorized(request, reply, id))) return;
+  const notifyEmails = await resolveNotifyEmailsForHousehold(id);
+  return reply.send({ ok: true, notifyEmails });
 });
 
 fastify.get('/v1/household/auth/me', async (request, reply) => {
@@ -701,8 +759,10 @@ fastify.get('/v1/household/auth/me', async (request, reply) => {
       },
     });
   }
+  const notifyEmails = await resolveNotifyEmailsForHousehold(member.household_id);
   return reply.send({
     ok: true,
+    notifyEmails,
     member: {
       id: member.id,
       email: member.email,
