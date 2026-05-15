@@ -21,7 +21,7 @@ import { pushToast } from '../ui/toast/toastBus';
 import { applyNotifyEmails } from '../utils/applyNotifyEmails';
 import { preloadWorkbookModule } from '../SignedInWorkbook';
 
-type Tab = 'signin' | 'register';
+type Tab = 'signin' | 'register' | 'partner';
 type AuthPanel = 'default' | 'forgot' | 'reset';
 
 function finishAuth(
@@ -68,10 +68,14 @@ export function HouseholdAuthForm({
   const [invitePreviewLoading, setInvitePreviewLoading] = useState(false);
   const [invitePreview, setInvitePreview] = useState<{
     valid: boolean;
+    mode?: 'join' | 'signin';
+    householdId?: string;
     partnerEmail?: string;
     needsEmailVerification?: boolean;
     emailVerified?: boolean;
   } | null>(null);
+  const [partnerSignInEmail, setPartnerSignInEmail] = useState('');
+  const [partnerSignInCode, setPartnerSignInCode] = useState('');
   const [resetTokenFromHash, setResetTokenFromHash] = useState<string | null>(null);
   const [newPasswordAfterReset, setNewPasswordAfterReset] = useState('');
   const [authPanel, setAuthPanel] = useState<AuthPanel>('default');
@@ -122,14 +126,22 @@ export function HouseholdAuthForm({
       try {
         const j = (await postNotifyRelayPublicJson('/v1/household/auth/invite-preview', { token })) as {
           valid?: boolean;
+          mode?: 'join' | 'signin';
+          householdId?: string;
           partnerEmail?: string;
           needsEmailVerification?: boolean;
           emailVerified?: boolean;
         };
         if (cancelled) return;
-        if (j.valid && j.partnerEmail) setPartnerEmail(j.partnerEmail);
+        if (j.valid && j.partnerEmail) {
+          setPartnerEmail(j.partnerEmail);
+          setPartnerSignInEmail(j.partnerEmail);
+        }
+        if (j.valid && j.householdId) setNotifyRelayHouseholdId(j.householdId);
         setInvitePreview({
           valid: Boolean(j.valid),
+          mode: j.mode,
+          householdId: j.householdId,
           partnerEmail: j.partnerEmail,
           needsEmailVerification: j.needsEmailVerification,
           emailVerified: j.emailVerified,
@@ -146,9 +158,13 @@ export function HouseholdAuthForm({
   }, [inviteToken]);
 
   const partnerInviteMode = Boolean(inviteToken.trim());
+  const partnerInviteSignInMode = partnerInviteMode && invitePreview?.valid && invitePreview.mode === 'signin';
   const partnerCanJoin =
     invitePreview?.valid &&
+    invitePreview.mode !== 'signin' &&
     (!invitePreview.needsEmailVerification || invitePreview.emailVerified);
+  const partnerCanSignInFromInvite =
+    partnerInviteSignInMode && (!invitePreview?.needsEmailVerification || invitePreview.emailVerified);
 
   const register = async () => {
     setBusy(true);
@@ -298,8 +314,10 @@ export function HouseholdAuthForm({
       })) as {
         token?: string;
         needsEmailVerification?: boolean;
+        notifyEmails?: { husbandEmail?: string; wifeEmail?: string };
         member?: { email?: string; role?: string; householdId?: string };
       };
+      applyNotifyEmails(j.notifyEmails);
       if (j.needsEmailVerification) {
         pushToast({
           type: 'success',
@@ -332,6 +350,47 @@ export function HouseholdAuthForm({
     }
   };
 
+  const partnerSignIn = async (opts?: { email?: string; code?: string; householdId?: string }) => {
+    const signEmail = (opts?.email ?? partnerSignInEmail).trim();
+    const digits = (opts?.code ?? partnerSignInCode).replace(/\D/g, '');
+    const hid =
+      (opts?.householdId ?? invitePreview?.householdId ?? readNotifyRelayConfig().householdId ?? '').trim();
+    if (!signEmail.includes('@')) {
+      pushToast({ type: 'error', message: 'Enter your email address.' });
+      return;
+    }
+    if (digits.length !== 6) {
+      pushToast({ type: 'error', message: 'Enter the 6-digit pairing code from your partner.' });
+      return;
+    }
+    setBusy(true);
+    try {
+      const j = (await postNotifyRelayPublicJson('/v1/household/auth/partner-sign-in', {
+        ...(hid ? { householdId: hid } : {}),
+        email: signEmail,
+        code: digits,
+      })) as {
+        token?: string;
+        notifyEmails?: { husbandEmail?: string; wifeEmail?: string };
+        member?: { email?: string; role?: string; householdId?: string; emailVerified?: boolean };
+      };
+      applyNotifyEmails(j.notifyEmails);
+      if (j.token && j.member?.householdId) {
+        try {
+          history.replaceState(null, '', window.location.pathname + window.location.search);
+        } catch {
+          /* ignore */
+        }
+        pushToast({ type: 'success', message: 'Signed in — welcome back.' });
+        finishAuth(j.member, j.token, onAuthed);
+      }
+    } catch (e) {
+      pushToast({ type: 'error', message: String((e as Error)?.message ?? e) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const reloadInvitePage = () => {
     const token = inviteToken.trim();
     const path = window.location.pathname + window.location.search;
@@ -356,7 +415,15 @@ export function HouseholdAuthForm({
                 : 'mt-1 font-display text-2xl font-bold text-slate-950 dark:text-moss-fg'
             }
           >
-            {partnerInviteMode ? 'Join household' : compact ? 'Sign in or register' : 'Household sign-in'}
+            {partnerInviteMode
+              ? partnerInviteSignInMode
+                ? 'Partner sign-in'
+                : 'Join household'
+              : tab === 'partner'
+                ? 'Partner sign-in'
+                : compact
+                  ? 'Sign in or register'
+                  : 'Household sign-in'}
           </h2>
           {!compact && !partnerInviteMode ? (
             <p className="mt-2 text-xs text-slate-600 dark:text-moss-muted">
@@ -365,9 +432,14 @@ export function HouseholdAuthForm({
                 : 'Sign in with the email and password you registered.'}
             </p>
           ) : null}
-          {partnerInviteMode ? (
+          {partnerInviteMode && !partnerInviteSignInMode ? (
             <p className="mt-2 text-xs text-slate-600 dark:text-moss-muted">
               Enter your email and the pairing code your partner shared with the invite link.
+            </p>
+          ) : null}
+          {partnerInviteSignInMode || tab === 'partner' ? (
+            <p className="mt-2 text-xs text-slate-600 dark:text-moss-muted">
+              Use the email you joined with and your household&apos;s current pairing code — no invite link needed.
             </p>
           ) : null}
         </div>
@@ -389,8 +461,9 @@ export function HouseholdAuthForm({
             value={tab}
             onChange={setTab}
             options={[
-              { id: 'signin', label: 'Sign in' },
+              { id: 'signin', label: 'Owner sign in' },
               { id: 'register', label: 'Register' },
+              { id: 'partner', label: 'Partner sign-in' },
             ]}
           />
         </div>
@@ -425,16 +498,26 @@ export function HouseholdAuthForm({
 
         {partnerInviteMode ? (
           <div className="space-y-3 rounded-xl border border-teal-200/80 bg-teal-50/50 p-3 dark:border-teal-900/40 dark:bg-teal-950/25">
-            <p className="text-sm font-semibold text-teal-950 dark:text-teal-100">Partner join</p>
-            <p className="text-xs text-teal-900/90 dark:text-teal-200/85">
-              This invite link does not expire. Check your inbox for a partner verification email first.
+            <p className="text-sm font-semibold text-teal-950 dark:text-teal-100">
+              {partnerInviteSignInMode ? 'Already in this household' : 'Partner join'}
             </p>
+            {!partnerInviteSignInMode ? (
+              <p className="text-xs text-teal-900/90 dark:text-teal-200/85">
+                This invite link does not expire. Check your inbox for a partner verification email first.
+              </p>
+            ) : (
+              <p className="text-xs text-teal-900/90 dark:text-teal-200/85">
+                You already joined with this invite. Sign in with your email and the current pairing code from your
+                partner — the link is only needed once.
+              </p>
+            )}
             {invitePreviewLoading ? (
               <p className="text-xs text-slate-600 dark:text-moss-muted">Checking invite…</p>
             ) : null}
             {!invitePreviewLoading && invitePreview && !invitePreview.valid ? (
               <p className="rounded-lg border border-red-300/80 bg-red-50/90 px-3 py-2 text-sm text-red-950 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100">
-                This invite link is invalid or was already used. Ask your partner for a new invite.
+                This invite link is invalid. Ask your partner for a new invite, or use Partner sign-in if you already
+                joined.
               </p>
             ) : null}
             {!invitePreviewLoading && invitePreview?.valid && invitePreview.needsEmailVerification && !invitePreview.emailVerified ? (
@@ -485,7 +568,68 @@ export function HouseholdAuthForm({
                 </button>
               </>
             ) : null}
+            {partnerCanSignInFromInvite ? (
+              <>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
+                  Your email
+                  <input
+                    className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm dark:border-moss-border dark:bg-moss-bg/80"
+                    value={partnerSignInEmail}
+                    readOnly
+                    autoComplete="email"
+                  />
+                </label>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
+                  Pairing code (6 digits)
+                  <input
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm tracking-widest dark:border-moss-border dark:bg-moss-bg"
+                    placeholder="000000"
+                    inputMode="numeric"
+                    value={partnerSignInCode}
+                    onChange={(e) => setPartnerSignInCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    autoComplete="one-time-code"
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="btn-primary btn-primary-sm font-bold"
+                  disabled={busy}
+                  onClick={() =>
+                    void partnerSignIn({
+                      email: partnerSignInEmail,
+                      code: partnerSignInCode,
+                      householdId: invitePreview?.householdId,
+                    })
+                  }
+                >
+                  Sign in
+                </button>
+              </>
+            ) : null}
           </div>
+        ) : tab === 'partner' ? (
+          <>
+            <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
+              Your email
+              <input
+                className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
+                value={partnerSignInEmail}
+                onChange={(e) => setPartnerSignInEmail(e.target.value)}
+                autoComplete="email"
+              />
+            </label>
+            <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
+              Pairing code (6 digits)
+              <input
+                className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 font-mono text-sm tracking-widest dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
+                placeholder="000000"
+                inputMode="numeric"
+                value={partnerSignInCode}
+                onChange={(e) => setPartnerSignInCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                autoComplete="one-time-code"
+              />
+            </label>
+          </>
         ) : (
           <>
             <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
@@ -612,6 +756,15 @@ export function HouseholdAuthForm({
             {tab === 'register' ? (
               <button type="button" className="btn-primary btn-primary-sm font-bold" disabled={busy} onClick={() => void register()}>
                 Create account
+              </button>
+            ) : tab === 'partner' ? (
+              <button
+                type="button"
+                className="btn-primary btn-primary-sm font-bold"
+                disabled={busy}
+                onClick={() => void partnerSignIn()}
+              >
+                Partner sign in
               </button>
             ) : (
               <button type="button" className="btn-primary btn-primary-sm font-bold" disabled={busy} onClick={() => void login()}>

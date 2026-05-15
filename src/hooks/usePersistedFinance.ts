@@ -48,11 +48,25 @@ function hashFinanceState(s: FinanceState): string {
   }
 }
 
+function diffTouchesOnlySurprises(from: FinanceState, to: FinanceState): boolean {
+  const f = { ...from, surpriseExpenses: to.surpriseExpenses };
+  const t = { ...to, surpriseExpenses: from.surpriseExpenses };
+  return hashFinanceState(f) === hashFinanceState(to) && hashFinanceState(t) === hashFinanceState(from);
+}
+
+function notifyRelayCanSend(cfg: ReturnType<typeof readNotifyRelayConfig>): boolean {
+  if (!cfg.enabled || !cfg.url) return false;
+  if (cfg.secret.trim()) return true;
+  return Boolean(readHouseholdSession()?.token);
+}
+
 export function usePersistedFinance() {
   const [state, setState] = useState<FinanceState>(() => loadFinanceState());
   const stateRef = useRef(state);
   /** Skip one debounced PUT right after hydrating from server (avoids redundant write-back on load). */
   const skipNextServerSaveRef = useRef(false);
+  /** Skip arming notify debounce right after hydrate (avoids spurious email timer on login). */
+  const skipNextNotifyRef = useRef(false);
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
@@ -74,6 +88,7 @@ export function usePersistedFinance() {
       if (cancelled) return;
       if (remote.ok) {
         skipNextServerSaveRef.current = true;
+        skipNextNotifyRef.current = true;
         setState(remote.state);
         maybeMigrateLegacyHouseholdSetup(remote.state, readNotifyRelayConfig());
       }
@@ -103,6 +118,7 @@ export function usePersistedFinance() {
       return { ok: false as const, error };
     }
     skipNextServerSaveRef.current = true;
+    skipNextNotifyRef.current = true;
     setState(remote.state);
     maybeMigrateLegacyHouseholdSetup(remote.state, readNotifyRelayConfig());
     pushToast({ type: 'success', message: 'Synced from server.' });
@@ -405,10 +421,19 @@ export function usePersistedFinance() {
       prevStateRef.current = state;
       return;
     }
+    if (skipNextNotifyRef.current) {
+      skipNextNotifyRef.current = false;
+      notifyBaselineRef.current = h;
+      prevStateRef.current = state;
+      return;
+    }
     if (notifyBaselineRef.current === h) {
       prevStateRef.current = state;
       return;
     }
+
+    const surpriseOnly = diffTouchesOnlySurprises(prev, state);
+    const debounceMs = surpriseOnly ? 15_000 : 60_000;
 
     const hadTimer = notifyDebounceRef.current !== null;
     if (notifyDebounceRef.current !== null) clearTimeout(notifyDebounceRef.current);
@@ -424,7 +449,7 @@ export function usePersistedFinance() {
     notifyDebounceRef.current = setTimeout(() => {
       notifyDebounceRef.current = null;
       const cfg = readNotifyRelayConfig();
-      if (!cfg.enabled || !cfg.url || !cfg.secret) {
+      if (!notifyRelayCanSend(cfg)) {
         notifyWindowFromRef.current = null;
         return;
       }
@@ -443,7 +468,7 @@ export function usePersistedFinance() {
       void postSnapshotRelay(buildSnapshotForReminders(latest)).then((r) => {
         if (!r.ok && typeof console !== 'undefined') console.warn('[notify relay snapshot]', r.error);
       });
-    }, 60_000);
+    }, debounceMs);
 
     prevStateRef.current = state;
 

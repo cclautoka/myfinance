@@ -206,6 +206,18 @@ export function DataEditor({
                 onValueChange={(n) => onIncome({ ...state.income, wifeMonthly: n })}
               />
             </Field>
+            <Field label="Other consistent monthly (0 = none)">
+              <NumericAmountInput
+                min={0}
+                className="w-full rounded-lg border border-sage-300 bg-white px-2 py-1.5 dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
+                value={state.income.otherPlannedMonthly ?? 0}
+                onValueChange={(n) => onIncome({ ...state.income, otherPlannedMonthly: n })}
+              />
+            </Field>
+            <p className="sm:col-span-2 text-xs leading-relaxed text-sage-700 dark:text-moss-muted">
+              Bonuses, gifts, and one-off cash can be added later on the Dashboard. Only use this lane for income
+              that is steady every month (rental, benefits, side gig, etc.).
+            </p>
             <Field label="Husband usual pay rhythm">
               <SegmentedChoice
                 name="pay-rhythm-husband"

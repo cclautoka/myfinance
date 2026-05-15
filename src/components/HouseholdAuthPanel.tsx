@@ -14,6 +14,7 @@ import { pushToast } from '../ui/toast/toastBus';
 import { PartnerInviteModal } from './PartnerInviteModal';
 import { resolvePartnerEmailForInvite } from '../utils/resolvePartnerEmail';
 import { applyNotifyEmails } from '../utils/applyNotifyEmails';
+import { clearLocalFinanceCache } from '../utils/clearLocalFinanceCache';
 import { preloadWorkbookModule } from '../SignedInWorkbook';
 
 function isValidEmail(v: string) {
@@ -162,7 +163,8 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
       })) as {
         token?: string;
         needsEmailVerification?: boolean;
-        member?: { email?: string; role?: string; householdId?: string };
+        notifyEmails?: { husbandEmail?: string; wifeEmail?: string };
+        member?: { email?: string; role?: string; householdId?: string; emailVerified?: boolean };
       };
       if (j.needsEmailVerification) {
         pushToast({
@@ -170,12 +172,16 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
           message: 'Check your email to verify, then sign in here with the same password.',
         });
       } else if (j.token && j.member?.householdId) {
+        applyNotifyEmails(j.notifyEmails);
+        clearLocalFinanceCache();
         writeHouseholdSession({
           token: j.token,
           householdId: j.member.householdId,
           email: j.member.email,
           role: j.member.role,
+          emailVerified: Boolean(j.member.emailVerified ?? true),
         });
+        void preloadWorkbookModule();
         pushToast({ type: 'success', message: 'Registered and signed in on this device.' });
         onAuthChange?.();
       }
@@ -228,8 +234,10 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
     }
   };
 
-  const createPairing = useCallback(async (): Promise<ActivePairing | null> => {
+  const createPairing = useCallback(
+    async (opts?: { regenerate?: boolean }): Promise<ActivePairing | null> => {
     const body: Record<string, unknown> = { householdId: hid };
+    if (opts?.regenerate) body.regenerate = true;
     const { secret } = readNotifyRelayConfig();
     const sess = readHouseholdSession();
     if (!sess?.token && secret.trim()) {
@@ -242,7 +250,9 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
     const next: ActivePairing = { code: j.code };
     setActivePairing(next);
     return next;
-  }, [email, hid, postJson]);
+  },
+    [email, hid, postJson],
+  );
 
   const highlightPairingSection = () => {
     setPairingHighlight(true);
@@ -409,7 +419,7 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
   const generatePairingClick = async () => {
     setBusy(true);
     try {
-      const p = await createPairing();
+      const p = await createPairing({ regenerate: true });
       if (p) {
         pushToast({
           type: 'success',

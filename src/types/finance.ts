@@ -28,6 +28,25 @@ export interface IncomeConfig {
   wifePayAutoLog?: boolean;
   /** Start date `YYYY-MM-DD`; next paydays follow wife’s pay rhythm (weekly +7d, biweekly +14d, monthly same DOM). */
   wifeBiweeklyPayAnchor?: string | null;
+  /** @deprecated Migrated to otherPlannedIncome on load — do not use in new UI */
+  otherPlannedMonthly?: number;
+  /** Steady monthly income beyond husband/wife (rental, benefits, side gig, etc.) */
+  otherPlannedIncome?: OtherPlannedIncomeEntry[];
+}
+
+/** Recurring monthly income outside husband/wife pay — counted in planned income totals */
+export interface OtherPlannedIncomeEntry {
+  id: string;
+  label: string;
+  amount: number;
+}
+
+/** Named savings target with optional balance tracked toward the goal */
+export interface SavingsGoal {
+  id: string;
+  name: string;
+  targetAmount: number;
+  balance: number;
 }
 
 export interface EssentialExpense {
@@ -140,8 +159,10 @@ export interface FinanceState {
   allocation: AllocationPercents;
   wallets: PersonalWallets;
   emergencyFund: number;
-  /** Target for “3‑month cushion” milestone (editable) */
+  /** Target for “3‑month cushion” milestone (legacy ring when savingsGoals is empty) */
   threeMonthFundTarget: number;
+  /** Custom savings goals — rings and progress in Plan & Dashboard */
+  savingsGoals: SavingsGoal[];
   /**
    * Planned dollars per month toward savings (after modelling essentials, groceries, debt in Household).
    * Pie + totals use this — not allocation.savings × income.

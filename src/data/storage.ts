@@ -4,7 +4,13 @@ import {
   HISTORY_TRACKING_STARTED_MONTH_KEY,
   previousCalendarMonthKey,
 } from './defaults';
-import type { FinanceState, IncomeConfig, MonthCashflowOpening } from '../types/finance';
+import type {
+  FinanceState,
+  IncomeConfig,
+  MonthCashflowOpening,
+  OtherPlannedIncomeEntry,
+  SavingsGoal,
+} from '../types/finance';
 import { STORAGE_KEY } from '../types/finance';
 import { applyAutoScheduledPayLogs } from '../utils/autoScheduledPayLog';
 import { applyAutoMarkHandled } from '../utils/autoBills';
@@ -69,6 +75,22 @@ const prunePreTrackingBillKeys = (state: FinanceState): FinanceState => {
   return { ...state, billsPaid, billsAutoUnmarked, billPaidAmounts };
 };
 
+const migrateOtherPlannedIncome = (income: IncomeConfig): IncomeConfig => {
+  if (income.otherPlannedIncome?.length) {
+    return { ...income, otherPlannedIncome: income.otherPlannedIncome };
+  }
+  const legacy = Number(income.otherPlannedMonthly ?? 0);
+  if (legacy > 0) {
+    const row: OtherPlannedIncomeEntry = {
+      id: 'legacy-other-planned',
+      label: 'Other income',
+      amount: legacy,
+    };
+    return { ...income, otherPlannedIncome: [row], otherPlannedMonthly: 0 };
+  }
+  return { ...income, otherPlannedIncome: [] };
+};
+
 /** Old saves lacked auto-pay keys — leave both earners off until opted in explicitly. */
 const finalizeIncomeMergeForLoad = (template: IncomeConfig, partial?: Partial<IncomeConfig>): IncomeConfig => {
   const p = partial ?? {};
@@ -76,7 +98,7 @@ const finalizeIncomeMergeForLoad = (template: IncomeConfig, partial?: Partial<In
   const hasWAnchor = Object.prototype.hasOwnProperty.call(p, 'wifeBiweeklyPayAnchor');
   const hasHAuto = Object.prototype.hasOwnProperty.call(p, 'husbandPayAutoLog');
   const hasHAnchor = Object.prototype.hasOwnProperty.call(p, 'husbandPayAnchor');
-  return {
+  const merged: IncomeConfig = {
     ...template,
     ...p,
     husbandPayAutoLog: hasHAuto ? Boolean(p.husbandPayAutoLog) : false,
@@ -84,6 +106,22 @@ const finalizeIncomeMergeForLoad = (template: IncomeConfig, partial?: Partial<In
     wifePayAutoLog: hasWAuto ? Boolean(p.wifePayAutoLog) : false,
     wifeBiweeklyPayAnchor: hasWAnchor ? (p.wifeBiweeklyPayAnchor ?? null) : null,
   };
+  return migrateOtherPlannedIncome(merged);
+};
+
+const normalizeSavingsGoals = (state: FinanceState): FinanceState => {
+  if (state.savingsGoals?.length) return { ...state, savingsGoals: state.savingsGoals };
+  const legacyTarget = Number(state.threeMonthFundTarget) || 0;
+  if (legacyTarget > 0) {
+    const goal: SavingsGoal = {
+      id: 'legacy-three-month',
+      name: '3-month cushion',
+      targetAmount: legacyTarget,
+      balance: Math.min(Number(state.emergencyFund) || 0, legacyTarget),
+    };
+    return { ...state, savingsGoals: [goal] };
+  }
+  return { ...state, savingsGoals: [] };
 };
 
 const deepMerge = (base: FinanceState, partial: Partial<FinanceState>): FinanceState => ({
@@ -126,6 +164,7 @@ const deepMerge = (base: FinanceState, partial: Partial<FinanceState>): FinanceS
     partial.plannedSavingsMonthly !== undefined ? partial.plannedSavingsMonthly : base.plannedSavingsMonthly,
   plannedPersonalMonthly:
     partial.plannedPersonalMonthly !== undefined ? partial.plannedPersonalMonthly : base.plannedPersonalMonthly,
+  savingsGoals: partial.savingsGoals !== undefined ? partial.savingsGoals : base.savingsGoals,
 });
 
 /**
@@ -195,7 +234,8 @@ const normalizeLoadedState = (base: FinanceState, parsed?: Partial<FinanceState>
   const pruned = prunePreTrackingBillKeys(migrated);
   const withMonth = resetWalletsIfNewMonth(pruned);
   const legacyOpening = silentlyBackfillMonthCashflowOpeningForLegacySave(withMonth, parsed);
-  return applyAutoScheduledPayLogs(applyAutoMarkHandled(legacyOpening));
+  const withGoals = normalizeSavingsGoals(legacyOpening);
+  return applyAutoScheduledPayLogs(applyAutoMarkHandled(withGoals));
 };
 
 export const SERVER_CACHE_KEY = 'finance-server-cache-v1';

@@ -1,4 +1,4 @@
-import type { DebtAccount, EssentialExpense, FinanceState } from '../types/finance';
+import type { DebtAccount, EssentialExpense, FinanceState, IncomeConfig } from '../types/finance';
 
 /**
  * For weekly line items we use **4 weeks per month** so $150/week → $600/mo
@@ -16,8 +16,20 @@ export const monthlyEssentialAmount = (items: EssentialExpense[]): number =>
     return sum + m;
   }, 0);
 
+export const otherPlannedIncomeTotal = (income: IncomeConfig): number => {
+  const rows = income.otherPlannedIncome;
+  if (rows?.length) {
+    return rows.reduce((sum, row) => {
+      const a = Number(row.amount);
+      return sum + (Number.isFinite(a) && a > 0 ? a : 0);
+    }, 0);
+  }
+  const legacy = income.otherPlannedMonthly ?? 0;
+  return Number.isFinite(legacy) && legacy > 0 ? legacy : 0;
+};
+
 export const combinedMonthlyIncome = (state: FinanceState): number =>
-  state.income.husbandMonthly + state.income.wifeMonthly;
+  state.income.husbandMonthly + state.income.wifeMonthly + otherPlannedIncomeTotal(state.income);
 
 export const totalDebtPayments = (debts: DebtAccount[]): number =>
   debts.reduce((s, d) => s + d.monthlyPayment, 0);

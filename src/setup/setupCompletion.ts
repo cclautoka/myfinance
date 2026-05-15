@@ -6,8 +6,6 @@ import { HOUSEHOLD_SETUP_STORAGE_KEY, HOUSEHOLD_SETUP_VERSION } from './constant
 export type HouseholdSetupCompletion = {
   version: typeof HOUSEHOLD_SETUP_VERSION;
   completedAt: string;
-  /** User explicitly chose “no tracked debts yet” in the wizard. */
-  noDebtsClaim?: boolean;
 };
 
 export function readHouseholdMode(): HouseholdMode {
@@ -23,24 +21,22 @@ export function readHouseholdSetupCompletion(): HouseholdSetupCompletion | null 
   try {
     const raw = localStorage.getItem(HOUSEHOLD_SETUP_STORAGE_KEY);
     if (!raw) return null;
-    const j = JSON.parse(raw) as Partial<HouseholdSetupCompletion>;
+    const j = JSON.parse(raw) as Partial<HouseholdSetupCompletion & { noDebtsClaim?: boolean }>;
     if (j?.version !== HOUSEHOLD_SETUP_VERSION || typeof j.completedAt !== 'string') return null;
     return {
       version: HOUSEHOLD_SETUP_VERSION,
       completedAt: j.completedAt,
-      noDebtsClaim: Boolean(j.noDebtsClaim),
     };
   } catch {
     return null;
   }
 }
 
-export function markHouseholdSetupFinished(noDebtsClaim: boolean): void {
+export function markHouseholdSetupFinished(): void {
   try {
     const next: HouseholdSetupCompletion = {
       version: HOUSEHOLD_SETUP_VERSION,
       completedAt: new Date().toISOString(),
-      noDebtsClaim,
     };
     localStorage.setItem(HOUSEHOLD_SETUP_STORAGE_KEY, JSON.stringify(next));
   } catch {
@@ -74,11 +70,6 @@ function incomeOk(mode: HouseholdMode, income: FinanceState['income']): boolean 
   return h > 0 && w > 0;
 }
 
-function debtsOk(state: FinanceState, completion: HouseholdSetupCompletion | null): boolean {
-  if (state.debts.length > 0) return true;
-  return Boolean(completion?.noDebtsClaim);
-}
-
 /** Pre-wizard households: enough real data to skip the gate once (income + essentials only). */
 function legacyHouseholdLooksComplete(state: FinanceState, _cfg: NotifyRelayConfig): boolean {
   const mode = readHouseholdMode();
@@ -93,7 +84,7 @@ function legacyHouseholdLooksComplete(state: FinanceState, _cfg: NotifyRelayConf
 export function maybeMigrateLegacyHouseholdSetup(state: FinanceState, cfg: NotifyRelayConfig): void {
   if (readHouseholdSetupCompletion()) return;
   if (!legacyHouseholdLooksComplete(state, cfg)) return;
-  markHouseholdSetupFinished(state.debts.length === 0);
+  markHouseholdSetupFinished();
 }
 
 function notifyOk(cfg: NotifyRelayConfig): boolean {
@@ -103,14 +94,12 @@ function notifyOk(cfg: NotifyRelayConfig): boolean {
   if (!url || !hid) return false;
   const he = cfg.husbandEmail.trim();
   const we = cfg.wifeEmail.trim();
-  // Same-origin bootstrap turns relay on before Tools emails exist — don't block setup forever.
   if (!he && !we) return true;
   return he.includes('@') || we.includes('@');
 }
 
 /**
  * True when persisted finance + relay snapshot satisfy the same bar the wizard enforces.
- * Used to grandfather existing users and to re-check after server rehydrate.
  */
 export function householdSetupMirrorsComplete(
   state: FinanceState,
@@ -120,15 +109,10 @@ export function householdSetupMirrorsComplete(
   const mode = readHouseholdMode();
   if (!incomeOk(mode, state.income)) return false;
   if (essentialsBaselineTotal(state) <= 0) return false;
-  if (!debtsOk(state, completion)) return false;
   if (!notifyOk(cfg)) return false;
   return true;
 }
 
-/**
- * After server rehydrate, mark setup done when the workbook is clearly already in use.
- * Returns true when the blocking gate should open (main app, not wizard).
- */
 export function syncHouseholdSetupFromServerState(state: FinanceState, cfg: NotifyRelayConfig): boolean {
   maybeMigrateLegacyHouseholdSetup(state, cfg);
 
@@ -143,20 +127,19 @@ export function syncHouseholdSetupFromServerState(state: FinanceState, cfg: Noti
   const hasEssentials = essentialsBaselineTotal(state) > 0;
   const hasDebts = state.debts.length > 0;
   if (hasEssentials || hasDebts) {
-    markHouseholdSetupFinished(!hasDebts);
+    markHouseholdSetupFinished();
     const after = readHouseholdSetupCompletion();
     return Boolean(after && householdSetupMirrorsComplete(state, cfg, after));
   }
 
-  // Income already on server (e.g. $1600 / $1800) — returning user after login cache clear.
   if (mode === 'couple' && state.income.husbandMonthly > 0 && state.income.wifeMonthly > 0) {
-    markHouseholdSetupFinished(state.debts.length === 0);
+    markHouseholdSetupFinished();
     return true;
   }
   if (mode === 'single') {
     const top = Math.max(state.income.husbandMonthly, state.income.wifeMonthly);
     if (top > 0) {
-      markHouseholdSetupFinished(state.debts.length === 0);
+      markHouseholdSetupFinished();
       return true;
     }
   }
@@ -164,9 +147,6 @@ export function syncHouseholdSetupFromServerState(state: FinanceState, cfg: Noti
   return false;
 }
 
-/**
- * Blocking gate: show wizard until completion is recorded and mirrors still pass.
- */
 export function isHouseholdSetupComplete(state: FinanceState, cfg: NotifyRelayConfig): boolean {
   return syncHouseholdSetupFromServerState(state, cfg);
 }

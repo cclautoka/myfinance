@@ -1,13 +1,11 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { TimelineColumnSpotlight } from './components/TimelineColumnSpotlight';
-import { AllocationPanel } from './components/AllocationPanel';
 import { BudgetSurplusPanel } from './components/BudgetSurplusPanel';
 import { BillsTimeline } from './components/BillsTimeline';
 import { DashboardIncomeBridge } from './components/DashboardIncomeBridge';
 import { DashboardOverview } from './components/DashboardOverview';
 import { DataEditor } from './components/DataEditor';
 import { DebtBalancesPanel } from './components/DebtBalancesPanel';
-import { DebtSnowball } from './components/DebtSnowball';
 import { EmergencyFund } from './components/EmergencyFund';
 import { Header } from './components/Header';
 import { IncomeLogPanel } from './components/IncomeLogPanel';
@@ -22,7 +20,6 @@ import { MonthCashflowOpeningModal } from './components/MonthCashflowOpeningModa
 import { MonthFocusBar } from './components/MonthFocusBar';
 import { SpotlightTour } from './components/onboarding/SpotlightTour';
 import { MonthlyReport } from './components/MonthlyReport';
-import { PaymentsLifetimePanel } from './components/PaymentsLifetimePanel';
 import { PastMonthInsights } from './components/PastMonthInsights';
 import { SurpriseExpenses } from './components/SurpriseExpenses';
 import { ConfirmDialog } from './components/ui/ConfirmDialog';
@@ -50,12 +47,19 @@ import {
   subscribeHouseholdSessionChanged,
   writeHouseholdSession,
 } from './utils/householdSession';
-import {
-  apiBaseFromNotifyUrl,
-  parseVerifyTokenFromHash,
-  postNotifyRelayPublicJson,
-  readNotifyRelayConfig,
-} from './utils/notifyRelayConfig';
+import { apiBaseFromNotifyUrl, readNotifyRelayConfig } from './utils/notifyRelayConfig';
+
+const PaymentsLifetimePanel = lazy(() =>
+  import('./components/PaymentsLifetimePanel').then((m) => ({ default: m.PaymentsLifetimePanel })),
+);
+const DebtSnowball = lazy(() => import('./components/DebtSnowball').then((m) => ({ default: m.DebtSnowball })));
+const AllocationPanel = lazy(() =>
+  import('./components/AllocationPanel').then((m) => ({ default: m.AllocationPanel })),
+);
+
+function ChartPanelSkeleton() {
+  return <div className="h-48 animate-pulse rounded-xl bg-slate-100/90 dark:bg-moss-bg/60" aria-hidden />;
+}
 
 function applyThemeClass(theme: 'light' | 'dark' | 'system') {
   const root = document.documentElement;
@@ -146,41 +150,6 @@ export function AuthenticatedFinanceApp() {
   }, [state]);
 
   useEffect(() => {
-    const vt = parseVerifyTokenFromHash();
-    if (!vt) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const j = (await postNotifyRelayPublicJson('/v1/household/auth/verify-email', { token: vt })) as {
-          token?: string;
-          member?: { email?: string; role?: string; householdId?: string };
-        };
-        if (cancelled) return;
-        if (j.token && j.member?.householdId) {
-          writeHouseholdSession({
-            token: j.token,
-            householdId: j.member.householdId,
-            email: j.member.email,
-            role: j.member.role,
-          });
-        }
-        setEmailVerified(true);
-        setMagicLinkBanner('Email verified — you can continue in the app.');
-        try {
-          history.replaceState(null, '', window.location.pathname + window.location.search);
-        } catch {
-          /* ignore */
-        }
-      } catch (e) {
-        if (!cancelled) setMagicLinkBanner(String((e as Error)?.message ?? e));
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
     if (!householdSignedIn) {
       setEmailVerified(true);
       return;
@@ -193,6 +162,10 @@ export function AuthenticatedFinanceApp() {
     const sess = readHouseholdSession();
     if (!sess?.token) {
       setEmailVerified(false);
+      return;
+    }
+    if (sess.emailVerified === true) {
+      setEmailVerified(true);
       return;
     }
     let cancelled = false;
@@ -341,6 +314,7 @@ export function AuthenticatedFinanceApp() {
         setIncome={setIncome}
         setEssentials={setEssentials}
         setDebts={setDebts}
+        onPatch={update}
         onComplete={() => setSetupTick((n) => n + 1)}
         theme={state.theme}
         onTheme={setTheme}
@@ -413,7 +387,9 @@ export function AuthenticatedFinanceApp() {
                 <div className="order-3 flex min-w-0 flex-col gap-8 lg:order-none lg:ml-[calc((100%-4rem)*3/12+2rem)] lg:mr-[calc((100%-4rem)*3/12+2rem)] lg:w-[calc((100%-4rem)*6/12)]">
                   <div data-tour="tour-dashboard-snapshot" className="min-w-0 space-y-8">
                     <DashboardOverview state={state} />
-                    <PaymentsLifetimePanel state={state} />
+                    <Suspense fallback={<ChartPanelSkeleton />}>
+                      <PaymentsLifetimePanel state={state} />
+                    </Suspense>
                   </div>
                   <details
                     id="dashboard-more-month"
@@ -425,7 +401,9 @@ export function AuthenticatedFinanceApp() {
                       </span>
                     </summary>
                     <div className="space-y-8 border-t border-slate-200/70 px-3 pb-4 pt-4 dark:border-moss-border">
-                      <DebtSnowball state={state} compact />
+                      <Suspense fallback={<ChartPanelSkeleton />}>
+                        <DebtSnowball state={state} compact />
+                      </Suspense>
                       <BudgetSurplusPanel
                         state={state}
                         onSweepToEmergency={applyBudgetSurplusToEmergency}
@@ -527,7 +505,9 @@ export function AuthenticatedFinanceApp() {
                 ),
                 plan: (
                   <div id="finance-plan" data-tour="tour-plan" className="space-y-10">
-                    <AllocationPanel state={state} onPatch={update} />
+                    <Suspense fallback={<ChartPanelSkeleton />}>
+                      <AllocationPanel state={state} onPatch={update} />
+                    </Suspense>
                     <div>
                       <h3 className="mb-2 font-display text-xl font-bold text-sage-900 dark:text-moss-fg">
                         Fun money & emergency savings

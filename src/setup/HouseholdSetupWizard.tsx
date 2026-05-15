@@ -1,5 +1,13 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
-import type { DebtAccount, FinanceState, IncomeConfig, ThemePreference } from '../types/finance';
+import { useCallback, useState } from 'react';
+import type {
+  DebtAccount,
+  EssentialExpense,
+  FinanceState,
+  IncomeConfig,
+  OtherPlannedIncomeEntry,
+  SavingsGoal,
+  ThemePreference,
+} from '../types/finance';
 import { HOUSEHOLD_MODE_KEY, type HouseholdMode } from '../utils/householdMode';
 import type { NotifyRelayConfig } from '../utils/notifyRelayConfig';
 import {
@@ -16,35 +24,88 @@ import { FieldHelp } from '../components/ui/FieldHelp';
 import { SegmentedButtonGroup } from '../components/ui/SegmentedButtonGroup';
 import { SegmentedChoice } from '../components/ui/SegmentedChoice';
 import { THEME_SEGMENT_OPTIONS } from '../components/ui/themeSegmentedOptions';
+import { NumericAmountInput } from '../components/ui/NumericInputs';
 import { markHouseholdSetupFinished, readHouseholdMode } from './setupCompletion';
 import {
+  sanitizeOtherPlannedIncome,
+  sanitizeSavingsGoals,
+  sanitizeSetupDebts,
+  sanitizeSetupEssentials,
   setupAlertsStepSchema,
   setupDebtsStepSchema,
   setupEssentialsStepSchema,
+  setupFunMoneyStepSchema,
   setupIncomeStepSchema,
+  setupSavingsStepSchema,
   zodIssuesToRecord,
 } from './setupSchema';
+import { SetupEssentialRows } from './SetupEssentialRows';
+import { SetupDebtRows } from './SetupDebtRows';
+import { SetupOtherIncomeRows } from './SetupOtherIncomeRows';
+import { SetupSavingsGoalsRows } from './SetupSavingsGoalsRows';
+import { createStarterDebt, createStarterEssential } from './setupIds';
 import { zLayers } from '../ui/zLayers';
-
-const BASELINE_ESSENTIAL_ID = 'wizard-household-baseline-v1';
 
 export type HouseholdSetupWizardProps = {
   state: FinanceState;
   setIncome: (income: IncomeConfig) => void;
   setEssentials: (essentials: FinanceState['essentials']) => void;
   setDebts: (debts: FinanceState['debts']) => void;
+  onPatch: (patch: Partial<FinanceState>) => void;
   onComplete: () => void;
   theme: ThemePreference;
   onTheme: (t: ThemePreference) => void;
 };
 
-const STEPS = ['Income & household', 'Essentials', 'Debts', 'Alerts'] as const;
+const STEPS = [
+  'Household & income',
+  'Bills & recurring costs',
+  'Debts & loans',
+  'Savings & backup',
+  'Fun money',
+  'Email heads-up',
+  "You're set",
+] as const;
+
+function initEssentials(state: FinanceState): EssentialExpense[] {
+  const rows = state.essentials.filter((e) => e.amount > 0 || e.name.trim());
+  return rows.length > 0 ? rows : [createStarterEssential()];
+}
+
+function initDebts(state: FinanceState): DebtAccount[] {
+  return state.debts.length > 0 ? state.debts : [createStarterDebt()];
+}
+
+function initOtherIncome(income: IncomeConfig): OtherPlannedIncomeEntry[] {
+  if (income.otherPlannedIncome?.length) return income.otherPlannedIncome;
+  const legacy = Number(income.otherPlannedMonthly ?? 0);
+  if (legacy > 0) {
+    return [{ id: 'legacy-other-planned', label: 'Other income', amount: legacy }];
+  }
+  return [];
+}
+
+function initSavingsGoals(state: FinanceState): SavingsGoal[] {
+  if (state.savingsGoals?.length) return state.savingsGoals;
+  if (state.threeMonthFundTarget > 0) {
+    return [
+      {
+        id: 'legacy-three-month',
+        name: '3-month cushion',
+        targetAmount: state.threeMonthFundTarget,
+        balance: Math.min(state.emergencyFund, state.threeMonthFundTarget),
+      },
+    ];
+  }
+  return [];
+}
 
 export function HouseholdSetupWizard({
   state,
   setIncome,
   setEssentials,
   setDebts,
+  onPatch,
   onComplete,
   theme,
   onTheme,
@@ -53,16 +114,21 @@ export function HouseholdSetupWizard({
   const [mode, setMode] = useState<HouseholdMode>(() => readHouseholdMode());
   const [husbandMonthly, setHusbandMonthly] = useState(() => String(state.income.husbandMonthly || ''));
   const [wifeMonthly, setWifeMonthly] = useState(() => String(state.income.wifeMonthly || ''));
-  const [monthlyBaseline, setMonthlyBaseline] = useState(() => {
-    const baseline = state.essentials.find((e) => e.id === BASELINE_ESSENTIAL_ID);
-    return String(baseline?.amount ?? '');
-  });
-  const [noDebts, setNoDebts] = useState(false);
-  const noDebtsClaimRef = useRef(false);
-  const [debtName, setDebtName] = useState('');
-  const [debtBalance, setDebtBalance] = useState('');
-  const [debtMin, setDebtMin] = useState('');
-  const [debtDue, setDebtDue] = useState('15');
+  const [otherIncomeRows, setOtherIncomeRows] = useState<OtherPlannedIncomeEntry[]>(() =>
+    initOtherIncome(state.income),
+  );
+  const [essentialRows, setEssentialRows] = useState<EssentialExpense[]>(() => initEssentials(state));
+  const [debtRows, setDebtRows] = useState<DebtAccount[]>(() => initDebts(state));
+  const [plannedSavingsMonthly, setPlannedSavingsMonthly] = useState(() =>
+    String(state.plannedSavingsMonthly || ''),
+  );
+  const [emergencyFund, setEmergencyFund] = useState(() => String(state.emergencyFund || ''));
+  const [savingsGoalRows, setSavingsGoalRows] = useState<SavingsGoal[]>(() => initSavingsGoals(state));
+  const [plannedPersonalMonthly, setPlannedPersonalMonthly] = useState(() =>
+    String(state.plannedPersonalMonthly || ''),
+  );
+  const [husbandBudget, setHusbandBudget] = useState(() => String(state.wallets.husbandBudget || ''));
+  const [wifeBudget, setWifeBudget] = useState(() => String(state.wallets.wifeBudget || ''));
   const cfg0 = useMemo(() => readNotifyRelayConfig(), []);
   const [alertsEnabled, setAlertsEnabled] = useState(cfg0.enabled);
   const [householdId] = useState(() => {
@@ -90,77 +156,118 @@ export function HouseholdSetupWizard({
     });
   };
 
+  const walletGapWarning =
+    mode === 'couple' &&
+    Number(plannedPersonalMonthly || 0) > 0 &&
+    Number(husbandBudget || 0) + Number(wifeBudget || 0) >
+      Number(plannedPersonalMonthly || 0) + 5;
+
+  const finishSetup = () => {
+    markHouseholdSetupFinished();
+    onComplete();
+  };
+
   const goNext = () => {
     setErrors({});
     if (step === 0) {
       const parsed = setupIncomeStepSchema.safeParse({
         mode,
-        husbandMonthly: mode === 'single' ? Number(husbandMonthly || 0) : Number(husbandMonthly || 0),
+        husbandMonthly: Number(husbandMonthly || 0),
         wifeMonthly: mode === 'single' ? 0 : Number(wifeMonthly || 0),
+        otherPlannedIncome: otherIncomeRows,
       });
       if (!parsed.success) {
         setErrors(zodIssuesToRecord(parsed.error.issues));
         return;
       }
       persistMode(parsed.data.mode);
+      const otherPlannedIncome = sanitizeOtherPlannedIncome(parsed.data.otherPlannedIncome);
+      setOtherIncomeRows(otherPlannedIncome);
       setIncome({
         ...state.income,
         husbandMonthly: parsed.data.husbandMonthly,
         wifeMonthly: parsed.data.wifeMonthly,
+        otherPlannedIncome,
+        otherPlannedMonthly: 0,
       });
       setStep(1);
       return;
     }
     if (step === 1) {
-      const parsed = setupEssentialsStepSchema.safeParse({ monthlyBaseline });
+      const parsed = setupEssentialsStepSchema.safeParse({ rows: essentialRows });
       if (!parsed.success) {
         setErrors(zodIssuesToRecord(parsed.error.issues));
         return;
       }
-      const amt = parsed.data.monthlyBaseline;
-      const next = state.essentials.filter((e) => e.id !== BASELINE_ESSENTIAL_ID);
-      next.push({
-        id: BASELINE_ESSENTIAL_ID,
-        name: 'Monthly essentials (baseline)',
-        amount: amt,
-        cadence: 'month',
-        dueDay: 1,
-      });
+      const next = sanitizeSetupEssentials(essentialRows);
       setEssentials(next);
+      setEssentialRows(next);
       setStep(2);
       return;
     }
     if (step === 2) {
-      const parsed = setupDebtsStepSchema.safeParse({
-        noDebts,
-        name: debtName,
-        balance: debtBalance,
-        monthlyPayment: debtMin,
-        dueDay: debtDue,
+      const parsed = setupDebtsStepSchema.safeParse({ rows: debtRows });
+      if (!parsed.success) {
+        setErrors(zodIssuesToRecord(parsed.error.issues));
+        return;
+      }
+      const next = sanitizeSetupDebts(debtRows);
+      setDebts(next);
+      setDebtRows(next.length > 0 ? next : [createStarterDebt()]);
+      setStep(3);
+      return;
+    }
+    if (step === 3) {
+      const parsed = setupSavingsStepSchema.safeParse({
+        plannedSavingsMonthly: plannedSavingsMonthly || 0,
+        emergencyFund: emergencyFund || 0,
+        goals: savingsGoalRows,
       });
       if (!parsed.success) {
         setErrors(zodIssuesToRecord(parsed.error.issues));
         return;
       }
-      noDebtsClaimRef.current = parsed.data.noDebts;
-      if (parsed.data.noDebts) {
-        setDebts([]);
-      } else {
-        const d: DebtAccount = {
-          id: crypto.randomUUID(),
-          name: parsed.data.name,
-          balance: parsed.data.balance,
-          monthlyPayment: parsed.data.monthlyPayment,
-          dueDay: parsed.data.dueDay,
-          autoDeduction: false,
-          kind: 'loan',
-        };
-        setDebts([d]);
-      }
-      setStep(3);
+      const goals = sanitizeSavingsGoals(savingsGoalRows);
+      setSavingsGoalRows(goals);
+      const legacyThreeMonth =
+        goals.length > 0 ? Math.max(...goals.map((g) => g.targetAmount)) : 0;
+      onPatch({
+        plannedSavingsMonthly: parsed.data.plannedSavingsMonthly,
+        emergencyFund: parsed.data.emergencyFund,
+        savingsGoals: goals,
+        threeMonthFundTarget: legacyThreeMonth,
+      });
+      setStep(4);
       return;
     }
-    if (step === 3) {
+    if (step === 4) {
+      const personal = Number(plannedPersonalMonthly || 0);
+      const hBudget = mode === 'single' ? personal : Number(husbandBudget || 0);
+      const wBudget = mode === 'single' ? 0 : Number(wifeBudget || 0);
+      const parsed = setupFunMoneyStepSchema.safeParse({
+        mode,
+        plannedPersonalMonthly: personal,
+        husbandBudget: hBudget,
+        wifeBudget: wBudget,
+      });
+      if (!parsed.success) {
+        setErrors(zodIssuesToRecord(parsed.error.issues));
+        return;
+      }
+      onPatch({
+        plannedPersonalMonthly: parsed.data.plannedPersonalMonthly,
+        wallets: {
+          ...state.wallets,
+          husbandBudget: parsed.data.husbandBudget,
+          wifeBudget: parsed.data.wifeBudget,
+          husbandSpent: 0,
+          wifeSpent: 0,
+        },
+      });
+      setStep(5);
+      return;
+    }
+    if (step === 5) {
       const parsed = setupAlertsStepSchema.safeParse({
         enabled: alertsEnabled,
         householdId,
@@ -180,8 +287,8 @@ export function HouseholdSetupWizard({
         householdId: parsed.data.householdId.trim(),
       };
       writeNotifyRelayConfig(nextCfg);
-      markHouseholdSetupFinished(noDebtsClaimRef.current);
-      onComplete();
+      setStep(6);
+      return;
     }
   };
 
@@ -191,6 +298,7 @@ export function HouseholdSetupWizard({
   };
 
   const z = zLayers.setupWizard;
+  const isFinish = step === STEPS.length - 1;
 
   return (
     <div
@@ -201,7 +309,7 @@ export function HouseholdSetupWizard({
       aria-labelledby="household-setup-title"
       data-tour="household-setup"
     >
-      <div className="mx-auto flex w-full max-w-lg flex-1 flex-col px-4 py-8 sm:px-6">
+      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-8 sm:max-w-4xl sm:px-6">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-teal-800 dark:text-teal-300/90">
@@ -255,7 +363,7 @@ export function HouseholdSetupWizard({
                 <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
                   Planned monthly take-home ($)
                   <FieldHelp label="Income">
-                    After tax and deductions — one number is enough to start. You can fine-tune later in Household.
+                    After tax and deductions — one number is enough to start.
                   </FieldHelp>
                   <input
                     className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
@@ -273,8 +381,8 @@ export function HouseholdSetupWizard({
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
-                    Earner A monthly ($)
-                    <FieldHelp label="Earner A">Planned monthly take-home after tax.</FieldHelp>
+                    Husband monthly ($)
+                    <FieldHelp label="Husband">Planned monthly take-home after tax.</FieldHelp>
                     <input
                       className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
                       inputMode="decimal"
@@ -289,8 +397,8 @@ export function HouseholdSetupWizard({
                     <FieldError id={fieldErrorId('husbandMonthly')} message={errors.husbandMonthly} />
                   </label>
                   <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
-                    Earner B monthly ($)
-                    <FieldHelp label="Earner B">Planned monthly take-home after tax.</FieldHelp>
+                    Wife monthly ($)
+                    <FieldHelp label="Wife">Planned monthly take-home after tax.</FieldHelp>
                     <input
                       className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
                       inputMode="decimal"
@@ -303,30 +411,16 @@ export function HouseholdSetupWizard({
                   </label>
                 </div>
               )}
+              <SetupOtherIncomeRows rows={otherIncomeRows} onChange={setOtherIncomeRows} />
+              <p className="rounded-xl border border-slate-200/80 bg-slate-50/80 px-3 py-2 text-xs text-slate-700 dark:border-moss-border dark:bg-moss-surface/80 dark:text-moss-subtle">
+                Bonuses, gifts, and one-off cash can be added later on the Dashboard — only add rows here if the money
+                is steady every month. Each row counts toward planned income on your tracker.
+              </p>
             </div>
           ) : null}
 
           {step === 1 ? (
-            <div className="space-y-3">
-              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
-                Monthly essentials baseline ($)
-                <FieldHelp label="Essentials">
-                  Rough rent + utilities + food floor for the month. You will map real bills later in Essentials.
-                </FieldHelp>
-                <input
-                  className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
-                  inputMode="decimal"
-                  value={monthlyBaseline}
-                  onChange={(e) => {
-                    setMonthlyBaseline(e.target.value);
-                    clearErr('monthlyBaseline');
-                  }}
-                  aria-invalid={Boolean(errors.monthlyBaseline)}
-                  aria-describedby={errors.monthlyBaseline ? fieldErrorId('monthlyBaseline') : undefined}
-                />
-                <FieldError id={fieldErrorId('monthlyBaseline')} message={errors.monthlyBaseline} />
-              </label>
-            </div>
+            <SetupEssentialRows rows={essentialRows} onChange={setEssentialRows} errors={errors} />
           ) : null}
 
           {step === 2 ? (
@@ -346,62 +440,118 @@ export function HouseholdSetupWizard({
                   onCheckedChange={setNoDebts}
                 />
               </div>
-              {!noDebts ? (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted sm:col-span-2">
-                    Account name
-                    <input
-                      className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
-                      value={debtName}
-                      onChange={(e) => {
-                        setDebtName(e.target.value);
-                        clearErr('name');
-                      }}
-                    />
-                    <FieldError id={fieldErrorId('name')} message={errors.name} />
-                  </label>
-                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
-                    Balance owed ($)
-                    <input
-                      className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
-                      inputMode="decimal"
-                      value={debtBalance}
-                      onChange={(e) => {
-                        setDebtBalance(e.target.value);
-                        clearErr('balance');
-                      }}
-                    />
-                    <FieldError id={fieldErrorId('balance')} message={errors.balance} />
-                  </label>
-                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
-                    Min payment ($)
-                    <input
-                      className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
-                      inputMode="decimal"
-                      value={debtMin}
-                      onChange={(e) => {
-                        setDebtMin(e.target.value);
-                        clearErr('monthlyPayment');
-                      }}
-                    />
-                    <FieldError id={fieldErrorId('monthlyPayment')} message={errors.monthlyPayment} />
-                  </label>
-                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted sm:col-span-2">
-                    Due day of month (1–31)
-                    <input
-                      className="mt-1 w-full max-w-[8rem] rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
-                      inputMode="numeric"
-                      value={debtDue}
-                      onChange={(e) => setDebtDue(e.target.value)}
-                    />
-                    <FieldError id={fieldErrorId('dueDay')} message={errors.dueDay} />
-                  </label>
-                </div>
-              ) : null}
+              {!noDebts ? <SetupDebtRows rows={debtRows} onChange={setDebtRows} errors={errors} /> : null}
             </div>
           ) : null}
 
           {step === 3 ? (
+            <div className="space-y-4">
+              <p className="text-xs leading-relaxed text-slate-600 dark:text-moss-muted">
+                Planned savings is how much you intend to set aside each month. Emergency balance is what is already in
+                your saver today.
+              </p>
+              <div className="rounded-xl border border-dashed border-slate-300/80 bg-slate-50/80 px-3 py-2 text-xs text-slate-700 dark:border-moss-border dark:bg-moss-bg/50 dark:text-moss-subtle">
+                <p className="font-semibold text-slate-900 dark:text-moss-fg">Other savings goals?</p>
+                <p className="mt-1">
+                  Holiday fund, school fees, etc. belong as bill rows on the previous step. This step is for monthly
+                  savings intent and emergency cash on hand.
+                </p>
+              </div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
+                Planned savings (this month) ($)
+                <NumericAmountInput
+                  min={0}
+                  className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
+                  value={Number(plannedSavingsMonthly || 0)}
+                  onValueChange={(n) => setPlannedSavingsMonthly(String(n))}
+                />
+              </label>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
+                Balance in emergency / joint savings ($)
+                <NumericAmountInput
+                  min={0}
+                  className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
+                  value={Number(emergencyFund || 0)}
+                  onValueChange={(n) => setEmergencyFund(String(n))}
+                />
+              </label>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
+                3-month cushion target ($)
+                <FieldHelp label="3-month target">
+                  Suggested from your bills: {formatMoney(suggestedThreeMonth)} (essentials + debt payments × 3).
+                </FieldHelp>
+                <NumericAmountInput
+                  min={0}
+                  className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
+                  value={Number(threeMonthFundTarget || suggestedThreeMonth || 0)}
+                  onValueChange={(n) => setThreeMonthFundTarget(String(n))}
+                />
+              </label>
+            </div>
+          ) : null}
+
+          {step === 4 ? (
+            <div className="space-y-4">
+              <p className="text-xs leading-relaxed text-slate-600 dark:text-moss-muted">
+                Fun money is your discretionary envelope — split it between partners in couple mode, or use one amount
+                when you are on your own.
+              </p>
+              {mode === 'single' ? (
+                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
+                  Monthly fun money ($)
+                  <NumericAmountInput
+                    min={0}
+                    className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
+                    value={Number(plannedPersonalMonthly || husbandBudget || 0)}
+                    onValueChange={(n) => {
+                      setPlannedPersonalMonthly(String(n));
+                      setHusbandBudget(String(n));
+                      setWifeBudget('0');
+                    }}
+                  />
+                </label>
+              ) : (
+                <>
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
+                    Planned personal / fun envelope ($)
+                    <NumericAmountInput
+                      min={0}
+                      className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
+                      value={Number(plannedPersonalMonthly || 0)}
+                      onValueChange={(n) => setPlannedPersonalMonthly(String(n))}
+                    />
+                  </label>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
+                      Husband wallet ($)
+                      <NumericAmountInput
+                        min={0}
+                        className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
+                        value={Number(husbandBudget || 0)}
+                        onValueChange={(n) => setHusbandBudget(String(n))}
+                      />
+                    </label>
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
+                      Wife wallet ($)
+                      <NumericAmountInput
+                        min={0}
+                        className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
+                        value={Number(wifeBudget || 0)}
+                        onValueChange={(n) => setWifeBudget(String(n))}
+                      />
+                    </label>
+                  </div>
+                  {walletGapWarning ? (
+                    <p className="text-xs font-medium text-amber-900 dark:text-amber-100/90">
+                      Wallets total more than the planned personal envelope — you can adjust either in the app later.
+                    </p>
+                  ) : null}
+                </>
+              )}
+            </div>
+          ) : null}
+
+          {step === 5 ? (
             <div className="space-y-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                 <p className="text-sm font-semibold text-slate-800 dark:text-moss-fg">
@@ -419,7 +569,8 @@ export function HouseholdSetupWizard({
               {alertsEnabled ? (
                 <div className="grid gap-3">
                   <p className="rounded-xl border border-slate-200/80 bg-slate-50/80 px-3 py-2 text-xs text-slate-700 dark:border-moss-border dark:bg-moss-surface/80 dark:text-moss-subtle">
-                    Summaries use this site’s API at <code className="font-mono">{resolveNotifyRelayUrl()}</code> (same server as the app).
+                    Summaries use this site’s API at <code className="font-mono">{resolveNotifyRelayUrl()}</code> (same
+                    server as the app).
                   </p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
@@ -455,6 +606,31 @@ export function HouseholdSetupWizard({
             </div>
           ) : null}
 
+          {step === 6 ? (
+            <div className="space-y-4">
+              <p className="text-sm leading-relaxed text-slate-700 dark:text-moss-subtle">
+                You are ready to use the dashboard. Everything you entered here can be changed anytime:
+              </p>
+              <ul className="list-inside list-disc space-y-2 text-sm text-slate-700 dark:text-moss-subtle">
+                <li>
+                  <strong className="text-slate-900 dark:text-moss-fg">Workspace → Your numbers</strong> — income,
+                  bills, debts, and bill timing
+                </li>
+                <li>
+                  <strong className="text-slate-900 dark:text-moss-fg">Workspace → Plan & bills</strong> — monthly
+                  split, fun money wallets, and emergency savings
+                </li>
+                <li>
+                  <strong className="text-slate-900 dark:text-moss-fg">Dashboard</strong> — check off bills, log extra
+                  cash, and track the month
+                </li>
+              </ul>
+              <p className="text-sm text-slate-600 dark:text-moss-muted">
+                This setup is just to get you started with real numbers — refine as you go.
+              </p>
+            </div>
+          ) : null}
+
           <div className="mt-auto flex flex-wrap justify-between gap-3 pt-8">
             <button
               type="button"
@@ -464,9 +640,15 @@ export function HouseholdSetupWizard({
             >
               Back
             </button>
-            <button type="button" className="btn-primary btn-primary-sm font-bold" onClick={goNext}>
-              {step === STEPS.length - 1 ? 'Enter dashboard' : 'Next'}
-            </button>
+            {isFinish ? (
+              <button type="button" className="btn-primary btn-primary-sm font-bold" onClick={finishSetup}>
+                Enter dashboard
+              </button>
+            ) : (
+              <button type="button" className="btn-primary btn-primary-sm font-bold" onClick={goNext}>
+                Next
+              </button>
+            )}
           </div>
         </div>
       </div>

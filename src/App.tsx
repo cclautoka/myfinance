@@ -12,6 +12,13 @@ import {
 } from './utils/notifyRelayConfig';
 import { readHouseholdSession, subscribeHouseholdSessionChanged, writeHouseholdSession } from './utils/householdSession';
 import { clearLocalFinanceCache } from './utils/clearLocalFinanceCache';
+import { SetupWizardDevPage } from './dev/SetupWizardDevPage';
+
+function isSetupWizardDevPreview(): boolean {
+  if (!import.meta.env.DEV) return false;
+  const path = window.location.pathname.replace(/\/$/, '') || '/';
+  return path === '/dev/setup-wizard';
+}
 
 export default function App() {
   const householdSignedIn = useSyncExternalStore(
@@ -133,7 +140,13 @@ export default function App() {
   return (
     <>
       <ToastProvider />
-      {householdSignedIn ? <SignedInWorkbook /> : <PublicLandingShell />}
+      {isSetupWizardDevPreview() ? (
+        <SetupWizardDevPage />
+      ) : householdSignedIn ? (
+        <SignedInWorkbook />
+      ) : (
+        <PublicLandingShell />
+      )}
     </>
   );
 }

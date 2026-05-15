@@ -32,6 +32,7 @@ import {
   getMemberById,
   insertInvite,
   getActiveInviteByTokenHash,
+  getInviteByTokenHash,
   getLatestUnusedInviteForPartner,
   markInviteUsed,
   ensureHouseholdRow,
@@ -43,6 +44,8 @@ import {
   updateMemberPassword,
   insertPairing,
   getLatestUnusedPairingForHousehold,
+  getLatestPairingCodeForHousehold,
+  revokeUnusedPairingsForHousehold,
   getActivePairingByHouseholdAndCodeHash,
   markPairingUsed,
   insertBearerKey,
@@ -974,17 +977,39 @@ fastify.post('/v1/household/auth/invite-preview', async (request, reply) => {
   const token = typeof body.token === 'string' ? body.token.trim() : '';
   if (!token) return reply.code(400).send({ error: 'token required' });
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-  const inv = await getActiveInviteByTokenHash(tokenHash);
-  if (!inv) return reply.send({ ok: true, valid: false, reason: 'invalid_or_used' });
+  let inv = await getActiveInviteByTokenHash(tokenHash);
+  let mode = 'join';
+  if (!inv) {
+    const used = await getInviteByTokenHash(tokenHash);
+    if (!used?.used_at) return reply.send({ ok: true, valid: false, reason: 'invalid_or_used' });
+    inv = used;
+    mode = 'signin';
+  }
   const partnerEmail = normalizeEmail(inv.partner_email);
   let member = null;
   if (inv.partner_member_id) member = await getMemberById(inv.partner_member_id);
   else if (partnerEmail) member = await findMemberByHouseholdAndEmail(inv.household_id, partnerEmail);
+  if (mode === 'signin') {
+    if (!member || member.role !== 'partner') {
+      return reply.send({ ok: true, valid: false, reason: 'invalid_or_used' });
+    }
+    const emailVerified = Boolean(member.email_verified_at) || !emailVerificationRequired();
+    return reply.send({
+      ok: true,
+      valid: true,
+      mode: 'signin',
+      householdId: inv.household_id,
+      partnerEmail: member.email,
+      emailVerified,
+      needsEmailVerification: emailVerificationRequired() && !emailVerified,
+    });
+  }
   const emailVerified = Boolean(member?.email_verified_at) || !emailVerificationRequired();
   const needsEmailVerification = emailVerificationRequired() && !emailVerified;
   return reply.send({
     ok: true,
     valid: true,
+    mode: 'join',
     householdId: inv.household_id,
     partnerEmail: partnerEmail || member?.email || '',
     emailVerified,
@@ -1047,7 +1072,6 @@ fastify.post('/v1/household/auth/accept-invite', async (request, reply) => {
   }
 
   try {
-    await markPairingUsed(pr.id);
     await markInviteUsed(inv.id);
   } catch (e) {
     request.log.error(e);
@@ -1055,9 +1079,66 @@ fastify.post('/v1/household/auth/accept-invite', async (request, reply) => {
   }
   await ensureHouseholdRow(inv.household_id);
   const sessionTok = issueSessionToken(row);
+  const notifyEmails = await resolveNotifyEmailsForHousehold(inv.household_id);
   return reply.send({
     ok: true,
     token: sessionTok,
+    notifyEmails,
+    member: {
+      id: row.id,
+      email: row.email,
+      role: row.role,
+      householdId: row.household_id,
+      emailVerified: Boolean(row.email_verified_at),
+    },
+  });
+});
+
+fastify.post('/v1/household/auth/partner-sign-in', async (request, reply) => {
+  await initDbIfNeeded(request.log);
+  if (!getDbEnabled()) return reply.code(503).send({ error: 'DATABASE_URL is not set.' });
+  if (sessionSecret().length < 16) {
+    return reply.code(503).send({ error: 'SESSION_SECRET must be set (min 16 chars) for partner sessions.' });
+  }
+  const body = request.body ?? {};
+  let householdId = typeof body.householdId === 'string' ? body.householdId.trim().slice(0, 64) : '';
+  const email = normalizeEmail(body.email);
+  const digits = typeof body.code === 'string' ? body.code.replace(/\D/g, '') : '';
+  if (!email || digits.length !== 6) {
+    return reply.code(400).send({ error: 'email and 6-digit pairing code required.' });
+  }
+  let row;
+  if (householdId) {
+    row = await findMemberByHouseholdAndEmail(householdId, email);
+  } else {
+    const rows = (await findMembersByEmail(email)).filter((m) => m.role === 'partner');
+    if (rows.length > 1) {
+      return reply.code(400).send({
+        error: 'Multiple partner accounts found for this email. Enter your household id from your partner.',
+      });
+    }
+    row = rows[0] ?? null;
+    if (row) householdId = row.household_id;
+  }
+  if (!row || row.role !== 'partner') {
+    return reply.code(401).send({ error: 'No partner account found for this email.' });
+  }
+  if (emailVerificationRequired() && !row.email_verified_at) {
+    return reply.code(403).send({
+      error: 'Verify your email first, then sign in with your pairing code.',
+      code: 'EMAIL_NOT_VERIFIED',
+    });
+  }
+  const pairing = await getLatestPairingCodeForHousehold(householdId);
+  if (!pairing?.code_plain || pairing.code_plain !== digits) {
+    return reply.code(401).send({ error: 'Invalid pairing code. Ask your partner for the current code.' });
+  }
+  const sessionTok = issueSessionToken(row);
+  const notifyEmails = await resolveNotifyEmailsForHousehold(householdId);
+  return reply.send({
+    ok: true,
+    token: sessionTok,
+    notifyEmails,
     member: {
       id: row.id,
       email: row.email,
@@ -1331,14 +1412,19 @@ fastify.post('/v1/household/pairing/create', async (request, reply) => {
   if (!getDbEnabled()) return reply.code(503).send({ error: 'DATABASE_URL is not set.' });
   const owner = await requirePrimaryOwnerMember(request, reply, householdId, body);
   if (!owner) return;
-  const existing = await getLatestUnusedPairingForHousehold(householdId);
-  if (existing?.code_plain) {
-    return reply.send({
-      ok: true,
-      code: existing.code_plain,
-      persistent: true,
-      message: 'Reusing your household pairing code (does not expire).',
-    });
+  const regenerate = body.regenerate === true;
+  if (regenerate) {
+    await revokeUnusedPairingsForHousehold(householdId);
+  } else {
+    const existing = await getLatestUnusedPairingForHousehold(householdId);
+    if (existing?.code_plain) {
+      return reply.send({
+        ok: true,
+        code: existing.code_plain,
+        persistent: true,
+        message: 'Reusing your household pairing code (does not expire).',
+      });
+    }
   }
   const digits = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
   const codeHash = hashUtf8Sha256Hex(`pair:${householdId}:${digits}`);

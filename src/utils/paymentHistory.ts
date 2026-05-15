@@ -22,6 +22,18 @@ export type LifetimePaidBillRow = {
   lastPaidDate: string | null;
 };
 
+export type LifeSpendKind = 'bill' | 'surprise';
+
+export type LifetimeLifeSpendRow = {
+  id: string;
+  name: string;
+  kind: LifeSpendKind;
+  total: number;
+  paidOccurrences: number;
+  lastPaidDate: string | null;
+  category?: 'essential' | 'debt' | 'other';
+};
+
 /** Calendar months from first tracked month through `ref`’s calendar month (inclusive). */
 export function trackingMonthKeysThrough(ref = new Date()): string[] {
   const end = dateToMonthKey(ref);
@@ -86,4 +98,42 @@ export function lifetimePaidByBill(state: FinanceState, ref = new Date()): Lifet
       lastPaidDate: v.lastDueMs > 0 ? new Date(v.lastDueMs).toISOString().slice(0, 10) : null,
     }))
     .sort((a, b) => b.total - a.total);
+}
+
+function expenseMonthKey(dateIso: string): string | null {
+  const m = /^(\d{4})-(\d{2})/.exec(dateIso.trim());
+  if (!m) return null;
+  return `${m[1]}-${m[2]}`;
+}
+
+/** Unexpected expenses logged since tracking started (one bar per entry). */
+export function lifetimeSurpriseSpend(state: FinanceState): LifetimeLifeSpendRow[] {
+  return state.surpriseExpenses
+    .filter((e) => {
+      const mk = expenseMonthKey(e.date);
+      return mk != null && mk >= HISTORY_TRACKING_STARTED_MONTH_KEY;
+    })
+    .map((e) => ({
+      id: e.id,
+      name: e.label.trim() || 'Unexpected',
+      kind: 'surprise' as const,
+      total: round2(e.amount),
+      paidOccurrences: 1,
+      lastPaidDate: e.date,
+    }))
+    .sort((a, b) => b.total - a.total);
+}
+
+/** Bills marked handled + unexpected expenses for the lifetime chart. */
+export function lifetimeLifeSpendRows(state: FinanceState, ref = new Date()): LifetimeLifeSpendRow[] {
+  const bills: LifetimeLifeSpendRow[] = lifetimePaidByBill(state, ref).map((r) => ({
+    id: r.billId,
+    name: r.name,
+    kind: 'bill' as const,
+    total: r.total,
+    paidOccurrences: r.paidOccurrences,
+    lastPaidDate: r.lastPaidDate,
+    category: r.category,
+  }));
+  return [...bills, ...lifetimeSurpriseSpend(state)].sort((a, b) => b.total - a.total);
 }

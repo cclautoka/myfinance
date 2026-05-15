@@ -1,3 +1,4 @@
+import { HOUSEHOLD_MODE_KEY } from './householdMode';
 import { apiBaseFromNotifyUrl, readNotifyRelayConfig, writeNotifyRelayConfig } from './notifyRelayConfig';
 import { readHouseholdSession } from './householdSession';
 
@@ -13,10 +14,18 @@ export function applyNotifyEmails(payload: NotifyEmailsPayload | undefined | nul
   const we = (payload.wifeEmail ?? '').trim();
   if (!he && !we) return;
   const base = readNotifyRelayConfig();
+  let coupleMode = false;
+  try {
+    coupleMode = localStorage.getItem(HOUSEHOLD_MODE_KEY) === 'couple';
+  } catch {
+    /* ignore */
+  }
+  const bothFilled = Boolean((he || base.husbandEmail) && (we || base.wifeEmail));
   writeNotifyRelayConfig({
     ...base,
     husbandEmail: he || base.husbandEmail,
     wifeEmail: we || base.wifeEmail,
+    ...(coupleMode && bothFilled && !base.enabled ? { enabled: true } : {}),
   });
 }
 

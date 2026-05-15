@@ -10,6 +10,7 @@ import {
   maybeMigrateLegacyHouseholdSetup,
 } from './setupCompletion';
 import { setupIncomeStepSchema, setupEssentialsStepSchema } from './setupSchema';
+import { createStarterEssential } from './setupIds';
 
 function mockLocalStorage() {
   const s: Record<string, string> = {};
@@ -89,17 +90,41 @@ describe('setupCompletion', () => {
 
 describe('setupSchema', () => {
   it('rejects couple income when one earner is zero', () => {
-    const r = setupIncomeStepSchema.safeParse({ mode: 'couple', husbandMonthly: 0, wifeMonthly: 100 });
+    const r = setupIncomeStepSchema.safeParse({
+      mode: 'couple',
+      husbandMonthly: 0,
+      wifeMonthly: 100,
+    });
     expect(r.success).toBe(false);
   });
 
   it('accepts single with one positive earner', () => {
-    const r = setupIncomeStepSchema.safeParse({ mode: 'single', husbandMonthly: 2500, wifeMonthly: 0 });
+    const r = setupIncomeStepSchema.safeParse({
+      mode: 'single',
+      husbandMonthly: 2500,
+      wifeMonthly: 0,
+    });
     expect(r.success).toBe(true);
   });
 
-  it('essentials baseline must be positive', () => {
-    expect(setupEssentialsStepSchema.safeParse({ monthlyBaseline: 0 }).success).toBe(false);
-    expect(setupEssentialsStepSchema.safeParse({ monthlyBaseline: 100 }).success).toBe(true);
+  it('accepts optional other consistent income', () => {
+    const r = setupIncomeStepSchema.safeParse({
+      mode: 'couple',
+      husbandMonthly: 2000,
+      wifeMonthly: 1500,
+      otherPlannedMonthly: 400,
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('essentials require at least one named row with amount', () => {
+    const starter = createStarterEssential();
+    expect(setupEssentialsStepSchema.safeParse({ rows: [{ ...starter, amount: 0 }] }).success).toBe(
+      false,
+    );
+    expect(
+      setupEssentialsStepSchema.safeParse({ rows: [{ ...starter, name: 'Rent', amount: 100 }] })
+        .success,
+    ).toBe(true);
   });
 });

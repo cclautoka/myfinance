@@ -279,6 +279,20 @@ export async function getActiveInviteByTokenHash(tokenHash) {
   return r.rows[0] ?? null;
 }
 
+/** Invite row by token hash (including already-used invites). */
+export async function getInviteByTokenHash(tokenHash) {
+  if (!pool) throw new Error('DB not initialized');
+  const r = await pool.query(
+    `select id, household_id, inviter_member_id, expires_at, used_at, partner_email, partner_member_id
+     from household_invite
+     where token_hash = $1
+     order by created_at desc
+     limit 1`,
+    [tokenHash],
+  );
+  return r.rows[0] ?? null;
+}
+
 export async function markInviteUsed(inviteId) {
   if (!pool) throw new Error('DB not initialized');
   await pool.query(`update household_invite set used_at = now() where id = $1`, [inviteId]);
@@ -378,6 +392,27 @@ export async function getLatestUnusedPairingForHousehold(householdId) {
     [householdId],
   );
   return r.rows[0] ?? null;
+}
+
+/** Current household pairing code (latest row with code_plain — may be used for sign-in). */
+export async function getLatestPairingCodeForHousehold(householdId) {
+  if (!pool) throw new Error('DB not initialized');
+  const r = await pool.query(
+    `select id, household_id, code_plain, code_hash, used_at, expires_at from household_pairing
+     where household_id = $1 and code_plain is not null
+     order by created_at desc limit 1`,
+    [householdId],
+  );
+  return r.rows[0] ?? null;
+}
+
+export async function revokeUnusedPairingsForHousehold(householdId) {
+  if (!pool) throw new Error('DB not initialized');
+  await pool.query(
+    `update household_pairing set used_at = now()
+     where household_id = $1 and used_at is null`,
+    [householdId],
+  );
 }
 
 export async function getActivePairingByHouseholdAndCodeHash(householdId, codeHash) {
