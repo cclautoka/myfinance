@@ -14,6 +14,7 @@ export default defineConfig({
         manualChunks(id) {
           if (id.includes('node_modules/recharts')) return 'recharts';
           if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/')) return 'react-vendor';
+          if (id.includes('/src/landing/ProductDemoPlayer')) return 'landing-demo';
         },
       },
     },

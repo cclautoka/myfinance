@@ -133,6 +133,36 @@ Success response: JSON `{"ok":true}`.
 
 ---
 
-## 9. Updating the app
+## 9. Link previews (Open Graph)
+
+Meta tags and **`/og-image.jpg`** (1200×630) ship in the static build. If Slack, iMessage, or Facebook show title-only previews, platforms are usually serving a **cached** scrape from before the image existed.
+
+After each deploy that changes preview copy or art:
+
+1. [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/) → enter `https://finance.solofi.cloud/` → **Scrape Again**
+2. [LinkedIn Post Inspector](https://www.linkedin.com/post-inspector/)
+3. iMessage / WhatsApp: share once with a cache-bust query, e.g. `https://finance.solofi.cloud/?v=3`
+
+---
+
+## 10. Static caching (performance)
+
+Hashed files under **`/assets/*`** should return:
+
+`Cache-Control: public, max-age=31536000, immutable`
+
+Check after deploy:
+
+```bash
+curl -sI "https://finance.solofi.cloud/assets/<your-index-hash>.js" | grep -i cache-control
+```
+
+If you still see **`max-age=0`**, Dokploy or Traefik may be overriding response headers—disable “no-cache” middleware on static paths for this app.
+
+`index.html` and SPA fallbacks use **`no-cache`** so users pick up new hashes after redeploy. **`/og-image.jpg`** is cached for one day.
+
+---
+
+## 11. Updating the app
 
 Push to **`main`** on GitHub, then in Dokploy **Redeploy** / enable **auto-deploy on push** if your template supports it.

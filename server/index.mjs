@@ -57,6 +57,7 @@ import { computeReminderEmailPayload } from './reminders.mjs';
 import { hashPassword, verifyPassword } from './password.mjs';
 import { signFinanceSession, verifyFinanceSession } from './sessionToken.mjs';
 import { buildEmptyFinanceState } from './emptyFinanceState.mjs';
+import { applyStaticCacheHeaders } from './staticCache.mjs';
 
 const port = Number(process.env.PORT ?? 8787);
 const notifyTo = process.env.NOTIFY_TO ?? '';
@@ -1798,10 +1799,9 @@ if (serveSpa) {
   await fastify.register(fastifyStatic, {
     root: publicDir,
     prefix: '/',
+    cacheControl: false,
     setHeaders(res, filePath) {
-      if (filePath.includes(`${path.sep}assets${path.sep}`)) {
-        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-      }
+      applyStaticCacheHeaders(res, filePath);
     },
   });
   fastify.setNotFoundHandler((request, reply) => {
@@ -1809,7 +1809,8 @@ if (serveSpa) {
     if (url.startsWith('/v1')) {
       return reply.code(404).send({ error: 'Not found' });
     }
-    return reply.sendFile('index.html');
+    reply.header('Cache-Control', 'no-cache');
+    return reply.sendFile('index.html', publicDir);
   });
   fastify.log.info('Serving SPA from ./public');
 } else {

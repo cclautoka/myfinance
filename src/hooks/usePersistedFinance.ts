@@ -62,6 +62,7 @@ function notifyRelayCanSend(cfg: ReturnType<typeof readNotifyRelayConfig>): bool
 
 export function usePersistedFinance() {
   const [state, setState] = useState<FinanceState>(() => loadFinanceState());
+  const [isServerSyncing, setIsServerSyncing] = useState(false);
   const stateRef = useRef(state);
   /** Skip one debounced PUT right after hydrating from server (avoids redundant write-back on load). */
   const skipNextServerSaveRef = useRef(false);
@@ -83,21 +84,27 @@ export function usePersistedFinance() {
     if (!cfg.enabled) return;
 
     let cancelled = false;
+    setIsServerSyncing(true);
     (async () => {
-      const remote = await fetchServerFinanceState();
-      if (cancelled) return;
-      if (remote.ok) {
-        skipNextServerSaveRef.current = true;
-        skipNextNotifyRef.current = true;
-        setState(remote.state);
-        maybeMigrateLegacyHouseholdSetup(remote.state, readNotifyRelayConfig());
+      try {
+        const remote = await fetchServerFinanceState();
+        if (cancelled) return;
+        if (remote.ok) {
+          skipNextServerSaveRef.current = true;
+          skipNextNotifyRef.current = true;
+          setState(remote.state);
+          maybeMigrateLegacyHouseholdSetup(remote.state, readNotifyRelayConfig());
+        }
+      } catch {
+        /* offline / ignore */
+      } finally {
+        if (!cancelled) setIsServerSyncing(false);
       }
-    })().catch(() => {
-      /* offline / ignore */
-    });
+    })();
 
     return () => {
       cancelled = true;
+      setIsServerSyncing(false);
     };
   }, []);
 
@@ -479,6 +486,7 @@ export function usePersistedFinance() {
 
   return {
     state,
+    isServerSyncing,
     update,
     setIncome,
     setEssentials,

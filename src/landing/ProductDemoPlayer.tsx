@@ -1,18 +1,30 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { DashboardOverview } from '../components/DashboardOverview';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import { DemoToolsPreview } from './DemoToolsPreview';
+import { DemoWorkspacePreview } from './DemoWorkspacePreview';
+import { LandingDashboardDemo } from './LandingDashboardDemo';
 import { SegmentedButtonGroup } from '../components/ui/SegmentedButtonGroup';
 import type { AppTab } from '../components/layout/AppPrimaryTabs';
-import type { FinanceState } from '../types/finance';
 import { DemoScaledViewport } from './DemoScaledViewport';
 import { DemoSlideTransition, type SlideDirection } from './DemoSlideTransition';
-import { buildDemoFinanceState } from './demoFinanceState';
 import { useDemoSlideAutoplay } from './useDemoSlideAutoplay';
 import { useMinMdViewport } from './useMinMdViewport';
 
 const DEMO_TABS: { id: AppTab; label: string; blurb: string }[] = [
-  { id: 'dashboard', label: 'Dashboard', blurb: 'Month snapshot, bills checklist, and pay log in one view.' },
-  { id: 'workspace', label: 'Workspace', blurb: 'Edit income, essentials, debts, and your plan over time.' },
-  { id: 'tools', label: 'Tools', blurb: 'Sync, exports, alerts, and household settings.' },
+  {
+    id: 'dashboard',
+    label: 'Dashboard',
+    blurb: 'Upcoming bills, bill calendar checkmarks, financial snapshot, and “More this month” for pay & charts.',
+  },
+  {
+    id: 'workspace',
+    label: 'Workspace',
+    blurb: 'Past months & CSV export, your household numbers, and plan & savings — three workspace tabs.',
+  },
+  {
+    id: 'tools',
+    label: 'Tools',
+    blurb: 'Household sign-in, notify relay, magic links, invites, and worksheet reset.',
+  },
 ];
 
 const DESIGN_WIDTH = { desktop: 640, mobile: 360 } as const;
@@ -21,40 +33,24 @@ function tabIndex(tab: AppTab) {
   return DEMO_TABS.findIndex((t) => t.id === tab);
 }
 
-function DemoPanel({ appTab, demoState }: { appTab: AppTab; demoState: FinanceState }) {
+function DemoPanel({ appTab }: { appTab: AppTab }) {
   if (appTab === 'dashboard') {
     return (
       <div className="demo-content-breathe p-2">
-        <DashboardOverview state={demoState} variant="preview" />
+        <LandingDashboardDemo />
       </div>
     );
   }
   if (appTab === 'workspace') {
     return (
-      <div className="space-y-2.5 p-3 text-sm">
-        <p className="font-display text-base font-bold text-slate-900 dark:text-moss-fg">Household worksheet</p>
-        <ul className="space-y-2 text-slate-700 dark:text-moss-subtle">
-          <li className="min-w-0 break-words rounded-lg border border-slate-200/80 bg-white/90 px-3 py-2 dark:border-moss-border dark:bg-moss-surface/80">
-            Combined pay: <strong>$8,000/mo</strong> · 3 essentials · 1 debt
-          </li>
-          <li className="min-w-0 break-words rounded-lg border border-slate-200/80 bg-white/90 px-3 py-2 dark:border-moss-border dark:bg-moss-surface/80">
-            Past months, insights, and income log history
-          </li>
-        </ul>
+      <div className="p-2">
+        <DemoWorkspacePreview />
       </div>
     );
   }
   return (
-    <div className="space-y-2.5 p-3 text-sm">
-      <p className="font-display text-base font-bold text-slate-900 dark:text-moss-fg">Tools & sync</p>
-      <ul className="space-y-2 text-slate-700 dark:text-moss-subtle">
-        <li className="min-w-0 break-words rounded-lg border border-teal-200/70 bg-teal-50/50 px-3 py-2 dark:border-teal-900/40 dark:bg-teal-950/25">
-          Cloud backup per household
-        </li>
-        <li className="min-w-0 break-words rounded-lg border border-slate-200/80 bg-white/90 px-3 py-2 dark:border-moss-border dark:bg-moss-surface/80">
-          Email reminders · CSV export · guided tour
-        </li>
-      </ul>
+    <div className="p-2">
+      <DemoToolsPreview />
     </div>
   );
 }
@@ -121,7 +117,6 @@ function DeviceFrame({
   variant,
   appTab,
   slideDirection,
-  demoState,
   scrollRef,
   onAppTabChange,
   className = '',
@@ -129,7 +124,6 @@ function DeviceFrame({
   variant: 'desktop' | 'mobile';
   appTab: AppTab;
   slideDirection: SlideDirection;
-  demoState: FinanceState;
   scrollRef: RefObject<HTMLDivElement | null>;
   onAppTabChange: (t: AppTab) => void;
   className?: string;
@@ -176,7 +170,7 @@ function DeviceFrame({
           >
             <DemoScaledViewport designWidth={designWidth}>
               <DemoSlideTransition activeKey={appTab} direction={slideDirection}>
-                <DemoPanel appTab={appTab} demoState={demoState} />
+                <DemoPanel appTab={appTab} />
               </DemoSlideTransition>
             </DemoScaledViewport>
           </div>
@@ -187,7 +181,6 @@ function DeviceFrame({
 }
 
 export function ProductDemoPlayer() {
-  const demoState = useMemo(() => buildDemoFinanceState(), []);
   const isDesktop = useMinMdViewport();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [appTab, setAppTab] = useState<AppTab>('dashboard');
@@ -254,7 +247,6 @@ export function ProductDemoPlayer() {
         variant={isDesktop ? 'desktop' : 'mobile'}
         appTab={appTab}
         slideDirection={slideDirection}
-        demoState={demoState}
         scrollRef={scrollRef}
         onAppTabChange={(t) => selectTab(tabIndex(t))}
         className={isDesktop ? 'min-w-0 flex-1' : 'mx-auto w-full max-w-[min(100%,320px)]'}

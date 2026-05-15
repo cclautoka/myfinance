@@ -15,6 +15,7 @@ COPY server/load-env.mjs ./
 COPY server/password.mjs ./
 COPY server/sessionToken.mjs ./
 COPY server/index.mjs ./
+COPY server/staticCache.mjs ./
 COPY server/templates.mjs ./templates.mjs
 COPY server/snapshots.mjs ./snapshots.mjs
 COPY server/db.mjs ./db.mjs

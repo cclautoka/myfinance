@@ -1,9 +1,13 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { HouseholdAuthForm } from '../auth/HouseholdAuthForm';
 import { defaultFinanceState } from '../data/defaults';
 import type { ThemePreference } from '../types/finance';
 import { bootstrapPublicApiConfig } from '../utils/publicApiBootstrap';
-import { ProductDemoPlayer } from './ProductDemoPlayer';
+import { LandingDemoSkeleton } from './LandingDemoSkeleton';
+
+const ProductDemoPlayer = lazy(() =>
+  import('./ProductDemoPlayer').then((m) => ({ default: m.ProductDemoPlayer })),
+);
 
 function applyThemeClass(theme: ThemePreference) {
   const root = document.documentElement;
@@ -50,7 +54,9 @@ export function PublicLandingShell() {
     <div className="min-h-svh bg-gradient-to-br from-teal-50/90 via-[#f4f7fb] to-slate-100 dark:from-moss-bg dark:via-moss-elevated dark:to-moss-bg">
       <div className="mx-auto flex min-h-svh w-full max-w-[96rem] flex-col lg:flex-row">
         <section className="min-h-[42vh] flex-1 border-b border-slate-200/80 p-4 sm:p-6 lg:min-h-svh lg:w-[60%] lg:border-b-0 lg:border-r lg:p-8 xl:p-10">
-          <ProductDemoPlayer />
+          <Suspense fallback={<LandingDemoSkeleton />}>
+            <ProductDemoPlayer />
+          </Suspense>
         </section>
         <aside className="flex w-full shrink-0 flex-col justify-center p-4 sm:p-6 lg:w-[40%] lg:min-w-[280px] lg:p-6 xl:p-8">
           <div className="rounded-2xl border border-slate-200/90 bg-white/85 p-4 shadow-sm backdrop-blur-sm dark:border-moss-border dark:bg-moss-surface/90 sm:p-5 lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:backdrop-blur-none">

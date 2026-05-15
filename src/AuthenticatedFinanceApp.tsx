@@ -98,6 +98,7 @@ export function AuthenticatedFinanceApp() {
 
   const {
     state,
+    isServerSyncing,
     update,
     setTheme,
     setWallets,
@@ -368,6 +369,7 @@ export function AuthenticatedFinanceApp() {
         theme={state.theme}
         onTheme={setTheme}
         householdSignedIn={householdSignedIn}
+        serverSyncing={isServerSyncing}
       />
       <AppPrimaryTabs value={appTab} onChange={setAppTab} />
       {!monthOpeningBlocked ? <MobileBottomNav appTab={appTab} onAppTabChange={setAppTab} /> : null}

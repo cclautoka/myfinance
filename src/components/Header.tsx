@@ -9,12 +9,15 @@ export function Header({
   theme,
   onTheme,
   householdSignedIn = false,
+  serverSyncing = false,
   onOpenAccount,
 }: {
   theme: ThemePreference;
   onTheme: (t: ThemePreference) => void;
   /** When true, shows Sign out in the header. */
   householdSignedIn?: boolean;
+  /** Non-blocking hint while workbook state is fetched from the server. */
+  serverSyncing?: boolean;
   /** When set and not signed in, shows Sign in (e.g. public shell). */
   onOpenAccount?: () => void;
 }) {
@@ -36,6 +39,9 @@ export function Header({
           </h1>
           <p className="mt-1 hidden max-w-2xl text-sm font-medium leading-relaxed text-slate-600 dark:text-moss-subtle sm:block">
             Dashboard for this month — Workspace to edit history and plan — Tools for relay, sign-in, and reset.
+            {serverSyncing ? (
+              <span className="ml-2 text-teal-700 dark:text-teal-300">Syncing…</span>
+            ) : null}
           </p>
           <div className="mt-1 md:hidden">
             <button
