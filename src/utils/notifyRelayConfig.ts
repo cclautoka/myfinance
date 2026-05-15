@@ -98,3 +98,79 @@ export function applySetupFromUrlHash(): Partial<NotifyRelayConfig> | null {
     wifeEmail: decodeURIComponent(we),
   };
 }
+
+/** Opaque partner-invite token from `#invite=…` (no secrets). */
+export function parseInviteTokenFromHash(): string | null {
+  if (typeof window === 'undefined') return null;
+  const h = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
+  const params = new URLSearchParams(h);
+  const inv = (params.get('invite') ?? '').trim();
+  if (!inv || !/^[a-f0-9]{48}$/i.test(inv)) return null;
+  return inv;
+}
+
+/** Email verification token from `#verify=…` (64 hex). */
+export function parseVerifyTokenFromHash(): string | null {
+  if (typeof window === 'undefined') return null;
+  const h = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
+  const params = new URLSearchParams(h);
+  const t = (params.get('verify') ?? '').trim();
+  if (!t || !/^[a-f0-9]{64}$/i.test(t)) return null;
+  return t;
+}
+
+/** Password reset token from `#reset=…` (64 hex). */
+export function parseResetTokenFromHash(): string | null {
+  if (typeof window === 'undefined') return null;
+  const h = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
+  const params = new URLSearchParams(h);
+  const t = (params.get('reset') ?? '').trim();
+  if (!t || !/^[a-f0-9]{64}$/i.test(t)) return null;
+  return t;
+}
+
+/** Same-origin API root derived from notify relay URL (saved in Tools). */
+export function apiBaseFromNotifyUrl(notifyUrl: string): string {
+  const u = notifyUrl.trim();
+  if (!u) return '';
+  if (u.startsWith('/')) {
+    if (typeof window === 'undefined') return '';
+    return `${window.location.origin}`;
+  }
+  if (u.endsWith('/v1/notify')) return u.replace(/\/v1\/notify$/, '');
+  return u.replace(/\/$/, '');
+}
+
+/** One-time sign-in token from `#login=…` (64 hex). */
+export function parseMagicLoginTokenFromHash(): string | null {
+  if (typeof window === 'undefined') return null;
+  const h = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
+  const params = new URLSearchParams(h);
+  const t = (params.get('login') ?? '').trim();
+  if (!t || !/^[a-f0-9]{64}$/i.test(t)) return null;
+  return t;
+}
+
+/** POST JSON to the relay without Authorization (public household auth routes). */
+export async function postNotifyRelayPublicJson(
+  path: string,
+  body: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const { url } = readNotifyRelayConfig();
+  const base = apiBaseFromNotifyUrl(url);
+  if (!base) throw new Error('Set notify API URL first');
+  const res = await fetch(`${base}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const text = await res.text();
+  let j: Record<string, unknown> = {};
+  try {
+    j = JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    /* ignore */
+  }
+  if (!res.ok) throw new Error((j.error as string) || text || `HTTP ${res.status}`);
+  return j;
+}

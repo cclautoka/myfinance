@@ -110,7 +110,7 @@ export function dashboardSafeSpendTip(): ReactNode {
   return (
     <>
       Approximate leftover per week after essentials, groceries, debt payments, and savings (from sliders), with a gentle
-      haircut if big bills bunch up soon. Soft guidance — not spending permission or denial.
+      haircut if big bills bunch up soon. Rough estimate only — not spending permission or denial.
     </>
   );
 }
@@ -203,15 +203,6 @@ export function billsTimelineTip(): ReactNode {
       essentials (groceries, etc.) appear once per <strong className="text-sage-900 dark:text-moss-tip">Saturday</strong> in that month — mark handled on each row separately. Labels like “Needs a look” are reminders, not grades. Debts marked{' '}
       <strong className="text-sage-900 dark:text-moss-tip">Auto deduction</strong> switch to handled automatically after their due date passes this month — unless someone tapped{' '}
       <strong>Undo paid</strong>; then we remember not to flip them back on every visit. Manual bills stay manual.
-    </>
-  );
-}
-
-export function advisorTip(): ReactNode {
-  return (
-    <>
-      Short automatic notes from your numbers (bills, savings %, milestones). Not a chatbot — just prewritten patterns. If a line
-      feels off, the data in Household or the dashboard is what to adjust.
     </>
   );
 }

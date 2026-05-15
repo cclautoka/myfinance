@@ -4,8 +4,15 @@ import { execSync } from 'node:child_process';
 import { defineConfig } from 'vite';
 
 // https://vite.dev/config/
+const apiProxyTarget = process.env.VITE_API_PROXY_TARGET ?? 'http://127.0.0.1:8787';
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  server: {
+    proxy: {
+      '/v1': { target: apiProxyTarget, changeOrigin: true },
+    },
+  },
   define: {
     __BUILD_SHA__: JSON.stringify(
       process.env.DOKPLOY_GIT_SHA ??

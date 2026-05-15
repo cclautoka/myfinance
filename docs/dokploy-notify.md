@@ -1,6 +1,6 @@
 # Dokploy: host app + notify API (one service)
 
-The repo root **`Dockerfile`** builds the **Vite SPA** and the **`server/`** Node app into **one image**: Fastify serves `dist/` as static files and exposes **`POST /v1/notify`** on the **same origin** (so you can use notify URL **`/v1/notify`** in the app).
+The repo root **`Dockerfile`** builds the **Vite SPA** and the **`server/`** Node app into **one image**: Fastify serves `dist/` as static files and exposes **`POST /v1/notify`** on the **same origin** (so you can use notify URL **`/v1/notify`** in the app). The container runs **`node scripts/db-migrate.mjs`** before **`node index.mjs`** so Postgres tables exist on every deploy.
 
 ## Dokploy application
 
@@ -12,20 +12,23 @@ The repo root **`Dockerfile`** builds the **Vite SPA** and the **`server/`** Nod
 
 ## Environment variables
 
-See `server/env.example`. Minimum for email:
+See `server/env.example`. Typical production:
 
 | Variable | Notes |
 |----------|--------|
-| `NOTIFY_API_SECRET` | ≥16 chars; paste the same value in the app (**Tips & backup**). |
-| `NOTIFY_TO` | Recipient. |
-| `NOTIFY_CORS_ORIGINS` | Optional if browser and API share the **same** origin (single service). Set to your site origin(s) if you split frontend/API later. |
-| `RESEND_*` or `SMTP_*` | One mail transport (see `server/env.example`). |
+| `DATABASE_URL` | **Required** for server-backed state + household auth. |
+| `SESSION_SECRET` | **16+ chars** — required for `fm_sess_…` sign-in. |
+| `NOTIFY_LEGACY_SECRET_DISABLED` | Set to `1` when you no longer use legacy `NOTIFY_API_SECRET`. |
+| `NOTIFY_API_SECRET` | Legacy bearer only (≥16 chars); omit if disabled above. |
+| `NOTIFY_TO` | Optional legacy fallback recipients. |
+| `NOTIFY_CORS_ORIGINS` | Leave empty for same-origin SPA + API; otherwise comma-separated UI origins. |
+| `RESEND_*` or `SMTP_*` | One mail transport for summaries / magic links. |
 
 ## After deploy
 
 1. Open your Dokploy URL in the browser (the SPA).
-2. **Tips & backup** → **Notify API URL**: use **`/v1/notify`** (same host) unless you run the API elsewhere.
-3. Set **Shared secret**, enable summaries, **Send test email**.
+2. **Tools & alerts** → **Notify API URL**: use **`/v1/notify`** (same host) unless you run the API elsewhere.
+3. **Shared secret** only if you still use **`NOTIFY_API_SECRET`**; otherwise use **Household sign-in** + **`SESSION_SECRET`**. Enable summaries, **Send test email**.
 
 ## Health check
 
@@ -36,7 +39,9 @@ Use **`GET /health`** → `{ "ok": true }`.
 ```bash
 docker build -t household-finance:local .
 docker run --rm -p 8787:8787 \
-  -e NOTIFY_API_SECRET=your-long-secret-here-min-16 \
+  -e DATABASE_URL=postgres://user:pass@host:5432/dbname \
+  -e SESSION_SECRET=your-session-secret-min-16-chars \
+  -e NOTIFY_LEGACY_SECRET_DISABLED=1 \
   -e NOTIFY_TO=you@example.com \
   -e RESEND_API_KEY=... -e RESEND_FROM="App <onboarding@resend.dev>" \
   household-finance:local

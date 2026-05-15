@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './load-env.mjs';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
@@ -7,13 +7,41 @@ import crypto from 'crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildChangeEmailTemplate, buildReminderEmailTemplate, buildSaveEmailTemplate, renderEmailHtml, renderEmailText } from './templates.mjs';
+import { buildChangeEmailTemplate, buildReminderEmailTemplate, buildSaveEmailTemplate, buildAuthActionEmail, renderEmailHtml, renderEmailText } from './templates.mjs';
 import { readSnapshot, writeSnapshot } from './snapshots.mjs';
-import { getDbEnabled, getHouseholdIdFromRequest, initDbIfNeeded, readState, writeState } from './db.mjs';
+import {
+  getDbEnabled,
+  getHouseholdIdFromRequest,
+  initDbIfNeeded,
+  readState,
+  writeState,
+  findMemberByHouseholdAndEmail,
+  insertHouseholdMember,
+  countOwnersForHousehold,
+  getMemberById,
+  insertInvite,
+  getActiveInviteByTokenHash,
+  markInviteUsed,
+  ensureHouseholdRow,
+  insertEmailToken,
+  deleteUnusedEmailTokens,
+  getActiveEmailTokenByHash,
+  markEmailTokenUsed,
+  markMemberEmailVerified,
+  updateMemberPassword,
+  insertPairing,
+  getActivePairingByHouseholdAndCodeHash,
+  markPairingUsed,
+  insertBearerKey,
+  listActiveBearerHashesForHousehold,
+  listBearerKeysForHousehold,
+  revokeBearerKey,
+} from './db.mjs';
 import { computeReminderEmailPayload } from './reminders.mjs';
+import { hashPassword, verifyPassword } from './password.mjs';
+import { signFinanceSession, verifyFinanceSession } from './sessionToken.mjs';
 
 const port = Number(process.env.PORT ?? 8787);
-const secret = process.env.NOTIFY_API_SECRET ?? '';
 const notifyTo = process.env.NOTIFY_TO ?? '';
 
 function timingSafeEqual(a, b) {
@@ -54,13 +82,32 @@ function normalizeRecipientList(arr) {
   return out;
 }
 
-/** Reminder cron: body.to if set, else notifyRecipientEmails from snapshot/state, else NOTIFY_TO. */
+/** Reminder cron: body.to if set, else notifyRecipientEmails from snapshot/state, else NOTIFY_TO (legacy). */
 function pickReminderRecipients(body, stateData) {
   const fromBody = normalizeRecipientList(body?.to);
   if (fromBody.length) return fromBody;
   const fromSnapshot = normalizeRecipientList(stateData?.notifyRecipientEmails);
   if (fromSnapshot.length) return fromSnapshot;
   return splitRecipients(notifyTo.trim());
+}
+
+async function resolveNotifyRecipients(body, log) {
+  const fromBody = normalizeRecipientList(body?.to);
+  if (fromBody.length) return fromBody;
+  const fromEnv = splitRecipients(notifyTo.trim());
+  if (fromEnv.length) return fromEnv;
+  const id = typeof body?.id === 'string' && body.id.trim() ? body.id.trim().slice(0, 64) : '';
+  if (!id) return [];
+  const snap = await readSnapshot(id).catch(() => null);
+  let data = snap?.data ?? null;
+  if (!data) {
+    await initDbIfNeeded(log);
+    if (getDbEnabled()) {
+      const stored = await readState(id).catch(() => null);
+      data = stored?.state ?? null;
+    }
+  }
+  return normalizeRecipientList(data?.notifyRecipientEmails);
 }
 
 async function sendWithResend({ to, subject, text, html }) {
@@ -135,11 +182,204 @@ await fastify.register(cors, {
 
 fastify.get('/health', async () => ({ ok: true }));
 
+function publicAppBase() {
+  return (process.env.APP_PUBLIC_URL ?? process.env.SITE_URL ?? '').replace(/\/$/, '');
+}
+
+function hashUtf8Sha256Hex(s) {
+  return crypto.createHash('sha256').update(s, 'utf8').digest('hex');
+}
+
+function parseBearerFromRequest(request) {
+  return parseBearer(request.headers.authorization ?? '');
+}
+
+function isLegacyBearerDisabled() {
+  const v = (process.env.NOTIFY_LEGACY_SECRET_DISABLED ?? '').trim().toLowerCase();
+  return v === '1' || v === 'true' || v === 'yes';
+}
+
+function legacySecret() {
+  if (isLegacyBearerDisabled()) return '';
+  return (process.env.NOTIFY_API_SECRET ?? '').trim();
+}
+
+function sessionSecret() {
+  return (process.env.SESSION_SECRET ?? '').trim();
+}
+
+async function requirePrimaryOwnerMember(request, reply, householdId, body) {
+  await initDbIfNeeded(request.log);
+  const bearer = parseBearerFromRequest(request);
+  const leg = legacySecret();
+  const sess = sessionSecret();
+
+  if (leg.length >= 16 && bearer && timingSafeEqual(bearer, leg)) {
+    const ownerEmail = typeof body?.ownerEmail === 'string' ? body.ownerEmail.trim() : '';
+    if (!ownerEmail) {
+      reply
+        .code(403)
+        .send({ error: 'With legacy API secret, pass ownerEmail (must match registered primary) to perform this action.' });
+      return null;
+    }
+    const m = await findMemberByHouseholdAndEmail(householdId, ownerEmail);
+    if (!m || m.role !== 'owner') {
+      reply.code(403).send({ error: 'ownerEmail must match the registered primary owner for this household.' });
+      return null;
+    }
+    return m;
+  }
+
+  if (bearer.startsWith('fm_sess_') && sess.length >= 16) {
+    const v = verifyFinanceSession(bearer, sess);
+    if (!v) {
+      reply.code(403).send({ error: 'Invalid session' });
+      return null;
+    }
+    const owner = await getMemberById(v.memberId);
+    if (!owner || owner.household_id !== householdId || owner.role !== 'owner') {
+      reply.code(403).send({ error: 'Only the primary owner can perform this action.' });
+      return null;
+    }
+    return owner;
+  }
+
+  reply.code(403).send({ error: 'Owner session or legacy bearer with ownerEmail required.' });
+  return null;
+}
+
+function refuseHouseholdApiKey(request, reply) {
+  if (parseBearerFromRequest(request).startsWith('hk_')) {
+    reply.code(403).send({ error: 'This action requires a signed-in session (not a household API key).' });
+    return true;
+  }
+  return false;
+}
+
+function emailVerificationRequired() {
+  return String(process.env.EMAIL_VERIFICATION_REQUIRED ?? '').trim() === '1';
+}
+
+function sessionTokenTtlSeconds() {
+  const days = Number(process.env.SESSION_TOKEN_TTL_DAYS ?? 365);
+  const d = Number.isFinite(days) ? Math.min(3650, Math.max(1, Math.floor(days))) : 365;
+  return 60 * 60 * 24 * d;
+}
+
+async function sendAuthLinkEmail({ to, hashKey, rawToken, kind }) {
+  const base = publicAppBase();
+  const frag = `${hashKey}=${encodeURIComponent(rawToken)}`;
+  const link = base ? `${base}/#${frag}` : `Add this hash to your app URL: #${frag}`;
+  const tpl = buildAuthActionEmail({ kind, actionLink: link });
+  const html = renderEmailHtml({
+    title: tpl.title,
+    preheader: tpl.preheader,
+    sections: tpl.sections,
+    footerHint: tpl.footerHint,
+  });
+  const text = renderEmailText({
+    title: tpl.title,
+    preheader: tpl.preheader,
+    sections: tpl.sections,
+    footerHint: tpl.footerHint,
+  });
+  await sendMail({ to, subject: tpl.subject.slice(0, 200), text, html });
+}
+
+/**
+ * Legacy global bearer, signed session (`fm_sess_…`), or per-household API key (`hk_…`),
+ * scoped to `householdId` for session and household keys.
+ */
+async function assertAuthorized(request, reply, householdId) {
+  const leg = legacySecret();
+  const sess = sessionSecret();
+  const bearer = parseBearer(request.headers.authorization ?? '');
+
+  if (leg.length >= 16 && bearer && timingSafeEqual(bearer, leg)) {
+    return true;
+  }
+
+  if (bearer.startsWith('fm_sess_') && sess.length >= 16) {
+    if (!householdId || typeof householdId !== 'string') {
+      reply.code(400).send({ error: 'Include household id for session-authenticated requests.' });
+      return false;
+    }
+    const v = verifyFinanceSession(bearer, sess);
+    if (!v || v.householdId !== householdId) {
+      reply.code(401).send({ error: 'Unauthorized' });
+      return false;
+    }
+    await initDbIfNeeded(request.log);
+    const member = await getMemberById(v.memberId);
+    if (!member || member.household_id !== householdId) {
+      reply.code(401).send({ error: 'Unauthorized' });
+      return false;
+    }
+    if (emailVerificationRequired() && !member.email_verified_at) {
+      reply.code(403).send({ error: 'Email verification required', code: 'EMAIL_NOT_VERIFIED' });
+      return false;
+    }
+    return true;
+  }
+
+  if (bearer.startsWith('hk_')) {
+    if (!householdId || typeof householdId !== 'string') {
+      reply.code(400).send({ error: 'Include household id for household key requests.' });
+      return false;
+    }
+    await initDbIfNeeded(request.log);
+    if (!getDbEnabled()) {
+      reply.code(503).send({ error: 'DATABASE_URL is not set.' });
+      return false;
+    }
+    const hashes = await listActiveBearerHashesForHousehold(householdId);
+    const digestHex = hashUtf8Sha256Hex(bearer);
+    for (const th of hashes) {
+      if (digestHex.length === th.length && timingSafeEqual(digestHex, th)) {
+        return true;
+      }
+    }
+    reply.code(401).send({ error: 'Unauthorized' });
+    return false;
+  }
+
+  if (leg.length >= 16) {
+    reply.code(401).send({ error: 'Unauthorized' });
+    return false;
+  }
+  if (sess.length >= 16) {
+    reply
+      .code(401)
+      .send({
+        error: isLegacyBearerDisabled()
+          ? 'Sign in (fm_sess_…) or use a household hk_… key for this household id.'
+          : 'Sign in or set NOTIFY_API_SECRET for legacy device access.',
+      });
+    return false;
+  }
+  reply.code(503).send({
+    error: isLegacyBearerDisabled()
+      ? 'SESSION_SECRET must be set (min 16 chars). NOTIFY_LEGACY_SECRET_DISABLED=1 — legacy NOTIFY_API_SECRET bearer is not accepted.'
+      : 'NOTIFY_API_SECRET or SESSION_SECRET must be configured (min 16 chars).',
+  });
+  return false;
+}
+
+function issueSessionToken(memberRow) {
+  const sec = sessionSecret();
+  if (sec.length < 16) throw new Error('SESSION_SECRET not configured');
+  const exp = Math.floor(Date.now() / 1000) + sessionTokenTtlSeconds();
+  return signFinanceSession(
+    { sub: memberRow.id, hid: memberRow.household_id, role: memberRow.role, exp },
+    sec,
+  );
+}
+
 fastify.get('/v1/state/meta', async (request, reply) => {
-  if (!authOr401(request, reply)) return;
+  const id = getHouseholdIdFromRequest(request);
+  if (!(await assertAuthorized(request, reply, id))) return;
   await initDbIfNeeded(request.log);
   if (!getDbEnabled()) return reply.code(503).send({ error: 'DATABASE_URL is not set.' });
-  const id = getHouseholdIdFromRequest(request);
   const existing = await readState(id);
   return reply.send({
     ok: true,
@@ -150,20 +390,20 @@ fastify.get('/v1/state/meta', async (request, reply) => {
 });
 
 fastify.get('/v1/state', async (request, reply) => {
-  if (!authOr401(request, reply)) return;
+  const id = getHouseholdIdFromRequest(request);
+  if (!(await assertAuthorized(request, reply, id))) return;
   await initDbIfNeeded(request.log);
   if (!getDbEnabled()) return reply.code(503).send({ error: 'DATABASE_URL is not set.' });
-  const id = getHouseholdIdFromRequest(request);
   const existing = await readState(id);
   if (!existing) return reply.code(404).send({ error: 'Not found' });
   return reply.send({ ok: true, id, state: existing.state, updatedAt: existing.updatedAt });
 });
 
 fastify.put('/v1/state', async (request, reply) => {
-  if (!authOr401(request, reply)) return;
+  const id = getHouseholdIdFromRequest(request);
+  if (!(await assertAuthorized(request, reply, id))) return;
   await initDbIfNeeded(request.log);
   if (!getDbEnabled()) return reply.code(503).send({ error: 'DATABASE_URL is not set.' });
-  const id = getHouseholdIdFromRequest(request);
   const body = request.body;
   const state = body?.state;
   if (!state || typeof state !== 'object') return reply.code(400).send({ error: 'Body must include "state" object.' });
@@ -171,33 +411,529 @@ fastify.put('/v1/state', async (request, reply) => {
   return reply.send({ ok: true, id, updatedAt: r.updatedAt });
 });
 
+/** Public: register first owner for a household (no auth). */
+fastify.post('/v1/household/auth/register', async (request, reply) => {
+  await initDbIfNeeded(request.log);
+  if (!getDbEnabled()) return reply.code(503).send({ error: 'DATABASE_URL is not set.' });
+  if (sessionSecret().length < 16) {
+    return reply.code(503).send({ error: 'SESSION_SECRET must be set (min 16 chars) for sign-in tokens.' });
+  }
+  const body = request.body ?? {};
+  const householdId = typeof body.householdId === 'string' ? body.householdId.trim().slice(0, 64) : '';
+  const email = typeof body.email === 'string' ? body.email.trim() : '';
+  const password = typeof body.password === 'string' ? body.password : '';
+  if (!householdId || !email || password.length < 8) {
+    return reply.code(400).send({ error: 'householdId, email, and password (min 8 chars) required.' });
+  }
+  const owners = await countOwnersForHousehold(householdId);
+  if (owners > 0) return reply.code(409).send({ error: 'Household already has an owner. Use invite flow for partners.' });
+  const existing = await findMemberByHouseholdAndEmail(householdId, email);
+  if (existing) return reply.code(409).send({ error: 'Email already registered for this household.' });
+  const passwordHash = hashPassword(password);
+  let row;
+  try {
+    row = await insertHouseholdMember({ householdId, email, passwordHash, role: 'owner' });
+  } catch (e) {
+    request.log.error(e);
+    return reply.code(500).send({ error: 'Could not create account' });
+  }
+  await ensureHouseholdRow(householdId);
+  try {
+    await deleteUnusedEmailTokens(row.id, 'verify');
+    const raw = crypto.randomBytes(32).toString('hex');
+    const tokenHash = hashUtf8Sha256Hex(raw);
+    const expires = new Date(Date.now() + 1000 * 60 * 60 * 24);
+    await insertEmailToken({
+      memberId: row.id,
+      tokenHash,
+      kind: 'verify',
+      expiresAt: expires.toISOString(),
+    });
+    await sendAuthLinkEmail({ to: row.email, hashKey: 'verify', rawToken: raw, kind: 'verify' });
+  } catch (e) {
+    request.log.error(e);
+    return reply.code(502).send({
+      error: 'Could not send verification email',
+      detail: process.env.NODE_ENV === 'development' ? String(e?.message ?? e) : undefined,
+    });
+  }
+  return reply.send({
+    ok: true,
+    needsEmailVerification: true,
+    member: {
+      id: row.id,
+      email: row.email,
+      role: row.role,
+      householdId,
+      emailVerified: false,
+    },
+  });
+});
+
+fastify.post('/v1/household/auth/login', async (request, reply) => {
+  await initDbIfNeeded(request.log);
+  if (!getDbEnabled()) return reply.code(503).send({ error: 'DATABASE_URL is not set.' });
+  if (sessionSecret().length < 16) {
+    return reply.code(503).send({ error: 'SESSION_SECRET must be set (min 16 chars) for sign-in tokens.' });
+  }
+  const body = request.body ?? {};
+  const householdId = typeof body.householdId === 'string' ? body.householdId.trim().slice(0, 64) : '';
+  const email = typeof body.email === 'string' ? body.email.trim() : '';
+  const password = typeof body.password === 'string' ? body.password : '';
+  if (!householdId || !email || !password) {
+    return reply.code(400).send({ error: 'householdId, email, and password required.' });
+  }
+  const row = await findMemberByHouseholdAndEmail(householdId, email);
+  if (!row?.password_hash || !verifyPassword(password, row.password_hash)) {
+    return reply.code(401).send({ error: 'Invalid credentials' });
+  }
+  const token = issueSessionToken(row);
+  return reply.send({
+    ok: true,
+    token,
+    member: {
+      id: row.id,
+      email: row.email,
+      role: row.role,
+      householdId: row.household_id,
+      emailVerified: Boolean(row.email_verified_at),
+    },
+  });
+});
+
+fastify.get('/v1/household/auth/me', async (request, reply) => {
+  const sess = sessionSecret();
+  const bearer = parseBearer(request.headers.authorization ?? '');
+  if (!bearer.startsWith('fm_sess_') || sess.length < 16) {
+    return reply.code(401).send({ error: 'Session bearer required' });
+  }
+  const v = verifyFinanceSession(bearer, sess);
+  if (!v) return reply.code(401).send({ error: 'Invalid session' });
+  await initDbIfNeeded(request.log);
+  const member = await getMemberById(v.memberId);
+  if (!member) return reply.code(401).send({ error: 'Invalid session' });
+  return reply.send({
+    ok: true,
+    member: {
+      id: member.id,
+      email: member.email,
+      role: member.role,
+      householdId: member.household_id,
+      emailVerified: Boolean(member.email_verified_at),
+    },
+  });
+});
+
+fastify.post('/v1/household/auth/refresh', async (request, reply) => {
+  const sess = sessionSecret();
+  const bearer = parseBearerFromRequest(request);
+  if (!bearer.startsWith('fm_sess_') || sess.length < 16) {
+    return reply.code(401).send({ error: 'Session bearer required' });
+  }
+  const v = verifyFinanceSession(bearer, sess);
+  if (!v) return reply.code(401).send({ error: 'Invalid session' });
+  await initDbIfNeeded(request.log);
+  const member = await getMemberById(v.memberId);
+  if (!member) return reply.code(401).send({ error: 'Invalid session' });
+  const token = issueSessionToken(member);
+  return reply.send({
+    ok: true,
+    token,
+    member: {
+      id: member.id,
+      email: member.email,
+      role: member.role,
+      householdId: member.household_id,
+      emailVerified: Boolean(member.email_verified_at),
+    },
+  });
+});
+
+fastify.post('/v1/household/auth/invite', async (request, reply) => {
+  const body = request.body ?? {};
+  const householdId = typeof body.householdId === 'string' ? body.householdId.trim().slice(0, 64) : '';
+  if (!householdId) return reply.code(400).send({ error: 'householdId required' });
+  if (!(await assertAuthorized(request, reply, householdId))) return;
+  if (refuseHouseholdApiKey(request, reply)) return;
+  await initDbIfNeeded(request.log);
+  if (!getDbEnabled()) return reply.code(503).send({ error: 'DATABASE_URL is not set.' });
+
+  const inviter = await requirePrimaryOwnerMember(request, reply, householdId, body);
+  if (!inviter) return;
+
+  const raw = crypto.randomBytes(24).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(raw).digest('hex');
+  const expires = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
+  await insertInvite({
+    tokenHash,
+    householdId,
+    inviterMemberId: inviter.id,
+    expiresAt: expires.toISOString(),
+  });
+  const base = publicAppBase();
+  const token = raw;
+  return reply.send({
+    ok: true,
+    token,
+    inviteUrl: base ? `${base}/#invite=${encodeURIComponent(token)}` : null,
+    inviteHashFragment: `invite=${encodeURIComponent(token)}`,
+  });
+});
+
+fastify.post('/v1/household/auth/accept-invite', async (request, reply) => {
+  await initDbIfNeeded(request.log);
+  if (!getDbEnabled()) return reply.code(503).send({ error: 'DATABASE_URL is not set.' });
+  if (sessionSecret().length < 16) {
+    return reply.code(503).send({ error: 'SESSION_SECRET must be set (min 16 chars) for partner sessions.' });
+  }
+  const body = request.body ?? {};
+  const token = typeof body.token === 'string' ? body.token.trim() : '';
+  if (!token) return reply.code(400).send({ error: 'token required' });
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const inv = await getActiveInviteByTokenHash(tokenHash);
+  if (!inv) return reply.code(400).send({ error: 'Invalid or used invite' });
+  if (new Date(inv.expires_at) < new Date()) return reply.code(400).send({ error: 'Invite expired' });
+  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+  if (!email || !email.includes('@')) {
+    return reply.code(400).send({ error: 'Partner email required to accept invite' });
+  }
+  const existing = await findMemberByHouseholdAndEmail(inv.household_id, email);
+  if (existing) return reply.code(409).send({ error: 'Already a member' });
+  let row;
+  try {
+    row = await insertHouseholdMember({
+      householdId: inv.household_id,
+      email,
+      passwordHash: null,
+      role: 'partner',
+    });
+    await markInviteUsed(inv.id);
+  } catch (e) {
+    request.log.error(e);
+    return reply.code(500).send({ error: 'Could not accept invite' });
+  }
+  await ensureHouseholdRow(inv.household_id);
+  const sessionTok = issueSessionToken(row);
+  return reply.send({
+    ok: true,
+    token: sessionTok,
+    member: {
+      id: row.id,
+      email: row.email,
+      role: row.role,
+      householdId: row.household_id,
+      emailVerified: false,
+    },
+  });
+});
+
+fastify.post('/v1/household/auth/request-verify-email', async (request, reply) => {
+  await initDbIfNeeded(request.log);
+  if (!getDbEnabled()) return reply.code(503).send({ error: 'DATABASE_URL is not set.' });
+  const sess = sessionSecret();
+  const bearer = parseBearerFromRequest(request);
+  if (!bearer.startsWith('fm_sess_') || sess.length < 16) {
+    return reply.code(401).send({ error: 'Sign in required' });
+  }
+  const v = verifyFinanceSession(bearer, sess);
+  if (!v) return reply.code(401).send({ error: 'Invalid session' });
+  const member = await getMemberById(v.memberId);
+  if (!member) return reply.code(401).send({ error: 'Invalid session' });
+  if (member.role !== 'owner') {
+    return reply.code(403).send({ error: 'Only the primary owner can verify email through this flow.' });
+  }
+  if (member.email_verified_at) {
+    return reply.send({ ok: true, message: 'Already verified' });
+  }
+  try {
+    await deleteUnusedEmailTokens(member.id, 'verify');
+    const raw = crypto.randomBytes(32).toString('hex');
+    const tokenHash = hashUtf8Sha256Hex(raw);
+    const expires = new Date(Date.now() + 1000 * 60 * 60 * 24);
+    await insertEmailToken({
+      memberId: member.id,
+      tokenHash,
+      kind: 'verify',
+      expiresAt: expires.toISOString(),
+    });
+    await sendAuthLinkEmail({ to: member.email, hashKey: 'verify', rawToken: raw, kind: 'verify' });
+    return reply.send({ ok: true });
+  } catch (e) {
+    request.log.error(e);
+    return reply.code(502).send({
+      error: 'Could not send verification email',
+      detail: process.env.NODE_ENV === 'development' ? String(e?.message ?? e) : undefined,
+    });
+  }
+});
+
+fastify.post('/v1/household/auth/verify-email', async (request, reply) => {
+  await initDbIfNeeded(request.log);
+  if (!getDbEnabled()) return reply.code(503).send({ error: 'DATABASE_URL is not set.' });
+  const body = request.body ?? {};
+  const token = typeof body.token === 'string' ? body.token.trim() : '';
+  if (!token || !/^[a-f0-9]{64}$/i.test(token)) {
+    return reply.code(400).send({ error: 'token (64 hex chars) required' });
+  }
+  const tokenHash = hashUtf8Sha256Hex(token);
+  const row = await getActiveEmailTokenByHash(tokenHash, 'verify');
+  if (!row) return reply.code(400).send({ error: 'Invalid or used token' });
+  if (new Date(row.expires_at) < new Date()) return reply.code(400).send({ error: 'Token expired' });
+  await markMemberEmailVerified(row.member_id);
+  await markEmailTokenUsed(row.id);
+  const member = await getMemberById(row.member_id);
+  if (!member) return reply.code(500).send({ error: 'Member missing after verify' });
+  let sessionToken = null;
+  try {
+    if (sessionSecret().length >= 16) sessionToken = issueSessionToken(member);
+  } catch {
+    /* ignore */
+  }
+  return reply.send({
+    ok: true,
+    token: sessionToken,
+    member: {
+      id: member.id,
+      email: member.email,
+      role: member.role,
+      householdId: member.household_id,
+      emailVerified: Boolean(member.email_verified_at),
+    },
+  });
+});
+
+fastify.post('/v1/household/auth/request-password-reset', async (request, reply) => {
+  await initDbIfNeeded(request.log);
+  if (!getDbEnabled()) return reply.code(503).send({ error: 'DATABASE_URL is not set.' });
+  const body = request.body ?? {};
+  const householdId = typeof body.householdId === 'string' ? body.householdId.trim().slice(0, 64) : '';
+  const email = typeof body.email === 'string' ? body.email.trim() : '';
+  if (!householdId || !email) {
+    return reply.code(400).send({ error: 'householdId and email required' });
+  }
+  const row = await findMemberByHouseholdAndEmail(householdId, email);
+  const generic = { ok: true };
+  if (!row || row.role !== 'owner' || !row.password_hash) {
+    return reply.send(generic);
+  }
+  try {
+    await deleteUnusedEmailTokens(row.id, 'reset');
+    const raw = crypto.randomBytes(32).toString('hex');
+    const tokenHash = hashUtf8Sha256Hex(raw);
+    const expires = new Date(Date.now() + 1000 * 60 * 60);
+    await insertEmailToken({
+      memberId: row.id,
+      tokenHash,
+      kind: 'reset',
+      expiresAt: expires.toISOString(),
+    });
+    await sendAuthLinkEmail({ to: row.email, hashKey: 'reset', rawToken: raw, kind: 'reset' });
+  } catch (e) {
+    request.log.error(e);
+  }
+  return reply.send(generic);
+});
+
+fastify.post('/v1/household/auth/reset-password', async (request, reply) => {
+  await initDbIfNeeded(request.log);
+  if (!getDbEnabled()) return reply.code(503).send({ error: 'DATABASE_URL is not set.' });
+  const body = request.body ?? {};
+  const token = typeof body.token === 'string' ? body.token.trim() : '';
+  const newPassword = typeof body.newPassword === 'string' ? body.newPassword : '';
+  if (!token || !/^[a-f0-9]{64}$/i.test(token) || newPassword.length < 8) {
+    return reply.code(400).send({ error: 'token (64 hex) and newPassword (min 8 chars) required' });
+  }
+  const tokenHash = hashUtf8Sha256Hex(token);
+  const row = await getActiveEmailTokenByHash(tokenHash, 'reset');
+  if (!row || new Date(row.expires_at) < new Date()) {
+    return reply.code(400).send({ error: 'Invalid or expired token' });
+  }
+  await updateMemberPassword(row.member_id, hashPassword(newPassword));
+  await markEmailTokenUsed(row.id);
+  return reply.send({ ok: true });
+});
+
+fastify.post('/v1/household/auth/request-magic-login', async (request, reply) => {
+  await initDbIfNeeded(request.log);
+  if (!getDbEnabled()) return reply.code(503).send({ error: 'DATABASE_URL is not set.' });
+  if (sessionSecret().length < 16) {
+    return reply.code(503).send({ error: 'SESSION_SECRET must be set (min 16 chars) for sign-in tokens.' });
+  }
+  const body = request.body ?? {};
+  const householdId = typeof body.householdId === 'string' ? body.householdId.trim().slice(0, 64) : '';
+  const email = typeof body.email === 'string' ? body.email.trim() : '';
+  if (!householdId || !email.includes('@')) {
+    return reply.code(400).send({ error: 'householdId and valid email required' });
+  }
+  const row = await findMemberByHouseholdAndEmail(householdId, email);
+  const generic = { ok: true };
+  if (!row) {
+    return reply.send(generic);
+  }
+  try {
+    await deleteUnusedEmailTokens(row.id, 'magic_login');
+    const raw = crypto.randomBytes(32).toString('hex');
+    const tokenHash = hashUtf8Sha256Hex(raw);
+    const expires = new Date(Date.now() + 1000 * 60 * 15);
+    await insertEmailToken({
+      memberId: row.id,
+      tokenHash,
+      kind: 'magic_login',
+      expiresAt: expires.toISOString(),
+    });
+    await sendAuthLinkEmail({ to: row.email, hashKey: 'login', rawToken: raw, kind: 'magic' });
+  } catch (e) {
+    request.log.error(e);
+  }
+  return reply.send(generic);
+});
+
+fastify.post('/v1/household/auth/consume-magic-login', async (request, reply) => {
+  await initDbIfNeeded(request.log);
+  if (!getDbEnabled()) return reply.code(503).send({ error: 'DATABASE_URL is not set.' });
+  if (sessionSecret().length < 16) {
+    return reply.code(503).send({ error: 'SESSION_SECRET must be set (min 16 chars) for sign-in tokens.' });
+  }
+  const body = request.body ?? {};
+  const token = typeof body.token === 'string' ? body.token.trim() : '';
+  if (!token || !/^[a-f0-9]{64}$/i.test(token)) {
+    return reply.code(400).send({ error: 'token (64 hex chars) required' });
+  }
+  const tokenHash = hashUtf8Sha256Hex(token);
+  const tok = await getActiveEmailTokenByHash(tokenHash, 'magic_login');
+  if (!tok) return reply.code(400).send({ error: 'Invalid or used link' });
+  if (new Date(tok.expires_at) < new Date()) return reply.code(400).send({ error: 'Link expired' });
+  const member = await getMemberById(tok.member_id);
+  if (!member) return reply.code(400).send({ error: 'Invalid link' });
+  await markEmailTokenUsed(tok.id);
+  const sessionTok = issueSessionToken(member);
+  return reply.send({
+    ok: true,
+    token: sessionTok,
+    member: {
+      id: member.id,
+      email: member.email,
+      role: member.role,
+      householdId: member.household_id,
+      emailVerified: Boolean(member.email_verified_at),
+    },
+  });
+});
+
+fastify.post('/v1/household/pairing/create', async (request, reply) => {
+  const body = request.body ?? {};
+  const householdId = typeof body.householdId === 'string' ? body.householdId.trim().slice(0, 64) : '';
+  if (!householdId) return reply.code(400).send({ error: 'householdId required' });
+  if (!(await assertAuthorized(request, reply, householdId))) return;
+  if (refuseHouseholdApiKey(request, reply)) return;
+  await initDbIfNeeded(request.log);
+  if (!getDbEnabled()) return reply.code(503).send({ error: 'DATABASE_URL is not set.' });
+  const owner = await requirePrimaryOwnerMember(request, reply, householdId, body);
+  if (!owner) return;
+  const digits = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+  const codeHash = hashUtf8Sha256Hex(`pair:${householdId}:${digits}`);
+  const expires = new Date(Date.now() + 1000 * 60 * 15);
+  await insertPairing({
+    codeHash,
+    householdId,
+    inviterMemberId: owner.id,
+    expiresAt: expires.toISOString(),
+  });
+  return reply.send({ ok: true, code: digits, expiresAt: expires.toISOString() });
+});
+
+fastify.post('/v1/household/pairing/redeem', async (request, reply) => {
+  await initDbIfNeeded(request.log);
+  if (!getDbEnabled()) return reply.code(503).send({ error: 'DATABASE_URL is not set.' });
+  if (sessionSecret().length < 16) {
+    return reply.code(503).send({ error: 'SESSION_SECRET must be set (min 16 chars) for partner sessions.' });
+  }
+  const body = request.body ?? {};
+  const householdId = typeof body.householdId === 'string' ? body.householdId.trim().slice(0, 64) : '';
+  const codeDigits = String(body.code ?? '').replace(/\D/g, '');
+  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+  const password = typeof body.password === 'string' ? body.password : '';
+  if (!householdId || codeDigits.length !== 6 || !email.includes('@') || password.length < 8) {
+    return reply.code(400).send({ error: 'householdId, 6-digit code, email, and password (min 8) required.' });
+  }
+  const codeHash = hashUtf8Sha256Hex(`pair:${householdId}:${codeDigits}`);
+  const pr = await getActivePairingByHouseholdAndCodeHash(householdId, codeHash);
+  if (!pr) return reply.code(400).send({ error: 'Invalid or used pairing code' });
+  if (new Date(pr.expires_at) < new Date()) return reply.code(400).send({ error: 'Pairing code expired' });
+  const existing = await findMemberByHouseholdAndEmail(householdId, email);
+  if (existing) return reply.code(409).send({ error: 'Already a member' });
+  let row;
+  try {
+    row = await insertHouseholdMember({
+      householdId,
+      email,
+      passwordHash: hashPassword(password),
+      role: 'partner',
+    });
+    await markPairingUsed(pr.id);
+  } catch (e) {
+    request.log.error(e);
+    return reply.code(500).send({ error: 'Could not join household' });
+  }
+  await ensureHouseholdRow(householdId);
+  const sessionTok = issueSessionToken(row);
+  return reply.send({
+    ok: true,
+    token: sessionTok,
+    member: {
+      id: row.id,
+      email: row.email,
+      role: row.role,
+      householdId: row.household_id,
+      emailVerified: false,
+    },
+  });
+});
+
+fastify.post('/v1/household/bearer-keys', async (request, reply) => {
+  const body = request.body ?? {};
+  const householdId = typeof body.householdId === 'string' ? body.householdId.trim().slice(0, 64) : '';
+  const action = typeof body.action === 'string' ? body.action.trim() : '';
+  if (!householdId) return reply.code(400).send({ error: 'householdId required' });
+  if (!action) return reply.code(400).send({ error: 'action required (create | list | revoke)' });
+  if (!(await assertAuthorized(request, reply, householdId))) return;
+  if (refuseHouseholdApiKey(request, reply)) return;
+  await initDbIfNeeded(request.log);
+  if (!getDbEnabled()) return reply.code(503).send({ error: 'DATABASE_URL is not set.' });
+  const owner = await requirePrimaryOwnerMember(request, reply, householdId, body);
+  if (!owner) return;
+
+  if (action === 'create') {
+    const raw = `hk_${crypto.randomBytes(24).toString('hex')}`;
+    const tokenHash = hashUtf8Sha256Hex(raw);
+    const label = typeof body.label === 'string' ? body.label.slice(0, 80) : '';
+    const ins = await insertBearerKey({ householdId, tokenHash, label });
+    return reply.send({ ok: true, key: raw, id: ins.id, createdAt: ins.created_at });
+  }
+  if (action === 'list') {
+    const keys = await listBearerKeysForHousehold(householdId);
+    return reply.send({
+      ok: true,
+      keys: keys.map((k) => ({
+        id: k.id,
+        label: k.label,
+        createdAt: k.created_at,
+        revoked: Boolean(k.revoked_at),
+      })),
+    });
+  }
+  if (action === 'revoke') {
+    const keyId = typeof body.keyId === 'string' ? body.keyId.trim() : '';
+    if (!keyId) return reply.code(400).send({ error: 'keyId required' });
+    await revokeBearerKey(keyId, householdId);
+    return reply.send({ ok: true });
+  }
+  return reply.code(400).send({ error: 'Unknown action' });
+});
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, 'public');
 const serveSpa = fs.existsSync(path.join(publicDir, 'index.html'));
-
-function pickRecipients(body) {
-  const envTo = splitRecipients(notifyTo.trim());
-  const list = Array.isArray(body?.to) ? body.to : [];
-  const cleaned = list
-    .filter((v) => typeof v === 'string')
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .slice(0, 5);
-  return cleaned.length ? cleaned : envTo;
-}
-
-function authOr401(request, reply) {
-  if (!secret || secret.length < 16) {
-    reply.code(503).send({ error: 'NOTIFY_API_SECRET is not set or too short (min 16 chars).' });
-    return false;
-  }
-  const token = parseBearer(request.headers.authorization);
-  if (!token || !timingSafeEqual(token, secret)) {
-    reply.code(401).send({ error: 'Unauthorized' });
-    return false;
-  }
-  return true;
-}
 
 function sanitizeSaveDigest(body) {
   const d = body?.digest;
@@ -227,12 +963,15 @@ function sanitizeSaveDigest(body) {
 }
 
 fastify.post('/v1/notify', async (request, reply) => {
-  if (!notifyTo) {
-    return reply.code(503).send({ error: 'NOTIFY_TO is not set.' });
-  }
-  if (!authOr401(request, reply)) return;
+  const body = request.body ?? {};
+  const hid =
+    typeof body.id === 'string' && body.id.trim()
+      ? body.id.trim().slice(0, 64)
+      : typeof body.householdId === 'string' && body.householdId.trim()
+        ? body.householdId.trim().slice(0, 64)
+        : '';
+  if (!(await assertAuthorized(request, reply, hid))) return;
 
-  const body = request.body;
   try {
     const rawLen = JSON.stringify(body ?? {}).length;
     if (rawLen > 28000) {
@@ -276,8 +1015,15 @@ fastify.post('/v1/notify', async (request, reply) => {
   });
   const subject = template.subject.slice(0, 200);
 
+  const to = await resolveNotifyRecipients(body, request.log);
+  if (!to.length) {
+    return reply.code(400).send({
+      error:
+        'No recipient emails. Add addresses under Tools & alerts, save (snapshot), or include "to" in the request body. Legacy NOTIFY_TO env is optional.',
+    });
+  }
+
   try {
-    const to = pickRecipients(body);
     const result = await sendMail({
       to,
       subject,
@@ -295,11 +1041,11 @@ fastify.post('/v1/notify', async (request, reply) => {
 });
 
 fastify.post('/v1/snapshot', async (request, reply) => {
-  if (!authOr401(request, reply)) return;
   const body = request.body;
   const id = typeof body?.id === 'string' && body.id.trim() ? body.id.trim().slice(0, 64) : '';
-  const data = body?.data;
   if (!id) return reply.code(400).send({ error: 'Body must include "id" string.' });
+  if (!(await assertAuthorized(request, reply, id))) return;
+  const data = body?.data;
   if (!data || typeof data !== 'object') return reply.code(400).send({ error: 'Body must include "data" object.' });
   await writeSnapshot(id, data);
   return reply.send({ ok: true });
@@ -307,13 +1053,11 @@ fastify.post('/v1/snapshot', async (request, reply) => {
 
 /** Manual trigger (or Dokploy Schedule cron) to send due/overdue reminders. */
 fastify.post('/v1/reminders/send', async (request, reply) => {
-  if (!notifyTo) return reply.code(503).send({ error: 'NOTIFY_TO is not set.' });
-  if (!authOr401(request, reply)) return;
   const body = request.body;
   const id = typeof body?.id === 'string' && body.id.trim() ? body.id.trim().slice(0, 64) : '';
   if (!id) return reply.code(400).send({ error: 'Body must include "id" string.' });
+  if (!(await assertAuthorized(request, reply, id))) return;
 
-  // Prefer snapshot (fast). If missing, fall back to Postgres state so schedules work immediately after enabling server storage.
   const snap = await readSnapshot(id).catch(() => null);
   let stateData = snap?.data ?? null;
   if (!stateData) {
@@ -327,7 +1071,6 @@ fastify.post('/v1/reminders/send', async (request, reply) => {
 
   const { monthKey: mk, dueSoon, overdue, horizon, counts } = computeReminderEmailPayload(stateData, new Date());
   if (counts.dueSoon === 0 && counts.overdue === 0 && counts.horizon === 0) {
-    // Quiet days: do not email.
     return reply.send({ ok: true, skipped: true, counts });
   }
 
@@ -349,8 +1092,15 @@ fastify.post('/v1/reminders/send', async (request, reply) => {
     footerHint,
   });
 
+  const to = pickReminderRecipients(body, stateData);
+  if (!to.length) {
+    return reply.code(400).send({
+      error:
+        'No recipient emails for reminders. Add husband/wife emails in Tools & alerts, save to refresh the snapshot, pass "to" in the cron body, or set NOTIFY_TO (legacy).',
+    });
+  }
+
   try {
-    const to = pickReminderRecipients(body, stateData);
     const result = await sendMail({ to, subject: template.subject.slice(0, 200), text, html });
     return reply.send({ ok: true, ...result, counts });
   } catch (e) {
@@ -361,10 +1111,26 @@ fastify.post('/v1/reminders/send', async (request, reply) => {
 
 fastify.get('/preview/email', async (request, reply) => {
   const q = request.query?.kind;
-  const kind = q === 'reminder' ? 'reminder' : q === 'digest' ? 'digest' : 'change';
+  const kind =
+    q === 'reminder'
+      ? 'reminder'
+      : q === 'digest'
+        ? 'digest'
+        : q === 'verify'
+          ? 'verify'
+          : q === 'reset'
+            ? 'reset'
+            : q === 'magic'
+              ? 'magic'
+              : 'change';
   const monthKey = '2026-05';
   let tpl;
-  if (kind === 'reminder') {
+  if (kind === 'verify' || kind === 'reset' || kind === 'magic') {
+    tpl = buildAuthActionEmail({
+      kind: kind === 'magic' ? 'magic' : kind,
+      actionLink: 'https://example.com/#verify=demo-token-hex-64-chars-placeholder-demo-token-hex-64-chars',
+    });
+  } else if (kind === 'reminder') {
     tpl = buildReminderEmailTemplate({
       monthKey,
       dueSoon: [
@@ -415,7 +1181,12 @@ fastify.get('/preview/email', async (request, reply) => {
     });
   }
 
-  const html = renderEmailHtml({ title: tpl.title, preheader: tpl.preheader, sections: tpl.sections });
+  const html = renderEmailHtml({
+    title: tpl.title,
+    preheader: tpl.preheader,
+    sections: tpl.sections,
+    footerHint: tpl.footerHint,
+  });
   reply.header('Content-Type', 'text/html; charset=utf-8').send(html);
 });
 
@@ -434,6 +1205,16 @@ if (serveSpa) {
   fastify.log.info('Serving SPA from ./public');
 } else {
   fastify.log.warn('No ./public/index.html — API only (local dev?)');
+}
+
+if (getDbEnabled()) {
+  try {
+    await initDbIfNeeded(fastify.log);
+    fastify.log.info('Postgres schema initialized (or already up to date)');
+  } catch (err) {
+    fastify.log.error(err);
+    process.exit(1);
+  }
 }
 
 try {

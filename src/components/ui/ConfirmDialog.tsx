@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { zLayers } from '../../ui/zLayers';
 
 export type ConfirmDialogProps = {
   open: boolean;
@@ -69,7 +70,10 @@ export function ConfirmDialog({
   if (!open || typeof document === 'undefined') return null;
 
   const portal = (
-    <div className="fixed inset-0 z-[10002] isolate flex items-center justify-center p-4 sm:p-6">
+    <div
+      className="fixed inset-0 isolate flex items-center justify-center p-4 sm:p-6"
+      style={{ zIndex: zLayers.modal }}
+    >
       <button
         type="button"
         className="absolute inset-0 bg-sage-950/55 backdrop-blur-[2px] dark:bg-black/70"

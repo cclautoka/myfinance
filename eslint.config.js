@@ -18,5 +18,11 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      // Hash/session hydration and controlled-input sync legitimately set state in effects;
+      // React Compiler’s preserve rule conflicts with mutable workbook state in useMemo deps.
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/preserve-manual-memoization': 'off',
+    },
   },
 ])

@@ -59,9 +59,12 @@ Open **Environment** for this application and add at least:
 | Name | Example | Purpose |
 | ------ | --------- | --------- |
 | `NODE_ENV` | `production` | Standard Node production mode. |
-| `DATABASE_URL` | `postgres://user:pass@host:5432/dbname` | **Server-side persistence** for your entire workbook (JSONB in Postgres). |
-| `NOTIFY_API_SECRET` | `paste-a-long-random-string-at-least-16-chars` | Same value you type in the app under **Tips & backup → Shared secret**. |
-| `NOTIFY_TO` | `you@gmail.com` or `a@gmail.com,b@gmail.com` | Change-summary mail and **fallback** for scheduled reminders. If the uploaded snapshot includes husband/wife addresses from **Tools & alerts**, reminder cron uses those first (unless the cron body sends its own `to`). |
+| `DATABASE_URL` | `postgres://user:pass@host:5432/dbname` | **Server-side persistence** (workbook JSONB + household auth tables). The container runs **`node scripts/db-migrate.mjs`** before starting Node, and the server also runs schema init on boot. |
+| `SESSION_SECRET` | Long random string (**16+ chars**) | **Required** for household sign-in (`fm_sess_…` tokens). |
+| `NOTIFY_LEGACY_SECRET_DISABLED` | `1` | **Recommended** once every client uses session / `hk_` keys — disables legacy global `NOTIFY_API_SECRET` bearer. |
+| `NOTIFY_API_SECRET` | `paste-a-long-random-string-at-least-16-chars` | Legacy shared bearer for old devices. **Omit** if `NOTIFY_LEGACY_SECRET_DISABLED=1` and you only use sessions + household keys. |
+| `APP_PUBLIC_URL` or `SITE_URL` | `https://finances.yourdomain.com` | Used in **magic login**, **invite**, **verify**, **reset** links returned by the API. |
+| `NOTIFY_TO` | *(optional)* comma-separated emails | **Legacy fallback** only. Prefer **Tools & alerts** addresses saved into the snapshot; summaries use `to` from the client, snapshot emails, then this env. |
 
 **Email (pick one path):**
 
@@ -83,7 +86,7 @@ See also: `server/env.example` in the repo.
 
 ### Postgres note (Dokploy)
 
-Dokploy already runs Postgres for itself, but it’s usually best to create a **dedicated Postgres app/database** for your finance data (or at least a separate database) and set `DATABASE_URL` to that. The app will create a table named `finance_state` automatically.
+Dokploy already runs Postgres for itself, but it’s usually best to create a **dedicated Postgres app/database** for your finance data (or at least a separate database) and set `DATABASE_URL` to that. On each deploy the image runs **`node scripts/db-migrate.mjs`** before `index.mjs`, which creates/verifies **`finance_state`** plus **household** tables (`household_member`, `household_email_token`, `household_bearer_key`, etc.). The server also runs the same DDL on boot if anything changed.
 
 ---
 
@@ -101,16 +104,17 @@ Success response: JSON `{"ok":true}`.
 ## 6. Deploy
 
 1. Click **Deploy** / **Rebuild** (first build runs `npm ci` + Vite build + server install — can take **several minutes**).
-2. Open **Build logs** if it fails (common issues: out-of-memory on small VPS — upgrade RAM or add swap; or Git clone/auth errors).
+2. The running container executes **`db:migrate`** then starts the API — check logs for `db:migrate — OK` before `Listening on 8787`.
+3. Open **Build logs** if the image fails to build (common issues: out-of-memory on small VPS — upgrade RAM or add swap; or Git clone/auth errors).
 
 ---
 
 ## 7. After it’s green
 
 1. Visit **`https://finances.yourdomain.com`** (your domain). You should see the **Household finances** UI.
-2. **Tips & backup** → **Email heads-up**  
+2. **Tools & alerts** → **Email heads-up**  
    - **Notify API URL:** **`/v1/notify`**  
-   - **Shared secret:** same as **`NOTIFY_API_SECRET`**  
+   - **Shared secret:** only if you still use legacy `NOTIFY_API_SECRET` (otherwise leave empty when using **SESSION_SECRET** + sign-in / `hk_` keys).  
    - Enable **Send email summaries after changes**  
    - **Send test email** — check inbox/spam.
 
@@ -122,7 +126,8 @@ Success response: JSON `{"ok":true}`.
 | --------- | ---------------- |
 | **`{"message":"Branch Not Match"}`** on a URL like `/api/deploy/...` | That URL is a **deploy webhook**, not your website. Don’t open it in the browser as the “site.” In Dokploy, set the app’s **Git branch** to **`main`** (same as GitHub). Webhooks must **POST** with the matching branch (GitHub does this automatically); a manual browser visit is a **GET** and will often fail this check. |
 | 502 / blank page | Port mapping → container **8787**; build logs for failed `npm run build`. |
-| Site loads, test email fails | `RESEND_*` or `SMTP_*` + `NOTIFY_TO`; Resend: domain/sender verified. |
+| Site loads, `/v1/state` or auth returns **503** / container restarts | **`DATABASE_URL`** wrong or DB unreachable. Runtime logs should show **`db:migrate`** failing before `Listening on 8787`. |
+| Site loads, test email fails | `RESEND_*` or `SMTP_*`; add notification emails in the app (or optional `NOTIFY_TO`). Resend: domain/sender verified. |
 | Browser console CORS on `/v1/notify` | Same host should avoid CORS; if you use a different API URL, set **`NOTIFY_CORS_ORIGINS`** to your exact UI origin (including `https://`). |
 | Email only after ~60s of no edits | By design: summaries are **debounced** so typing doesn’t spam you. |
 

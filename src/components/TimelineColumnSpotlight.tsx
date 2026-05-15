@@ -1,50 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { holeRectForTourTarget } from '../utils/spotlightStickyChrome';
 
 const PAD = 8;
 const AUTO_DISMISS_MS = 3200;
-
-/** Bottom edge of sticky header + section nav — hole must not start above this or the frame paints over the chrome. */
-function getStickyChromeBottomPx(): number {
-  let y = 0;
-  const header = document.querySelector('header');
-  const nav = document.getElementById('finance-quick-nav');
-  if (header instanceof HTMLElement) y = Math.max(y, header.getBoundingClientRect().bottom);
-  if (nav instanceof HTMLElement) y = Math.max(y, nav.getBoundingClientRect().bottom);
-  return y;
-}
-
-/** Viewport rect for the halo, clipped so it does not sit under sticky top chrome (measured live). */
-function holeRectForTarget(el: HTMLElement): {
-  top: number;
-  left: number;
-  width: number;
-  height: number;
-} | null {
-  const r = el.getBoundingClientRect();
-  if (r.width <= 8 || r.height <= 8) return null;
-
-  const chromeBottom = getStickyChromeBottomPx();
-  let top = r.top - PAD;
-  let height = r.height + PAD * 2;
-  const left = r.left - PAD;
-  const width = r.width + PAD * 2;
-
-  if (chromeBottom > 1 && top < chromeBottom) {
-    const eat = chromeBottom - top;
-    top = chromeBottom;
-    height = Math.max(56, height - eat);
-  }
-
-  const vh = typeof window !== 'undefined' ? window.innerHeight : height;
-  if (top + height > vh) {
-    height = Math.max(48, vh - top - PAD);
-  }
-
-  if (height < 40 || width < 40) return null;
-
-  return { top, left, width, height };
-}
 
 /**
  * One-shot “focus” overlay: dims the page and frames a single element (same hole technique as SpotlightTour).
@@ -73,7 +32,7 @@ export function TimelineColumnSpotlight({
       setHole(null);
       return;
     }
-    const next = holeRectForTarget(el);
+    const next = holeRectForTourTarget(el, PAD);
     setHole(next);
   }, [open, targetId]);
 

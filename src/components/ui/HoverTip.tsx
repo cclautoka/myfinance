@@ -164,17 +164,17 @@ export function HoverTip({
     [clearLeaveTimer, clearOpenTimer],
   );
 
-  const positioningEl = (): HTMLElement | null => {
+  const positioningEl = useCallback((): HTMLElement | null => {
     if (showTrigger && triggerRef.current) return triggerRef.current;
     return anchorRef.current;
-  };
+  }, [showTrigger]);
 
   const reposition = useCallback(() => {
     const a = positioningEl();
     const t = tipRef.current;
     if (!open || !a || !t) return;
     placeFloatingTip(a, t);
-  }, [open, showTrigger]);
+  }, [open, positioningEl]);
 
   useLayoutEffect(() => {
     if (!open) return;

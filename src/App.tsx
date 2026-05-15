@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { TimelineColumnSpotlight } from './components/TimelineColumnSpotlight';
-import { AdvisorPanel } from './components/AdvisorPanel';
 import { AllocationPanel } from './components/AllocationPanel';
 import { BudgetSurplusPanel } from './components/BudgetSurplusPanel';
 import { BillsTimeline } from './components/BillsTimeline';
@@ -14,7 +13,8 @@ import { Header } from './components/Header';
 import { IncomeLogPanel } from './components/IncomeLogPanel';
 import { LifeThisMonth } from './components/LifeThisMonth';
 import { HistoryMonthBanner } from './components/HistoryMonthBanner';
-import { FinanceQuickNav } from './components/layout/FinanceQuickNav';
+import { AppPrimaryTabs, type AppTab } from './components/layout/AppPrimaryTabs';
+import { FinanceToolsPanel } from './components/layout/FinanceToolsPanel';
 import { MobileBottomNav } from './components/layout/MobileBottomNav';
 import { FinanceWorkspaceShell, type WorkspaceTabSelection } from './components/layout/FinanceWorkspaceShell';
 import { PageSection } from './components/layout/PageSection';
@@ -22,20 +22,33 @@ import { MonthCashflowOpeningModal } from './components/MonthCashflowOpeningModa
 import { MonthFocusBar } from './components/MonthFocusBar';
 import { SpotlightTour } from './components/onboarding/SpotlightTour';
 import { MonthlyReport } from './components/MonthlyReport';
+import { PaymentsLifetimePanel } from './components/PaymentsLifetimePanel';
 import { PastMonthInsights } from './components/PastMonthInsights';
 import { SurpriseExpenses } from './components/SurpriseExpenses';
 import { ConfirmDialog } from './components/ui/ConfirmDialog';
 import { UpcomingBillsStrip } from './components/UpcomingBillsStrip';
 import { WalletPanel } from './components/WalletPanel';
-import { NotifyRelaySettings } from './components/NotifyRelaySettings';
-import { ONBOARDING_STORAGE_KEY } from './onboarding/constants';
+import { ONBOARDING_STORAGE_KEY, ONBOARDING_STEPS, ONBOARDING_TOUR_LATER_KEY } from './onboarding/constants';
 import {
   HISTORY_EARLIEST_MONTH_KEY,
   currentMonthKey,
   historySelectableMonthKeys,
 } from './data/defaults';
 import { usePersistedFinance } from './hooks/usePersistedFinance';
+import { HouseholdAuthShell } from './auth/HouseholdAuthShell';
+import { VerifyEmailGate } from './auth/VerifyEmailGate';
+import { HouseholdSetupWizard } from './setup/HouseholdSetupWizard';
+import { isHouseholdSetupComplete, maybeMigrateLegacyHouseholdSetup } from './setup/setupCompletion';
+import { zLayers } from './ui/zLayers';
 import { requiresMonthCashflowOpening } from './utils/monthOpening';
+import { readHouseholdSession, subscribeHouseholdSessionChanged, writeHouseholdSession } from './utils/householdSession';
+import {
+  apiBaseFromNotifyUrl,
+  parseMagicLoginTokenFromHash,
+  parseVerifyTokenFromHash,
+  postNotifyRelayPublicJson,
+  readNotifyRelayConfig,
+} from './utils/notifyRelayConfig';
 
 function applyThemeClass(theme: 'light' | 'dark' | 'system') {
   const root = document.documentElement;
@@ -53,8 +66,11 @@ const DASHBOARD_BILLS_COLUMN_ID = 'dashboard-bills-column';
 export default function App() {
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [tourReplay, setTourReplay] = useState(0);
+  const [tourLaterToast, setTourLaterToast] = useState(false);
+  const [magicLinkBanner, setMagicLinkBanner] = useState<string | null>(null);
   /** Full timeline click: dims the rest of the page and frames the checklist column briefly. */
   const [timelineColumnSpotlight, setTimelineColumnSpotlight] = useState(false);
+  const [appTab, setAppTab] = useState<AppTab>('dashboard');
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTabSelection>(null);
   const [focusedMonthKey, setFocusedMonthKey] = useState(() => {
     const keys = historySelectableMonthKeys();
@@ -62,6 +78,7 @@ export default function App() {
   });
 
   const scrollToBills = () => {
+    setAppTab('dashboard');
     setTimelineColumnSpotlight(true);
     requestAnimationFrame(() => {
       document.getElementById('bills-timeline')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -97,6 +114,191 @@ export default function App() {
 
   const monthOpeningBlocked = requiresMonthCashflowOpening(state);
 
+  const householdSignedIn = useSyncExternalStore(
+    subscribeHouseholdSessionChanged,
+    () => Boolean(readHouseholdSession()?.token),
+    () => false,
+  );
+
+  const [urlHash, setUrlHash] = useState(() => (typeof window !== 'undefined' ? window.location.hash : ''));
+  useEffect(() => {
+    const fn = () => setUrlHash(window.location.hash);
+    window.addEventListener('hashchange', fn);
+    return () => window.removeEventListener('hashchange', fn);
+  }, []);
+
+  const [setupTick, setSetupTick] = useState(0);
+  useEffect(() => {
+    maybeMigrateLegacyHouseholdSetup(state, readNotifyRelayConfig());
+  }, [state]);
+
+  useEffect(() => {
+    const vt = parseVerifyTokenFromHash();
+    if (!vt) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const j = (await postNotifyRelayPublicJson('/v1/household/auth/verify-email', { token: vt })) as {
+          token?: string;
+          member?: { email?: string; role?: string; householdId?: string };
+        };
+        if (cancelled) return;
+        if (j.token && j.member?.householdId) {
+          writeHouseholdSession({
+            token: j.token,
+            householdId: j.member.householdId,
+            email: j.member.email,
+            role: j.member.role,
+          });
+        }
+        setMagicLinkBanner('Email verified — you can continue in the app.');
+        try {
+          history.replaceState(null, '', window.location.pathname + window.location.search);
+        } catch {
+          /* ignore */
+        }
+      } catch (e) {
+        if (!cancelled) setMagicLinkBanner(String((e as Error)?.message ?? e));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const [emailVerified, setEmailVerified] = useState(true);
+  useEffect(() => {
+    if (!householdSignedIn) {
+      setEmailVerified(true);
+      return;
+    }
+    const base = apiBaseFromNotifyUrl(readNotifyRelayConfig().url);
+    if (!base) {
+      setEmailVerified(true);
+      return;
+    }
+    const sess = readHouseholdSession();
+    if (!sess?.token) {
+      setEmailVerified(true);
+      return;
+    }
+    let cancelled = false;
+    void fetch(`${base}/v1/household/auth/me`, {
+      headers: { Authorization: `Bearer ${sess.token}` },
+    })
+      .then(async (res) => {
+        if (res.status === 403) return false;
+        if (!res.ok) return true;
+        const j = (await res.json()) as { member?: { emailVerified?: boolean } };
+        return Boolean(j.member?.emailVerified);
+      })
+      .then((v) => {
+        if (!cancelled) setEmailVerified(v);
+      })
+      .catch(() => {
+        if (!cancelled) setEmailVerified(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [householdSignedIn]);
+
+  useEffect(() => {
+    const refresh = () => {
+      const sess = readHouseholdSession();
+      if (!sess?.token) return;
+      const base = apiBaseFromNotifyUrl(readNotifyRelayConfig().url);
+      if (!base) return;
+      void fetch(`${base}/v1/household/auth/refresh`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${sess.token}` },
+      })
+        .then(async (r) => {
+          if (!r.ok) return null;
+          return r.json() as Promise<{ token?: string }>;
+        })
+        .then((j) => {
+          if (j?.token) writeHouseholdSession({ ...sess, token: j.token });
+        })
+        .catch(() => {});
+    };
+    window.addEventListener('focus', refresh);
+    return () => window.removeEventListener('focus', refresh);
+  }, []);
+
+  const notifyCfg = readNotifyRelayConfig();
+  const setupDone = useMemo(
+    () => isHouseholdSetupComplete(state, readNotifyRelayConfig()),
+    // setupTick: wizard completion writes localStorage; force re-check without a full state bump.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional
+    [state, setupTick],
+  );
+  const showAuthShell = !householdSignedIn && urlHash === '#auth';
+  const needsVerifyGate = householdSignedIn && Boolean(apiBaseFromNotifyUrl(notifyCfg.url)) && !emailVerified;
+
+  useEffect(() => {
+    if (householdSignedIn && urlHash === '#auth') {
+      try {
+        history.replaceState(null, '', window.location.pathname + window.location.search);
+      } catch {
+        /* ignore */
+      }
+      setUrlHash('');
+    }
+  }, [householdSignedIn, urlHash]);
+
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem(ONBOARDING_TOUR_LATER_KEY) !== '1') return;
+      if (localStorage.getItem(ONBOARDING_STORAGE_KEY) === '1') {
+        sessionStorage.removeItem(ONBOARDING_TOUR_LATER_KEY);
+        return;
+      }
+      setTourLaterToast(true);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    const t = parseMagicLoginTokenFromHash();
+    if (!t) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const j = (await postNotifyRelayPublicJson('/v1/household/auth/consume-magic-login', { token: t })) as {
+          token?: string;
+          member?: { email?: string; role?: string; householdId?: string };
+        };
+        if (cancelled) return;
+        if (j.token && j.member?.householdId) {
+          writeHouseholdSession({
+            token: j.token,
+            householdId: j.member.householdId,
+            email: j.member.email,
+            role: j.member.role,
+          });
+          try {
+            await reloadFromServer();
+          } catch {
+            /* ignore */
+          }
+        }
+        setMagicLinkBanner('Signed in via email link.');
+        try {
+          history.replaceState(null, '', window.location.pathname + window.location.search);
+        } catch {
+          /* ignore */
+        }
+      } catch (e) {
+        if (!cancelled) setMagicLinkBanner(String((e as Error)?.message ?? e));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadFromServer]);
+
   const selectableHistoryKeys = historySelectableMonthKeys();
   const focusedHistoryMonth =
     selectableHistoryKeys.length > 0 && !selectableHistoryKeys.includes(focusedMonthKey)
@@ -116,8 +318,8 @@ export default function App() {
   useEffect(() => {
     const meta = document.querySelector('meta[name="theme-color"]');
     if (!(meta instanceof HTMLMetaElement)) return;
-    const light = '#f6f7f4';
-    const dark = '#0b0c0a';
+    const light = '#f4f7fb';
+    const dark = '#050506';
     const sync = () => {
       meta.content = document.documentElement.classList.contains('dark') ? dark : light;
     };
@@ -130,11 +332,44 @@ export default function App() {
   const openTourReplay = () => {
     try {
       localStorage.removeItem(ONBOARDING_STORAGE_KEY);
+      sessionStorage.removeItem(ONBOARDING_TOUR_LATER_KEY);
     } catch {
       /* ignore */
     }
+    setTourLaterToast(false);
     setTourReplay((n) => n + 1);
   };
+
+  if (showAuthShell) {
+    return (
+      <HouseholdAuthShell
+        theme={state.theme}
+        onTheme={setTheme}
+        onAuthed={() => {
+          setSetupTick((n) => n + 1);
+          setUrlHash('');
+        }}
+      />
+    );
+  }
+
+  if (needsVerifyGate) {
+    return <VerifyEmailGate theme={state.theme} onTheme={setTheme} />;
+  }
+
+  if (!setupDone) {
+    return (
+      <HouseholdSetupWizard
+        state={state}
+        setIncome={setIncome}
+        setEssentials={setEssentials}
+        setDebts={setDebts}
+        onComplete={() => setSetupTick((n) => n + 1)}
+        theme={state.theme}
+        onTheme={setTheme}
+      />
+    );
+  }
 
   return (
     <div className="min-h-svh pb-[max(4rem,calc(4.5rem+env(safe-area-inset-bottom,0px)))] lg:pb-16">
@@ -145,7 +380,30 @@ export default function App() {
           onClose={() => setTimelineColumnSpotlight(false)}
         />
       ) : null}
-      {!monthOpeningBlocked ? <SpotlightTour key={tourReplay} /> : null}
+      {!monthOpeningBlocked ? (
+        <SpotlightTour
+          key={tourReplay}
+          householdSignedIn={householdSignedIn}
+          layoutSyncKey={`${appTab}-${workspaceTab ?? 'none'}`}
+          onPrepareStep={(i) => {
+            const t = ONBOARDING_STEPS[i]?.target;
+            if (t === 'tour-dashboard-snapshot' || t === 'tour-bills-checklist') {
+              setAppTab('dashboard');
+            }
+            if (t === 'tour-pay-log') {
+              setAppTab('dashboard');
+              const more = document.getElementById('dashboard-more-month');
+              if (more instanceof HTMLDetailsElement) more.open = true;
+            }
+            if (t === 'tour-workspace') {
+              setAppTab('workspace');
+            }
+            if (t === 'tour-tools-notify') {
+              setAppTab('tools');
+            }
+          }}
+        />
+      ) : null}
       <div
         {...(monthOpeningBlocked ? { inert: true as const } : {})}
         className={
@@ -155,219 +413,268 @@ export default function App() {
         }
         aria-hidden={monthOpeningBlocked}
       >
-      <Header theme={state.theme} onTheme={setTheme} />
-      <FinanceQuickNav dataTour="tour-quick-nav" onWorkspaceTab={setWorkspaceTab} />
-      {!monthOpeningBlocked ? <MobileBottomNav onWorkspaceTab={setWorkspaceTab} /> : null}
-      <main className="mx-auto max-w-7xl space-y-24 px-4 py-10 sm:px-6 xl:max-w-[96rem]">
-        <PageSection
-          id="finance-dashboard"
-          dataTour="tour-dashboard"
-          title="Dashboard"
-          subtitle="Side columns: bills due and checklist. Centre: snapshot, surplus sweeps to emergency, deposits, extras. Surprise bills log in the band right under here — past months live in worksheets tabs."
-          variant="band"
-          accent="emerald"
-          eyebrow="Live month"
-        >
-          <div className="relative isolate flex min-w-0 flex-col gap-10 lg:block">
-            <div className="order-3 flex min-w-0 flex-col gap-8 lg:order-none lg:ml-[calc((100%-4rem)*3/12+2rem)] lg:mr-[calc((100%-4rem)*3/12+2rem)] lg:w-[calc((100%-4rem)*6/12)]">
-              <DashboardOverview state={state} />
-              <DebtSnowball state={state} compact />
-              <BudgetSurplusPanel
-                state={state}
-                onSweepToEmergency={applyBudgetSurplusToEmergency}
-                onSetMonthSpendableCarry={setMonthSpendableCarry}
-              />
-              <DashboardIncomeBridge state={state} />
-              <IncomeLogPanel
-                variant="dashboard"
-                state={state}
-                monthKey={currentMonthKey()}
-                onAdd={addIncomeLog}
-                onRemove={removeIncomeLog}
-                onUpdateIncomeLog={updateIncomeLog}
-              />
-              <LifeThisMonth state={state} onAddExtra={addExtraIncome} onRemoveExtra={removeExtraIncome} />
-            </div>
-
-            <aside className="order-1 min-w-0 lg:order-none lg:absolute lg:left-0 lg:top-0 lg:z-[1] lg:h-full lg:w-[calc((100%-4rem)*3/12)] lg:overflow-hidden">
-              <div className="scrollbar-app h-auto min-h-0 w-full min-w-0">
-                <UpcomingBillsStrip state={state} onOpenTimeline={scrollToBills} />
-              </div>
-            </aside>
-
-            <aside
-              id={DASHBOARD_BILLS_COLUMN_ID}
-              className="order-2 min-w-0 lg:order-none lg:absolute lg:right-0 lg:top-0 lg:z-[1] lg:h-full lg:w-[calc((100%-4rem)*3/12)] lg:overflow-hidden"
+      <Header
+        theme={state.theme}
+        onTheme={setTheme}
+        householdSignedIn={householdSignedIn}
+        onOpenAccount={() => {
+          try {
+            window.location.hash = '#auth';
+          } catch {
+            /* ignore */
+          }
+          setUrlHash('#auth');
+        }}
+      />
+      <AppPrimaryTabs value={appTab} onChange={setAppTab} />
+      {!monthOpeningBlocked ? <MobileBottomNav appTab={appTab} onAppTabChange={setAppTab} /> : null}
+      <main className="mx-auto max-w-7xl space-y-12 px-4 py-8 sm:px-6 sm:py-10 xl:max-w-[96rem]">
+        {appTab === 'dashboard' ? (
+          <div role="tabpanel" id="app-tabpanel-dashboard" aria-labelledby="app-tab-dashboard" className="space-y-12">
+            <PageSection
+              id="finance-dashboard"
+              dataTour="tour-dashboard"
+              title="Dashboard"
+              subtitle="This month: snapshot in the centre · bills on the sides · pay log below."
+              variant="band"
+              accent="emerald"
+              eyebrow="Live month"
             >
-              <div className="scrollbar-app h-auto min-h-0 w-full min-w-0">
-                <BillsTimeline state={state} onTogglePaid={toggleBillPaid} />
+              <div className="relative isolate flex min-w-0 flex-col gap-10 lg:block">
+                <div className="order-3 flex min-w-0 flex-col gap-8 lg:order-none lg:ml-[calc((100%-4rem)*3/12+2rem)] lg:mr-[calc((100%-4rem)*3/12+2rem)] lg:w-[calc((100%-4rem)*6/12)]">
+                  <div data-tour="tour-dashboard-snapshot" className="min-w-0 space-y-8">
+                    <DashboardOverview state={state} />
+                    <PaymentsLifetimePanel state={state} />
+                  </div>
+                  <details
+                    id="dashboard-more-month"
+                    className="group rounded-xl border border-slate-200/80 bg-white/80 open:bg-white dark:border-moss-border dark:bg-moss-surface/60 dark:open:bg-moss-surface"
+                  >
+                    <summary className="cursor-pointer list-none px-3 py-2.5 text-sm font-bold text-slate-800 marker:content-none dark:text-moss-fg [&::-webkit-details-marker]:hidden">
+                      <span className="underline decoration-slate-400 decoration-2 underline-offset-2 group-open:no-underline">
+                        More this month (snowball, surplus, pay)
+                      </span>
+                    </summary>
+                    <div className="space-y-8 border-t border-slate-200/70 px-3 pb-4 pt-4 dark:border-moss-border">
+                      <DebtSnowball state={state} compact />
+                      <BudgetSurplusPanel
+                        state={state}
+                        onSweepToEmergency={applyBudgetSurplusToEmergency}
+                        onSetMonthSpendableCarry={setMonthSpendableCarry}
+                      />
+                      <div data-tour="tour-pay-log" className="space-y-4">
+                        <DashboardIncomeBridge state={state} />
+                        <IncomeLogPanel
+                          variant="dashboard"
+                          state={state}
+                          monthKey={currentMonthKey()}
+                          onAdd={addIncomeLog}
+                          onRemove={removeIncomeLog}
+                          onUpdateIncomeLog={updateIncomeLog}
+                        />
+                      </div>
+                    </div>
+                  </details>
+                  <LifeThisMonth state={state} onAddExtra={addExtraIncome} onRemoveExtra={removeExtraIncome} />
+                </div>
+
+                <aside className="order-1 min-w-0 lg:order-none lg:absolute lg:left-0 lg:top-0 lg:z-[1] lg:h-full lg:w-[calc((100%-4rem)*3/12)] lg:overflow-hidden">
+                  <div className="scrollbar-app h-auto min-h-0 w-full min-w-0">
+                    <UpcomingBillsStrip state={state} onOpenTimeline={scrollToBills} />
+                  </div>
+                </aside>
+
+                <aside
+                  id={DASHBOARD_BILLS_COLUMN_ID}
+                  className="order-2 min-w-0 lg:order-none lg:absolute lg:right-0 lg:top-0 lg:z-[1] lg:h-full lg:w-[calc((100%-4rem)*3/12)] lg:overflow-hidden"
+                >
+                  <div className="scrollbar-app h-auto min-h-0 w-full min-w-0">
+                    <BillsTimeline state={state} onTogglePaid={toggleBillPaid} />
+                  </div>
+                </aside>
               </div>
-            </aside>
+            </PageSection>
+
+            <details
+              id="finance-surprise-log"
+              className="rounded-xl border border-amber-200/70 bg-amber-50/30 px-4 py-2 dark:border-amber-900/35 dark:bg-amber-950/20 sm:px-6"
+            >
+              <summary className="cursor-pointer py-3 font-display text-lg font-bold text-sage-900 dark:text-moss-fg">
+                Unexpected expenses (optional)
+              </summary>
+              <div className="pb-6 pt-2">
+                <SurpriseExpenses state={state} onAdd={addSurpriseExpense} onRemove={removeSurpriseExpense} />
+              </div>
+            </details>
+
           </div>
-        </PageSection>
+        ) : null}
 
-        <PageSection
-          id="finance-surprise-log"
-          dataTour="tour-surprise-log"
-          title="Unexpected expenses"
-          subtitle="One-off costs for the story only — typed here soon after they happen so months stay truthful. Uses the same list as Past months recap when you browse older calendar months."
-          variant="band"
-          accent="amber"
-          eyebrow="Story & shocks"
-        >
-          <SurpriseExpenses state={state} onAdd={addSurpriseExpense} onRemove={removeSurpriseExpense} />
-        </PageSection>
-
-        <PageSection
-          id="finance-guidance"
-          dataTour="tour-guidance"
-          title="Money guidance"
-          subtitle="Plain-English nudges from what you typed below — patterns and reminders only, not professional advice."
-          variant="spotlight"
-          accent="teal"
-          eyebrow="Read this"
-        >
-          <AdvisorPanel state={state} prominent />
-        </PageSection>
-
-        <FinanceWorkspaceShell
-          tab={workspaceTab}
-          onTabChange={setWorkspaceTab}
-          panels={{
-            past: (
-              <div id="finance-history" data-tour="tour-history" className="space-y-10">
-                <MonthFocusBar monthKey={focusedHistoryMonth} onMonthKeyChange={setFocusedMonthKey} />
-                <HistoryMonthBanner state={state} monthKey={focusedHistoryMonth} />
-                <PastMonthInsights
-                  state={state}
-                  monthKey={focusedHistoryMonth}
-                  onRetroMarkHandled={toggleBillPaid}
-                  onUpdateExtra={updateExtraIncome}
-                  onUpdateSurprise={updateSurpriseExpense}
-                  onAddExtra={addExtraIncome}
-                  onRemoveExtra={removeExtraIncome}
-                  onAddSurprise={addSurpriseExpense}
-                  onRemoveSurprise={removeSurpriseExpense}
-                />
-                <IncomeLogPanel
-                  variant="pastMonth"
-                  state={state}
-                  monthKey={focusedHistoryMonth}
-                  onAdd={addIncomeLog}
-                  onRemove={removeIncomeLog}
-                  onUpdateIncomeLog={updateIncomeLog}
-                />
-                <MonthlyReport state={state} summaryMonthKey={focusedHistoryMonth} />
-              </div>
-            ),
-            household: (
-              <div id="finance-household" data-tour="tour-household" className="space-y-4">
-                <p className="text-sm font-medium text-sage-700 dark:text-moss-subtle">
-                  Monthly pay, rhythms, groceries, utilities, loans — edits flow through the dashboard the same minute you save.
-                </p>
-                <DataEditor
-                  state={state}
-                  onIncome={setIncome}
-                  onEssentials={setEssentials}
-                  onDebts={setDebts}
-                  patchState={update}
-                />
-              </div>
-            ),
-            plan: (
-              <div id="finance-plan" data-tour="tour-plan" className="space-y-10">
-                <AllocationPanel state={state} onPatch={update} />
-                <div>
-                  <h3 className="mb-2 font-display text-xl font-bold text-sage-900 dark:text-moss-fg">
-                    Fun money & emergency savings
-                  </h3>
-                  <p className="mb-6 max-w-3xl text-sm font-medium text-sage-700 dark:text-moss-subtle">
-                    Discretionary taps per person, and rainy-day balance you refresh after transfers.
-                  </p>
-                  <div className="grid gap-8 lg:grid-cols-2 lg:items-start">
-                    <WalletPanel state={state} onWallets={setWallets} />
-                    <EmergencyFund state={state} onFund={setEmergency} onTarget={setThreeMonthTarget} />
+        {appTab === 'workspace' ? (
+          <div role="tabpanel" id="app-tabpanel-workspace" aria-labelledby="app-tab-workspace">
+            <FinanceWorkspaceShell
+              tab={workspaceTab}
+              onTabChange={setWorkspaceTab}
+              panels={{
+                past: (
+                  <div id="finance-history" data-tour="tour-history" className="space-y-10">
+                    <MonthFocusBar monthKey={focusedHistoryMonth} onMonthKeyChange={setFocusedMonthKey} />
+                    <HistoryMonthBanner state={state} monthKey={focusedHistoryMonth} />
+                    <PastMonthInsights
+                      state={state}
+                      monthKey={focusedHistoryMonth}
+                      onRetroMarkHandled={toggleBillPaid}
+                      onUpdateExtra={updateExtraIncome}
+                      onUpdateSurprise={updateSurpriseExpense}
+                      onAddExtra={addExtraIncome}
+                      onRemoveExtra={removeExtraIncome}
+                      onAddSurprise={addSurpriseExpense}
+                      onRemoveSurprise={removeSurpriseExpense}
+                    />
+                    <IncomeLogPanel
+                      variant="pastMonth"
+                      state={state}
+                      monthKey={focusedHistoryMonth}
+                      onAdd={addIncomeLog}
+                      onRemove={removeIncomeLog}
+                      onUpdateIncomeLog={updateIncomeLog}
+                    />
+                    <MonthlyReport state={state} summaryMonthKey={focusedHistoryMonth} />
                   </div>
-                </div>
-                <DebtBalancesPanel state={state} />
-                <div className="rounded-2xl border border-sage-200/80 bg-sage-50/50 px-4 py-3 text-sm text-sage-700 dark:border-moss-border dark:bg-moss-bg/50 dark:text-moss-subtle">
-                  <strong className="text-sage-900 dark:text-moss-fg">Payoff bar chart</strong> now lives on the{' '}
-                  <button
-                    type="button"
-                    className="font-semibold text-teal-900 underline underline-offset-2 dark:text-moss-tip"
-                    onClick={() =>
-                      document.getElementById('finance-dashboard')?.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'start',
-                      })
-                    }
-                  >
-                    Dashboard
-                  </button>{' '}
-                  (center column).
-                </div>
-                <div className="rounded-2xl border-2 border-dashed border-sage-400/70 bg-white/85 px-4 py-4 text-sm leading-relaxed text-sage-800 dark:border-moss-border dark:bg-moss-surface/80 dark:text-moss-subtle">
-                  <strong className="text-sage-900 dark:text-moss-fg">Bill calendar & checkmarks</strong> stay on the{' '}
-                  <button
-                    type="button"
-                    className="font-semibold text-sage-900 underline underline-offset-2 hover:text-teal-800 dark:text-moss-fg dark:hover:text-teal-300/90"
-                    onClick={() =>
-                      document.getElementById('finance-dashboard')?.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'start',
-                      })
-                    }
-                  >
-                    Dashboard
-                  </button>
-                  .
-                </div>
-              </div>
-            ),
-            backup: (
-              <div id="finance-manage" data-tour="tour-manage" className="space-y-8">
-                <p className="max-w-3xl text-sm font-medium leading-relaxed text-sage-700 dark:text-moss-subtle">
-                  Data tools: export from the Past months tab; replay onboarding or wipe this browser workspace below. Auto-scheduled{' '}
-                  <strong className="text-sage-900 dark:text-moss-fg">Paycheque</strong> logs for husband and wife are in{' '}
-                  <strong className="text-sage-900 dark:text-moss-fg">Household → Your numbers</strong>. Guidance cards live in the Guidance band above.
-                </p>
-                <NotifyRelaySettings state={state} onReloadFromServer={reloadFromServer} />
-                <footer className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border-2 border-dashed border-sage-400/80 bg-white/90 p-5 text-sm font-medium leading-relaxed text-sage-900 dark:border-moss-border dark:bg-moss-surface dark:text-moss-subtle">
-                  <p className="max-w-xl">
-                    Saved only on this device. Clear site data wipes it — grab a CSV from Past months anytime. Need the walk-through again?
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <button type="button" className="btn-secondary btn-secondary-sm font-bold" onClick={openTourReplay}>
-                      Replay tour
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-secondary btn-secondary-sm font-bold"
-                      onClick={() => setResetDialogOpen(true)}
-                    >
-                      Reset to starter numbers
-                    </button>
+                ),
+                household: (
+                  <div id="finance-household" data-tour="tour-household" className="space-y-4">
+                    <p className="text-sm font-medium text-sage-700 dark:text-moss-subtle">
+                      Monthly pay, essentials, and loans — same fields as first-run setup, editable any time.
+                    </p>
+                    <DataEditor
+                      state={state}
+                      onIncome={setIncome}
+                      onEssentials={setEssentials}
+                      onDebts={setDebts}
+                      patchState={update}
+                    />
                   </div>
-                </footer>
-              </div>
-            ),
-          }}
-        />
+                ),
+                plan: (
+                  <div id="finance-plan" data-tour="tour-plan" className="space-y-10">
+                    <AllocationPanel state={state} onPatch={update} />
+                    <div>
+                      <h3 className="mb-2 font-display text-xl font-bold text-sage-900 dark:text-moss-fg">
+                        Fun money & emergency savings
+                      </h3>
+                      <p className="mb-6 max-w-3xl text-sm font-medium text-sage-700 dark:text-moss-subtle">
+                        Discretionary taps per person, and rainy-day balance you refresh after transfers.
+                      </p>
+                      <div className="grid gap-8 lg:grid-cols-2 lg:items-start">
+                        <WalletPanel state={state} onWallets={setWallets} />
+                        <EmergencyFund state={state} onFund={setEmergency} onTarget={setThreeMonthTarget} />
+                      </div>
+                    </div>
+                    <DebtBalancesPanel state={state} />
+                    <div className="rounded-xl border border-sage-200/80 bg-sage-50/50 px-4 py-3 text-sm text-sage-700 dark:border-moss-border dark:bg-moss-bg/50 dark:text-moss-subtle">
+                      <strong className="text-sage-900 dark:text-moss-fg">Payoff bar chart</strong> lives on the{' '}
+                      <button
+                        type="button"
+                        className="font-semibold text-teal-900 underline underline-offset-2 dark:text-moss-tip"
+                        onClick={() => setAppTab('dashboard')}
+                      >
+                        Dashboard
+                      </button>{' '}
+                      tab (centre column).
+                    </div>
+                    <div className="rounded-xl border border-dashed border-sage-400/80 bg-white/90 px-4 py-4 text-sm leading-relaxed text-sage-800 dark:border-moss-border dark:bg-moss-surface/80 dark:text-moss-subtle">
+                      <strong className="text-sage-900 dark:text-moss-fg">Bill calendar & checkmarks</strong> stay on the{' '}
+                      <button
+                        type="button"
+                        className="font-semibold text-sage-900 underline underline-offset-2 hover:text-teal-800 dark:text-moss-fg dark:hover:text-teal-300/90"
+                        onClick={() => setAppTab('dashboard')}
+                      >
+                        Dashboard
+                      </button>{' '}
+                      tab.
+                    </div>
+                  </div>
+                ),
+              }}
+            />
+          </div>
+        ) : null}
+
+        {appTab === 'tools' ? (
+          <div role="tabpanel" id="app-tabpanel-tools" aria-labelledby="app-tab-tools">
+            <FinanceToolsPanel
+              state={state}
+              onReloadFromServer={reloadFromServer}
+              onReplayTour={openTourReplay}
+              onRequestReset={() => setResetDialogOpen(true)}
+            />
+          </div>
+        ) : null}
 
         <ConfirmDialog
           open={resetDialogOpen}
           onClose={() => setResetDialogOpen(false)}
           variant="danger"
-          title="Reset to starter numbers?"
-          description="Everything in this browser—the budget, paycheck log, debts, checkmarks—goes back to the demo template. Saved CSVs stay on your device; this doesn’t erase those files."
+          title="Reset to blank worksheet?"
+          description="Clears this browser’s budget, paycheck log, debts, and checkmarks back to an empty starter (zeros and no rows). Saved CSV exports on your device are not removed."
           cancelLabel="Keep my data"
           confirmLabel="Reset everything"
           onConfirm={() => resetAll()}
         />
       </main>
       </div>
+      {magicLinkBanner ? (
+        <div
+          className="pointer-events-auto fixed inset-x-0 top-0 flex justify-center px-4 pt-3 sm:pt-4"
+          style={{ zIndex: zLayers.toast + 10 }}
+        >
+          <div className="flex w-full max-w-2xl items-start justify-between gap-3 rounded-xl border border-teal-400/70 bg-teal-50/95 px-4 py-2.5 text-sm text-sage-900 shadow-lg backdrop-blur-sm dark:border-teal-700/50 dark:bg-teal-950/90 dark:text-teal-50">
+            <p className="min-w-0 break-words">{magicLinkBanner}</p>
+            <button
+              type="button"
+              className="shrink-0 text-xs font-bold text-teal-800 underline dark:text-teal-200"
+              onClick={() => setMagicLinkBanner(null)}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      ) : null}
       {monthOpeningBlocked ? (
-        <MonthCashflowOpeningModal state={state} onConfirm={completeMonthCashflowOpening} />
+        <MonthCashflowOpeningModal
+          state={state}
+          onConfirm={completeMonthCashflowOpening}
+          onStartTourAfterUnlock={openTourReplay}
+        />
+      ) : null}
+      {tourLaterToast && !monthOpeningBlocked ? (
+        <div
+          className="fixed bottom-[max(5.5rem,calc(5.5rem+env(safe-area-inset-bottom,0px)))] left-1/2 w-[min(22rem,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border border-teal-300/80 bg-white/95 p-3 text-sm shadow-xl backdrop-blur-sm dark:border-teal-800/50 dark:bg-moss-elevated/95 dark:text-moss-fg"
+          style={{ zIndex: zLayers.toast }}
+        >
+          <p className="font-semibold text-sage-900 dark:text-moss-fg">Resume guided tour?</p>
+          <p className="mt-1 text-xs text-sage-600 dark:text-moss-muted">You asked to be reminded later.</p>
+          <div className="mt-2 flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              className="btn-secondary btn-secondary-sm"
+              onClick={() => {
+                try {
+                  sessionStorage.removeItem(ONBOARDING_TOUR_LATER_KEY);
+                } catch {
+                  /* ignore */
+                }
+                setTourLaterToast(false);
+              }}
+            >
+              Dismiss
+            </button>
+            <button type="button" className="btn-primary btn-primary-sm" onClick={() => openTourReplay()}>
+              Continue tour
+            </button>
+          </div>
+        </div>
       ) : null}
     </div>
   );

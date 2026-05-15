@@ -3,7 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node index.mjs"
+    "start": "node index.mjs",
+    "test": "node --test __tests__/*.test.mjs",
+    "db:migrate": "node scripts/db-migrate.mjs",
+    "seed:shahil": "node scripts/seed-shahil-household.mjs"
   },
   "engines": {
     "node": ">=20"

@@ -1,7 +1,13 @@
-import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
-import { ONBOARDING_STEPS, ONBOARDING_STORAGE_KEY } from '../../onboarding/constants';
+import {
+  ONBOARDING_STORAGE_KEY,
+  ONBOARDING_TOUR_LATER_KEY,
+  onboardingStepsForContext,
+} from '../../onboarding/constants';
+import { zLayers } from '../../ui/zLayers';
+import { getStickyChromeBottomPx, holeRectForTourTarget } from '../../utils/spotlightStickyChrome';
 
 const PAD = 8;
 const POPOVER_W = 352;
@@ -24,25 +30,68 @@ function persistDismiss() {
   }
 }
 
-/** Bottom bar is `position: fixed` — `offsetParent` is often null; use geometry instead. */
-function isTourTargetVisible(el: HTMLElement): boolean {
+function mobileBottomNavOffsetPx(): number {
+  if (typeof window === 'undefined') return 0;
+  return window.matchMedia('(max-width: 1023.98px)').matches ? 56 : 0;
+}
+
+/** True when the element participates in layout (not inside a closed tab / display:none chain). */
+function isVisibleForSpotlight(el: HTMLElement): boolean {
+  if (!el.isConnected) return false;
+  for (let n: HTMLElement | null = el; n; n = n.parentElement) {
+    if (n.hidden) return false;
+    if (n.getAttribute('aria-hidden') === 'true') return false;
+    if (typeof window !== 'undefined') {
+      const st = window.getComputedStyle(n);
+      if (st.display === 'none' || st.visibility === 'hidden') return false;
+    }
+  }
   const r = el.getBoundingClientRect();
   return r.width > 8 && r.height > 8;
 }
 
 function queryTourElement(target: string): HTMLElement | null {
   if (target === 'tour-nav-shortcuts') {
-    const wide = typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches;
-    const primary = wide ? 'tour-quick-nav' : 'tour-bottom-nav';
-    const secondary = wide ? 'tour-bottom-nav' : 'tour-quick-nav';
-    for (const key of [primary, secondary]) {
-      const e = document.querySelector(`[data-tour="${key}"]`);
-      if (e instanceof HTMLElement && isTourTargetVisible(e)) return e;
+    const nodes = document.querySelectorAll('[data-tour="tour-nav-shortcuts"]');
+    for (const node of nodes) {
+      if (node instanceof HTMLElement && isVisibleForSpotlight(node)) return node;
     }
     return null;
   }
-  const el = document.querySelector(`[data-tour="${target}"]`);
-  return el instanceof HTMLElement ? el : null;
+  const nodes = document.querySelectorAll(`[data-tour="${CSS.escape(target)}"]`);
+  for (const node of nodes) {
+    if (node instanceof HTMLElement && isVisibleForSpotlight(node)) return node;
+  }
+  return null;
+}
+
+/** Four fixed panels around the spotlight hole so dimmed areas receive clicks (tour “remind later”). */
+function holeBackdropPanels(hole: { top: number; left: number; width: number; height: number }): {
+  key: string;
+  style: CSSProperties;
+}[] {
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 0;
+  const vh = typeof window !== 'undefined' ? window.innerHeight : 0;
+  if (vw <= 0 || vh <= 0) return [];
+  const top = Math.max(0, hole.top);
+  const left = Math.max(0, hole.left);
+  const right = Math.min(vw, hole.left + hole.width);
+  const bottom = Math.min(vh, hole.top + hole.height);
+  const panels: { key: string; style: CSSProperties }[] = [];
+  if (top > 0) {
+    panels.push({ key: 't', style: { top: 0, left: 0, width: vw, height: top } });
+  }
+  if (bottom < vh) {
+    panels.push({ key: 'b', style: { top: bottom, left: 0, width: vw, height: vh - bottom } });
+  }
+  const midH = Math.max(0, bottom - top);
+  if (left > 0 && midH > 0) {
+    panels.push({ key: 'l', style: { top: top, left: 0, width: left, height: midH } });
+  }
+  if (right < vw && midH > 0) {
+    panels.push({ key: 'r', style: { top: top, left: right, width: vw - right, height: midH } });
+  }
+  return panels;
 }
 
 function computePopoverStyle(hole: {
@@ -53,15 +102,19 @@ function computePopoverStyle(hole: {
 }): CSSProperties {
   const vw = typeof window !== 'undefined' ? window.innerWidth : 800;
   const vh = typeof window !== 'undefined' ? window.innerHeight : 600;
+  const navPad = mobileBottomNavOffsetPx();
+  const minTop = Math.max(SAFE, getStickyChromeBottomPx() + 8);
 
   if (hole.height > vh * 0.6) {
     return {
       position: 'fixed',
       right: SAFE,
-      bottom: SAFE,
+      bottom: SAFE + navPad,
       left: 'auto',
       top: 'auto',
+      maxHeight: `min(56vh, 28rem)`,
       width: `min(${POPOVER_W}px, calc(100vw - ${SAFE * 2}px))`,
+      zIndex: zLayers.spotlightPopover,
     };
   }
 
@@ -76,113 +129,160 @@ function computePopoverStyle(hole: {
     top = hole.top + hole.height + SAFE;
   }
 
-  if (top + POPOVER_H_EST > vh - SAFE) {
-    top = Math.max(SAFE, vh - POPOVER_H_EST - SAFE);
+  if (top + POPOVER_H_EST > vh - SAFE - navPad) {
+    top = Math.max(minTop, vh - POPOVER_H_EST - SAFE - navPad);
   }
-  top = Math.max(SAFE, top);
+  top = Math.max(minTop, top);
 
   return {
     position: 'fixed',
     left,
     top,
+    maxHeight: `min(56vh, 28rem)`,
     width: `min(${POPOVER_W}px, calc(100vw - ${SAFE * 2}px))`,
+    zIndex: zLayers.spotlightPopover,
+  };
+}
+
+function defaultTourPopoverStyle(): CSSProperties {
+  return {
+    position: 'fixed',
+    left: SAFE,
+    bottom: SAFE + mobileBottomNavOffsetPx(),
+    width: `min(${POPOVER_W}px, calc(100vw - ${SAFE * 2}px))`,
+    zIndex: zLayers.spotlightPopover,
   };
 }
 
 /**
  * Mount with changing `key` in the parent to replay after “Replay tour” (parent clears storage, then bumps key).
  */
-export function SpotlightTour() {
+export function SpotlightTour({
+  onPrepareStep,
+  householdSignedIn = false,
+  layoutSyncKey = '',
+}: {
+  /** e.g. open Tools tab before highlighting `tour-tools-notify`. */
+  onPrepareStep?: (stepIndex: number) => void;
+  /** Affects Tools-step copy (local relay vs signed-in server features). */
+  householdSignedIn?: boolean;
+  /** When this changes after prepare (e.g. workspace tab), hole geometry is re-measured. */
+  layoutSyncKey?: string;
+}) {
+  const steps = useMemo(
+    () => onboardingStepsForContext({ householdSignedIn }),
+    [householdSignedIn],
+  );
+
   const [visible, setVisible] = useState(() => typeof window !== 'undefined' && !readDismissed());
   const [stepIndex, setStepIndex] = useState(0);
   const [hole, setHole] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
-  const [popoverStyle, setPopoverStyle] = useState<CSSProperties>({
-    position: 'fixed',
-    left: SAFE,
-    bottom: SAFE,
-    width: `min(${POPOVER_W}px, calc(100vw - ${SAFE * 2}px))`,
-  });
+  const [popoverStyle, setPopoverStyle] = useState<CSSProperties>(() => defaultTourPopoverStyle());
 
-  const stepCount = ONBOARDING_STEPS.length;
+  const firstFocusRef = useRef<HTMLButtonElement | null>(null);
+  const stepCount = steps.length;
 
   const closeAndRemember = useCallback(() => {
     persistDismiss();
     setVisible(false);
   }, []);
 
+  const remindLater = useCallback(() => {
+    try {
+      sessionStorage.setItem(ONBOARDING_TOUR_LATER_KEY, '1');
+    } catch {
+      /* ignore */
+    }
+    setVisible(false);
+  }, []);
+
   const syncHole = useCallback(() => {
-    const step = ONBOARDING_STEPS[stepIndex];
+    const step = steps[stepIndex];
     if (!visible || !step) {
       setHole(null);
-      setPopoverStyle({
-        position: 'fixed',
-        left: SAFE,
-        bottom: SAFE,
-        width: `min(${POPOVER_W}px, calc(100vw - ${SAFE * 2}px))`,
-      });
+      setPopoverStyle(defaultTourPopoverStyle());
       return;
     }
     const el = queryTourElement(step.target);
     if (!el) {
       setHole(null);
-      setPopoverStyle({
-        position: 'fixed',
-        left: SAFE,
-        bottom: SAFE,
-        width: `min(${POPOVER_W}px, calc(100vw - ${SAFE * 2}px))`,
-      });
+      setPopoverStyle(defaultTourPopoverStyle());
       return;
     }
-    const r = el.getBoundingClientRect();
 
-    const h = Math.max(0, r.height + PAD * 2);
-    /** Missing / collapsed target only (large sections like the dashboard can exceed viewport height). */
-    if (r.height <= 8 || r.width <= 8) {
+    const nextHole = holeRectForTourTarget(el, PAD);
+    if (!nextHole) {
       setHole(null);
-      setPopoverStyle({
-        position: 'fixed',
-        left: SAFE,
-        bottom: SAFE,
-        width: `min(${POPOVER_W}px, calc(100vw - ${SAFE * 2}px))`,
-      });
+      setPopoverStyle(defaultTourPopoverStyle());
       return;
     }
-
-    const nextHole = {
-      top: r.top - PAD,
-      left: r.left - PAD,
-      width: r.width + PAD * 2,
-      height: h,
-    };
     setHole(nextHole);
     setPopoverStyle(computePopoverStyle(nextHole));
-  }, [stepIndex, visible]);
+  }, [stepIndex, visible, steps]);
+
+  const spotlightTimeoutsRef = useRef<number[]>([]);
+
+  useLayoutEffect(() => {
+    spotlightTimeoutsRef.current.forEach((id) => window.clearTimeout(id));
+    spotlightTimeoutsRef.current = [];
+    if (!visible) return;
+    onPrepareStep?.(stepIndex);
+
+    let cancelled = false;
+    let rafOuter = 0;
+
+    const runScrollAndScheduleHole = () => {
+      if (cancelled) return;
+      const step = steps[stepIndex];
+      if (!step) return;
+      const el = queryTourElement(step.target);
+      if (el) {
+        if (step.target === 'tour-nav-shortcuts' && window.matchMedia('(min-width: 1024px)').matches) {
+          window.scrollTo({ top: 0, behavior: stepIndex <= 2 ? 'auto' : 'smooth' });
+        }
+        const block = step.scrollBlock ?? 'center';
+        el.scrollIntoView({
+          behavior: stepIndex === 0 ? 'auto' : 'smooth',
+          block,
+          inline: 'nearest',
+        });
+      }
+      const delay = stepIndex === 0 ? 120 : 400;
+      const t1 = window.setTimeout(syncHole, delay);
+      const t2 = window.setTimeout(syncHole, delay + 150);
+      const t3 = window.setTimeout(syncHole, delay + 380);
+      spotlightTimeoutsRef.current.push(t1, t2, t3);
+    };
+
+    rafOuter = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(runScrollAndScheduleHole);
+    });
+
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(rafOuter);
+      spotlightTimeoutsRef.current.forEach((id) => window.clearTimeout(id));
+      spotlightTimeoutsRef.current = [];
+    };
+  }, [stepIndex, visible, syncHole, onPrepareStep, steps, layoutSyncKey]);
 
   useLayoutEffect(() => {
     if (!visible) return;
-    const step = ONBOARDING_STEPS[stepIndex];
-    if (!step) return;
-    const el = queryTourElement(step.target);
-    if (el) {
-      if (step.target === 'tour-nav-shortcuts' && window.matchMedia('(min-width: 1024px)').matches) {
-        window.scrollTo({ top: 0, behavior: stepIndex <= 1 ? 'auto' : 'smooth' });
-      }
-      const block = step.scrollBlock ?? 'center';
-      el.scrollIntoView({
-        behavior: stepIndex === 0 ? 'auto' : 'smooth',
-        block,
-        inline: 'nearest',
-      });
-    }
+    const t = window.setTimeout(() => firstFocusRef.current?.focus(), 80);
+    return () => window.clearTimeout(t);
+  }, [visible, stepIndex]);
 
-    const delay = stepIndex === 0 ? 120 : 400;
-    const t1 = window.setTimeout(syncHole, delay);
-    const t2 = window.setTimeout(syncHole, delay + 150);
-    return () => {
-      window.clearTimeout(t1);
-      window.clearTimeout(t2);
+  useEffect(() => {
+    if (!visible) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeAndRemember();
+      }
     };
-  }, [stepIndex, visible, syncHole]);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [visible, closeAndRemember]);
 
   useEffect(() => {
     if (!visible) return;
@@ -194,42 +294,56 @@ export function SpotlightTour() {
     queueHole();
     window.addEventListener('scroll', queueHole, true);
     window.addEventListener('resize', queueHole);
+    window.visualViewport?.addEventListener('resize', queueHole);
+    window.visualViewport?.addEventListener('scroll', queueHole);
     const ro =
       typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => queueHole()) : null;
-    const observed = queryTourElement(ONBOARDING_STEPS[stepIndex]?.target ?? '');
+    const observed = queryTourElement(steps[stepIndex]?.target ?? '');
     if (ro && observed instanceof HTMLElement) ro.observe(observed);
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener('scroll', queueHole, true);
       window.removeEventListener('resize', queueHole);
+      window.visualViewport?.removeEventListener('resize', queueHole);
+      window.visualViewport?.removeEventListener('scroll', queueHole);
       ro?.disconnect();
     };
-  }, [visible, stepIndex, syncHole]);
+  }, [visible, stepIndex, syncHole, steps, layoutSyncKey]);
 
   if (!visible || typeof document === 'undefined') return null;
 
-  const step = ONBOARDING_STEPS[stepIndex];
+  const step = steps[stepIndex];
   const isLast = stepIndex >= stepCount - 1;
+  const progress = ((stepIndex + 1) / stepCount) * 100;
 
   const card = (
     <div
-      className="fixed z-[60] flex max-h-[min(48vh,420px)] flex-col rounded-2xl border border-sage-900/25 bg-white p-5 shadow-2xl dark:border-white/15 dark:bg-moss-elevated"
+      className="pointer-events-auto fixed flex max-h-[min(56vh,28rem)] flex-col overflow-hidden rounded-2xl border-2 border-slate-200/90 bg-white p-5 shadow-2xl shadow-slate-900/15 dark:border-moss-border dark:bg-moss-elevated dark:shadow-black/50"
       style={popoverStyle}
       role="dialog"
       aria-modal="true"
       aria-labelledby="tour-title"
       aria-describedby="tour-body"
     >
-      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-sage-600 dark:text-moss-muted">
+      <div className="mb-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-200/90 dark:bg-moss-border" aria-hidden>
+        <div
+          className="h-full rounded-full bg-teal-500 transition-[width] duration-300 ease-out dark:bg-teal-400/90"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-moss-muted">
         Guided overview · step {stepIndex + 1} of {stepCount}
       </p>
-      <h2 id="tour-title" className="mt-2 font-display text-xl font-semibold tracking-tight text-sage-900 dark:text-moss-fg">
+      <h2 id="tour-title" className="mt-2 font-display text-xl font-semibold tracking-tight text-slate-900 dark:text-moss-fg">
         {step?.title}
       </h2>
-      <p id="tour-body" className="mt-3 flex-1 overflow-y-auto text-sm leading-relaxed text-sage-700 dark:text-moss-subtle">
+      <p id="tour-body" className="mt-3 flex-1 overflow-y-auto text-sm leading-relaxed text-slate-600 dark:text-moss-subtle">
         {step?.body}
       </p>
-      <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-sage-200/80 pt-4 dark:border-moss-border">
+      <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-slate-200/90 pt-4 dark:border-moss-border">
+        <button type="button" className="btn-secondary btn-secondary-sm" onClick={remindLater}>
+          Remind me later
+        </button>
         <button type="button" className="btn-secondary btn-secondary-sm" onClick={closeAndRemember}>
           Skip and don&apos;t show again
         </button>
@@ -243,6 +357,7 @@ export function SpotlightTour() {
             Previous
           </button>
           <button
+            ref={firstFocusRef}
             type="button"
             className="btn-primary btn-primary-sm"
             onClick={() => {
@@ -257,27 +372,55 @@ export function SpotlightTour() {
     </div>
   );
 
+  const dimPanels = hole ? holeBackdropPanels(hole) : [];
+
   const overlay = (
     <>
       {hole == null ? (
-        <div className="fixed inset-0 z-[55] bg-sage-950/75 dark:bg-black/80" aria-hidden />
-      ) : (
-        <div
-          className="pointer-events-none fixed z-[56] rounded-xl"
-          style={{
-            top: hole.top,
-            left: hole.left,
-            width: hole.width,
-            height: hole.height,
-            /** Single halo — no Tailwind ring (avoids double-outline artifacts). */
-            boxShadow:
-              '0 0 0 2px rgba(45, 212, 191, 0.85), 0 0 0 9999px rgba(15, 18, 14, 0.78)',
-          }}
+        <button
+          type="button"
+          className="pointer-events-auto fixed inset-0 cursor-default border-0 bg-slate-950/70 p-0 dark:bg-black/80"
+          style={{ zIndex: zLayers.spotlightBackdrop }}
+          aria-label="Dismiss tour"
+          onClick={closeAndRemember}
         />
+      ) : (
+        <>
+          {dimPanels.map((p) => (
+            <button
+              key={p.key}
+              type="button"
+              className="pointer-events-auto fixed cursor-default border-0 bg-slate-950/70 p-0 dark:bg-black/80"
+              style={{ ...p.style, zIndex: zLayers.spotlightBackdrop }}
+              aria-label="Defer tour"
+              onClick={remindLater}
+            />
+          ))}
+          <div
+            className="pointer-events-none fixed rounded-xl"
+            style={{
+              top: hole.top,
+              left: hole.left,
+              width: hole.width,
+              height: hole.height,
+              boxShadow:
+                '0 0 0 2px rgba(45, 212, 191, 0.98), 0 0 0 5px rgba(45, 212, 191, 0.18), 0 0 26px rgba(45, 212, 191, 0.4)',
+              zIndex: zLayers.spotlightRing,
+            }}
+          />
+        </>
       )}
       {card}
     </>
   );
 
-  return createPortal(overlay, document.body);
+  return createPortal(
+    <div
+      className="pointer-events-none fixed inset-0"
+      style={{ zIndex: zLayers.spotlightBackdrop, isolation: 'isolate' }}
+    >
+      {overlay}
+    </div>,
+    document.body,
+  );
 }

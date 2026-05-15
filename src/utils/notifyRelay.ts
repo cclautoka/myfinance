@@ -7,6 +7,7 @@ import {
 } from './calculations';
 import { formatMoney } from './format';
 import { ensureNotifyRelayHouseholdId, readNotifyRelayConfig } from './notifyRelayConfig';
+import { serverAuthBearer } from './serverAuth';
 import {
   monthActualExpenseTotal,
   monthActualIncomeTotal,
@@ -156,8 +157,8 @@ export async function postNotifyRelay(
     digest?: SaveEmailDigestV1;
   },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { enabled, url, secret, husbandEmail, wifeEmail } = readNotifyRelayConfig();
-  if (!enabled || !url || !secret) return { ok: false, error: 'Notify relay not configured' };
+  const { enabled, url, husbandEmail, wifeEmail } = readNotifyRelayConfig();
+  if (!enabled || !url || !serverAuthBearer()) return { ok: false, error: 'Notify relay not configured' };
 
   let parsed: URL;
   try {
@@ -181,11 +182,14 @@ export async function postNotifyRelay(
       ? digestPlainTextSummary(digest)
       : summary.trim();
 
+  const id = ensureNotifyRelayHouseholdId();
+  if (!id) return { ok: false, error: 'No household id' };
+
   const res = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${secret}`,
+      Authorization: `Bearer ${serverAuthBearer()}`,
     },
     body: JSON.stringify({
       summary: summaryOut,
@@ -193,6 +197,7 @@ export async function postNotifyRelay(
       pocketLeft: opts?.pocketLeft ?? digest?.pocketLeft,
       digest: digest && digest.version === SAVE_EMAIL_DIGEST_VERSION ? digest : undefined,
       to: [husbandEmail, wifeEmail].filter(Boolean),
+      id,
       ...(opts?.subject ? { subject: opts.subject } : {}),
     }),
   });
@@ -205,8 +210,8 @@ export async function postNotifyRelay(
 }
 
 export async function postSnapshotRelay(data: unknown): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { enabled, url, secret } = readNotifyRelayConfig();
-  if (!enabled || !url || !secret) return { ok: false, error: 'Notify relay not configured' };
+  const { enabled, url } = readNotifyRelayConfig();
+  if (!enabled || !url || !serverAuthBearer()) return { ok: false, error: 'Notify relay not configured' };
   const base = url.endsWith('/v1/notify') ? url.replace(/\/v1\/notify$/, '') : url.replace(/\/$/, '');
   const snapUrl = `${base}/v1/snapshot`;
   const id = ensureNotifyRelayHouseholdId();
@@ -216,7 +221,7 @@ export async function postSnapshotRelay(data: unknown): Promise<{ ok: true } | {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${secret}`,
+      Authorization: `Bearer ${serverAuthBearer()}`,
     },
     body: JSON.stringify({ id, data }),
   });

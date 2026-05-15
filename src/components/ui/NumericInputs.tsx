@@ -5,7 +5,7 @@ type OmitValueProps = Omit<
   'type' | 'value' | 'defaultValue' | 'onChange'
 >;
 
-export function parseAmountInput(raw: string, opts?: { min?: number; max?: number }): number {
+function parseAmountInput(raw: string, opts?: { min?: number; max?: number }): number {
   const t = raw.trim().replace(/,/g, '');
   if (t === '' || t === '.' || t === '-' || t === '-.') return 0;
   const n = Number.parseFloat(t);

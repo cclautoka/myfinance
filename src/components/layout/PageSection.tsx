@@ -4,7 +4,7 @@ import { SECTION_PALETTE, type SectionAccent } from './sectionAccents';
 type Variant = 'plain' | 'band' | 'spotlight';
 
 /**
- * Landmark section — anchors match FinanceQuickNav ids.
+ * Landmark section — use stable `id`s for deep links and onboarding.
  * `band` / `spotlight` use gradient headers + tinted frames (`accent` picks the hue family).
  */
 export function PageSection({
@@ -42,11 +42,11 @@ export function PageSection({
 
   const headerPlain = (
     <>
-      <h2 className="font-display text-3xl font-bold tracking-tight text-sage-900 dark:text-moss-fg sm:text-[2rem]">
+      <h2 className="font-display text-3xl font-bold tracking-tight text-slate-950 dark:text-moss-fg sm:text-[2.05rem]">
         {title}
       </h2>
       {subtitle && (
-        <p className="mt-3 text-base font-medium leading-relaxed text-sage-700 dark:text-moss-subtle">{subtitle}</p>
+        <p className="mt-3 max-w-2xl text-base font-medium leading-relaxed text-slate-600 dark:text-moss-subtle">{subtitle}</p>
       )}
     </>
   );
@@ -74,7 +74,7 @@ export function PageSection({
       {variant !== 'plain' && palette ? (
         <>
           <header
-            className={`-mx-5 -mt-10 mb-8 rounded-b-3xl px-7 py-8 shadow-inner sm:-mx-8 sm:-mt-10 sm:px-10 ${palette.headerGradient}`}
+            className={`-mx-5 -mt-8 mb-7 border-b-4 border-teal-400/90 px-6 py-7 sm:-mx-8 sm:-mt-8 sm:px-9 ${palette.headerGradient}`}
             aria-live="polite"
           >
             {headerHero}
@@ -83,7 +83,9 @@ export function PageSection({
         </>
       ) : (
         <>
-          <header className="mb-8 max-w-3xl border-b-2 border-sage-200/90 pb-6 dark:border-moss-border">{headerPlain}</header>
+          <header className="relative mb-10 max-w-3xl pb-6 after:absolute after:bottom-0 after:left-0 after:h-[3px] after:w-12 after:rounded-full after:bg-teal-600 dark:after:bg-teal-500">
+            {headerPlain}
+          </header>
           <div className="min-w-0 space-y-8">{children}</div>
         </>
       )}

@@ -78,7 +78,7 @@ export function BillsTimeline({
   );
 
   return (
-    <div id="bills-timeline" className="min-h-0 min-w-0">
+    <div id="bills-timeline" data-tour="tour-bills-checklist" className="min-h-0 min-w-0">
       <div className="min-h-0 min-w-0">
         <Card
           accent="teal"

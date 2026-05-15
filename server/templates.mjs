@@ -222,3 +222,44 @@ export function buildReminderEmailTemplate({ monthKey, dueSoon = [], overdue = [
   };
 }
 
+/** Branded transactional mail for verify / reset / magic (uses same shell as digest emails). */
+export function buildAuthActionEmail({ kind, actionLink }) {
+  const safeLink = String(actionLink ?? '');
+  const titles = {
+    verify: {
+      subject: 'Verify your email',
+      title: 'Verify your email',
+      preheader: 'One tap to confirm this address for your household account.',
+    },
+    reset: {
+      subject: 'Reset your password',
+      title: 'Reset your password',
+      preheader: 'Use the secure link below to choose a new password.',
+    },
+    magic: {
+      subject: 'Sign in to your household',
+      title: 'Sign in link',
+      preheader: 'This one-time link signs you in on a new device or browser.',
+    },
+  };
+  const t = titles[kind] ?? titles.verify;
+  return {
+    subject: t.subject,
+    title: t.title,
+    preheader: t.preheader,
+    sections: [
+      {
+        heading: 'Your secure link',
+        items: [
+          {
+            title: 'Open in browser',
+            body: 'If the link does not open, copy the full URL into the same browser where you use the app.',
+            meta: safeLink.slice(0, 2000),
+          },
+        ],
+      },
+    ],
+    footerHint: 'If you did not request this, you can ignore this message. Links expire automatically.',
+  };
+}
+

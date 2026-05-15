@@ -8,14 +8,18 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "server:start": "npm --prefix server start",
+    "server:db:migrate": "npm --prefix server run db:migrate",
+    "server:seed:shahil": "npm --prefix server run seed:shahil"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "recharts": "^3.8.1",
-    "tailwindcss": "^4.3.0"
+    "tailwindcss": "^4.3.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

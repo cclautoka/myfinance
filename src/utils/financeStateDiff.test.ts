@@ -16,9 +16,12 @@ describe('computeFinanceStateDiff', () => {
   });
 
   it('detects bill paid toggle', () => {
-    const from = defaultFinanceState();
+    const from = {
+      ...defaultFinanceState(),
+      essentials: [{ id: 'net', name: 'Internet', amount: 114, cadence: 'month' }],
+    };
     const e = from.essentials[0];
-    if (!e) return;
+    if (!e) throw new Error('expected essential');
     const to = {
       ...from,
       billsPaid: {

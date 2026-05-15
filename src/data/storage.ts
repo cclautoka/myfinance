@@ -15,6 +15,8 @@ import {
   ensureNotifyRelayHouseholdId,
   readNotifyRelayConfig,
 } from '../utils/notifyRelayConfig';
+import { clearHouseholdSession, readHouseholdSession } from '../utils/householdSession';
+import { serverAuthBearer } from '../utils/serverAuth';
 
 /** Older builds stored weekly essentials with YYYY-MM so one toggle checked every week in the month — remove those stubs. */
 const stripLegacyWeeklyEssentialMonthKeys = (state: FinanceState): FinanceState => {
@@ -220,7 +222,11 @@ export const getServerStorageConfig = (
         : url.replace(/\/$/, '');
 
   const householdId = ensureNotifyRelayHouseholdId();
-  const ready = Boolean(url) && Boolean(cfg.secret) && Boolean(householdId);
+  const sess = readHouseholdSession();
+  const sessionOk = Boolean(sess?.token && sess.householdId === householdId);
+  const secretOk = Boolean((cfg.secret ?? '').trim());
+  const canAuth = secretOk || sessionOk;
+  const ready = Boolean(url) && Boolean(householdId) && canAuth;
   return {
     enabled: (opts?.force ? true : Boolean(cfg.enabled)) && ready,
     baseUrl,
@@ -242,10 +248,13 @@ export const fetchServerFinanceState = async (
   const url = `${c.baseUrl}/v1/state?id=${encodeURIComponent(c.householdId)}`;
   const res = await fetch(url, {
     method: 'GET',
-    headers: { Authorization: `Bearer ${c.secret}` },
+    headers: { Authorization: `Bearer ${serverAuthBearer()}` },
   });
   if (!res.ok) {
     const t = await res.text().catch(() => '');
+    if (res.status === 401) {
+      clearHouseholdSession();
+    }
     return { ok: false, status: res.status, error: t || res.statusText };
   }
   const j = (await res.json()) as { state?: Partial<FinanceState>; updatedAt?: string };
@@ -262,11 +271,14 @@ export const putServerFinanceState = async (
   const url = `${c.baseUrl}/v1/state?id=${encodeURIComponent(c.householdId)}`;
   const res = await fetch(url, {
     method: 'PUT',
-    headers: { Authorization: `Bearer ${c.secret}`, 'Content-Type': 'application/json' },
+    headers: { Authorization: `Bearer ${serverAuthBearer()}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ state }),
   });
   if (!res.ok) {
     const t = await res.text().catch(() => '');
+    if (res.status === 401) {
+      clearHouseholdSession();
+    }
     return { ok: false, status: res.status, error: t || res.statusText };
   }
   const j = (await res.json()) as { updatedAt?: string };
