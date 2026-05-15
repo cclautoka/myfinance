@@ -2,6 +2,8 @@ import { useState } from 'react';
 import type { ThemePreference } from '../types/finance';
 import { clearHouseholdSession } from '../utils/householdSession';
 import { zLayers } from '../ui/zLayers';
+import { SegmentedButtonGroup } from './ui/SegmentedButtonGroup';
+import { THEME_SEGMENT_OPTIONS } from './ui/themeSegmentedOptions';
 
 export function Header({
   theme,
@@ -72,19 +74,14 @@ export function Header({
               </button>
             )
           ) : null}
-          <div className="flex shrink-0 items-center gap-0.5 rounded-2xl border border-slate-200/90 bg-slate-50/80 p-1 dark:border-moss-border dark:bg-moss-elevated sm:gap-1">
-            {(['system', 'light', 'dark'] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => onTheme(t)}
-                className={`rounded-xl px-2.5 py-1.5 text-[10px] font-semibold capitalize transition-all sm:px-3 sm:text-xs ${
-                  theme === t ? 'btn-toggle-active' : 'btn-toggle-idle'
-                }`}
-              >
-                {t}
-              </button>
-            ))}
+          <div className="w-full max-w-[11.5rem] shrink-0 sm:max-w-[13rem]">
+            <SegmentedButtonGroup
+              aria-label="Color theme"
+              value={theme}
+              onChange={onTheme}
+              options={THEME_SEGMENT_OPTIONS}
+              size="compact"
+            />
           </div>
         </div>
       </div>

@@ -68,12 +68,3 @@ export const cardAccentTone: Record<SectionAccent, string> = {
 };
 
 export const WORKSPACE_SECTION_SHELL = `${SECTION_RADIUS} border-2 border-slate-200/90 bg-white shadow-lg shadow-slate-900/10 dark:border-moss-border dark:bg-moss-elevated dark:shadow-black/45`;
-
-export const WORKSPACE_TAB_TOOLBAR =
-  'border-b-2 border-slate-200/90 bg-slate-100/90 px-4 py-3.5 dark:border-moss-border dark:bg-moss-surface sm:px-6 sm:py-4';
-
-export const workspaceTabIdle =
-  'rounded-lg border border-slate-300/90 bg-white text-slate-900 shadow-sm transition-all hover:border-teal-500/50 hover:bg-teal-50/70 dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg dark:hover:border-teal-500/40 dark:hover:bg-teal-950/25';
-
-export const workspaceTabSelected =
-  'rounded-lg border border-teal-600 bg-teal-600 text-white shadow-md dark:border-teal-500 dark:bg-teal-500 dark:text-white';

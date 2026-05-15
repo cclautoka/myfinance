@@ -6,7 +6,9 @@ import { ensureNotifyRelayHouseholdId, readNotifyRelayConfig, writeNotifyRelayCo
 import { FieldError } from '../components/ui/FieldError';
 import { fieldErrorId } from '../components/ui/fieldErrorId';
 import { FieldHelp } from '../components/ui/FieldHelp';
+import { SegmentedButtonGroup } from '../components/ui/SegmentedButtonGroup';
 import { SegmentedChoice } from '../components/ui/SegmentedChoice';
+import { THEME_SEGMENT_OPTIONS } from '../components/ui/themeSegmentedOptions';
 import { markHouseholdSetupFinished, readHouseholdMode } from './setupCompletion';
 import {
   setupAlertsStepSchema,
@@ -204,19 +206,14 @@ export function HouseholdSetupWizard({
               Step {step + 1} of {STEPS.length}: {STEPS[step]}
             </p>
           </div>
-          <div className="flex shrink-0 items-center gap-0.5 rounded-2xl border border-slate-200/90 bg-slate-50/80 p-1 dark:border-moss-border dark:bg-moss-elevated">
-            {(['system', 'light', 'dark'] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => onTheme(t)}
-                className={`rounded-xl px-2.5 py-1.5 text-[10px] font-semibold capitalize transition-all ${
-                  theme === t ? 'btn-toggle-active' : 'btn-toggle-idle'
-                }`}
-              >
-                {t}
-              </button>
-            ))}
+          <div className="w-full max-w-[11.5rem] shrink-0 sm:max-w-[13rem]">
+            <SegmentedButtonGroup
+              aria-label="Color theme"
+              value={theme}
+              onChange={onTheme}
+              options={THEME_SEGMENT_OPTIONS}
+              size="compact"
+            />
           </div>
         </div>
 

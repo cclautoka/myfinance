@@ -1,3 +1,5 @@
+import { SEGMENTED_TRACK_CLASS, segmentedTriggerClass } from '../ui/segmentedSurface';
+
 export type AppTab = 'dashboard' | 'workspace' | 'tools';
 
 const TABS: { id: AppTab; label: string; panelId: string }[] = [
@@ -23,11 +25,7 @@ export function AppPrimaryTabs({
       className="hidden border-b border-slate-200/90 bg-sage-50/95 backdrop-blur-md dark:border-moss-border dark:bg-moss-bg/95 lg:sticky lg:top-[5.15rem] lg:z-30 lg:block xl:top-[5.35rem]"
     >
       <div className="mx-auto max-w-6xl px-4 py-3 sm:px-6 xl:max-w-[96rem]">
-        <div
-          role="tablist"
-          aria-label="Main areas"
-          className="flex w-full gap-1 rounded-xl border border-slate-200/90 bg-white p-1 shadow-sm dark:border-moss-border dark:bg-moss-surface sm:max-w-xl sm:gap-1.5"
-        >
+        <div role="tablist" aria-label="Main areas" className={`${SEGMENTED_TRACK_CLASS} w-full sm:max-w-xl`}>
           {TABS.map(({ id, label, panelId }) => {
             const selected = value === id;
             return (
@@ -38,11 +36,7 @@ export function AppPrimaryTabs({
                 aria-selected={selected}
                 aria-controls={panelId}
                 id={`app-tab-${id}`}
-                className={`min-h-[44px] flex-1 rounded-lg px-2 py-2 text-center text-xs font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-moss-bg sm:px-4 sm:text-sm ${
-                  selected
-                    ? 'bg-teal-700 text-white shadow-sm dark:bg-teal-600'
-                    : 'text-slate-700 hover:bg-slate-100 dark:text-moss-subtle dark:hover:bg-moss-elevated'
-                }`}
+                className={`${segmentedTriggerClass(selected)} text-xs sm:text-sm`}
                 onClick={() => onChange(id)}
               >
                 {label}

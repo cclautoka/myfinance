@@ -1,17 +1,15 @@
 import { SEGMENTED_TRACK_CLASS, segmentedTriggerClass } from './segmentedSurface';
 
 /**
- * Few-option segmented control backed by native radios for forms and a11y.
+ * Same look as {@link SegmentedChoice} but uses buttons (views, theme, no form submit).
  */
-export function SegmentedChoice<T extends string>({
-  name,
+export function SegmentedButtonGroup<T extends string>({
   value,
   onChange,
   options,
   'aria-label': ariaLabel,
   size = 'default',
 }: {
-  name: string;
   value: T;
   onChange: (next: T) => void;
   options: readonly { id: T; label: string }[];
@@ -20,24 +18,19 @@ export function SegmentedChoice<T extends string>({
 }) {
   const compact = size === 'compact';
   return (
-    <div className={SEGMENTED_TRACK_CLASS} role="radiogroup" aria-label={ariaLabel}>
+    <div className={SEGMENTED_TRACK_CLASS} role="toolbar" aria-label={ariaLabel}>
       {options.map((o) => {
         const selected = value === o.id;
         return (
-          <label
+          <button
             key={o.id}
+            type="button"
             className={segmentedTriggerClass(selected, compact ? { compact: true } : undefined)}
+            aria-pressed={selected}
+            onClick={() => onChange(o.id)}
           >
-            <input
-              type="radio"
-              name={name}
-              value={o.id}
-              checked={selected}
-              className="sr-only"
-              onChange={() => onChange(o.id)}
-            />
             {o.label}
-          </label>
+          </button>
         );
       })}
     </div>

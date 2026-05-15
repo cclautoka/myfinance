@@ -3,6 +3,8 @@ import { apiBaseFromNotifyUrl, readNotifyRelayConfig } from '../utils/notifyRela
 import { readHouseholdSession } from '../utils/householdSession';
 import type { ThemePreference } from '../types/finance';
 import { zLayers } from '../ui/zLayers';
+import { SegmentedButtonGroup } from '../components/ui/SegmentedButtonGroup';
+import { THEME_SEGMENT_OPTIONS } from '../components/ui/themeSegmentedOptions';
 
 export function VerifyEmailGate({
   theme,
@@ -52,19 +54,14 @@ export function VerifyEmailGate({
           <h1 id="verify-email-title" className="font-display text-2xl font-bold text-slate-950 dark:text-moss-fg">
             Verify your email
           </h1>
-          <div className="flex shrink-0 items-center gap-0.5 rounded-2xl border border-slate-200/90 bg-slate-50/80 p-1 dark:border-moss-border dark:bg-moss-elevated">
-            {(['system', 'light', 'dark'] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => onTheme(t)}
-                className={`rounded-xl px-2.5 py-1.5 text-[10px] font-semibold capitalize ${
-                  theme === t ? 'btn-toggle-active' : 'btn-toggle-idle'
-                }`}
-              >
-                {t}
-              </button>
-            ))}
+          <div className="w-full max-w-[11.5rem] shrink-0 sm:max-w-[13rem]">
+            <SegmentedButtonGroup
+              aria-label="Color theme"
+              value={theme}
+              onChange={onTheme}
+              options={THEME_SEGMENT_OPTIONS}
+              size="compact"
+            />
           </div>
         </div>
         <p className="mt-4 text-sm leading-relaxed text-slate-700 dark:text-moss-subtle">

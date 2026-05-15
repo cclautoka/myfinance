@@ -58,10 +58,10 @@ export function MobileBottomNav({
   onAppTabChange: (t: AppTab) => void;
 }) {
   const navBtn = (active: boolean) =>
-    `flex min-h-[52px] min-w-[52px] flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 transition-all active:scale-[0.97] ${
+    `flex min-h-[52px] min-w-[52px] flex-1 flex-col items-center justify-center gap-1 rounded-md px-1 py-1.5 transition-all active:scale-[0.97] ${
       active
-        ? 'text-teal-800 dark:text-teal-300'
-        : 'text-slate-600 dark:text-moss-muted'
+        ? 'bg-teal-600 text-white shadow-sm dark:bg-teal-500 dark:text-slate-950'
+        : 'text-slate-700 hover:bg-white/80 dark:text-moss-subtle dark:hover:bg-moss-surface'
     }`;
 
   return (
@@ -72,8 +72,8 @@ export function MobileBottomNav({
       className="pointer-events-none fixed inset-x-0 bottom-0 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 lg:hidden"
       style={{ zIndex: zLayers.dockNav }}
     >
-      <div className="pointer-events-auto mx-auto max-w-lg rounded-xl border border-slate-200/90 bg-white/95 px-1 py-1.5 shadow-lg backdrop-blur-md dark:border-moss-border dark:bg-moss-elevated/95 dark:shadow-[0_-4px_36px_rgba(0,0,0,0.45)]">
-        <div className="flex items-stretch justify-around gap-0.5">
+      <div className="pointer-events-auto mx-auto max-w-lg rounded-lg border-2 border-slate-200/90 bg-slate-100/90 p-0.5 shadow-lg backdrop-blur-md dark:border-moss-border dark:bg-moss-bg dark:shadow-[0_-4px_36px_rgba(0,0,0,0.45)]">
+        <div className="flex items-stretch justify-around gap-0.5 rounded-md bg-transparent">
           {NAV.map(({ id, label, icon: Icon }) => {
             const active = appTab === id;
             return (
@@ -84,8 +84,12 @@ export function MobileBottomNav({
                 aria-current={active ? 'page' : undefined}
                 onClick={() => onAppTabChange(id)}
               >
-                <Icon className={active ? 'text-teal-700 dark:text-teal-400' : undefined} />
-                <span className="text-[10px] font-bold uppercase tracking-wide text-slate-800 dark:text-moss-subtle">
+                <Icon className={active ? 'text-white dark:text-slate-950' : undefined} />
+                <span
+                  className={`text-[10px] font-bold uppercase tracking-wide ${
+                    active ? 'text-white dark:text-slate-950' : 'text-slate-800 dark:text-moss-subtle'
+                  }`}
+                >
                   {label}
                 </span>
               </button>

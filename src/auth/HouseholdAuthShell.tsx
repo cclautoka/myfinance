@@ -11,7 +11,9 @@ import { HOUSEHOLD_MODE_KEY, type HouseholdMode } from '../utils/householdMode';
 import type { ThemePreference } from '../types/finance';
 import { FieldError } from '../components/ui/FieldError';
 import { fieldErrorId } from '../components/ui/fieldErrorId';
+import { SegmentedButtonGroup } from '../components/ui/SegmentedButtonGroup';
 import { SegmentedChoice } from '../components/ui/SegmentedChoice';
+import { THEME_SEGMENT_OPTIONS } from '../components/ui/themeSegmentedOptions';
 import { zLayers } from '../ui/zLayers';
 
 type Tab = 'signin' | 'register';
@@ -239,37 +241,27 @@ export function HouseholdAuthShell({
               Household id: <code className="font-mono font-semibold">{hid || '…'}</code>
             </p>
           </div>
-          <div className="flex shrink-0 items-center gap-0.5 rounded-2xl border border-slate-200/90 bg-slate-50/80 p-1 dark:border-moss-border dark:bg-moss-elevated">
-            {(['system', 'light', 'dark'] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => onTheme(t)}
-                className={`rounded-xl px-2.5 py-1.5 text-[10px] font-semibold capitalize ${
-                  theme === t ? 'btn-toggle-active' : 'btn-toggle-idle'
-                }`}
-              >
-                {t}
-              </button>
-            ))}
+          <div className="w-full max-w-[11.5rem] shrink-0 sm:max-w-[13rem]">
+            <SegmentedButtonGroup
+              aria-label="Color theme"
+              value={theme}
+              onChange={onTheme}
+              options={THEME_SEGMENT_OPTIONS}
+              size="compact"
+            />
           </div>
         </div>
 
-        <div className="mt-6 flex gap-2 rounded-2xl border border-slate-200/80 bg-white/80 p-1 dark:border-moss-border dark:bg-moss-surface/80">
-          <button
-            type="button"
-            className={`flex-1 rounded-xl py-2 text-sm font-bold ${tab === 'signin' ? 'bg-teal-600 text-white dark:bg-teal-700' : 'text-slate-700 dark:text-moss-subtle'}`}
-            onClick={() => setTab('signin')}
-          >
-            Sign in
-          </button>
-          <button
-            type="button"
-            className={`flex-1 rounded-xl py-2 text-sm font-bold ${tab === 'register' ? 'bg-teal-600 text-white dark:bg-teal-700' : 'text-slate-700 dark:text-moss-subtle'}`}
-            onClick={() => setTab('register')}
-          >
-            Register
-          </button>
+        <div className="mt-6 max-w-md">
+          <SegmentedButtonGroup
+            aria-label="Sign in or register"
+            value={tab}
+            onChange={setTab}
+            options={[
+              { id: 'signin', label: 'Sign in' },
+              { id: 'register', label: 'Register' },
+            ]}
+          />
         </div>
 
         <div className="mt-6 space-y-4 rounded-xl border-2 border-slate-200/90 border-t-teal-600 bg-white p-5 shadow-md dark:border-moss-border dark:border-t-teal-500 dark:bg-moss-surface dark:shadow-black/25">

@@ -1,10 +1,6 @@
 import type { ReactNode } from 'react';
-import {
-  WORKSPACE_SECTION_SHELL,
-  WORKSPACE_TAB_TOOLBAR,
-  workspaceTabIdle,
-  workspaceTabSelected,
-} from './sectionAccents';
+import { WORKSPACE_SECTION_SHELL } from './sectionAccents';
+import { SEGMENTED_TRACK_CLASS, segmentedTriggerClass } from '../ui/segmentedSurface';
 
 export type WorkspaceTab = 'past' | 'household' | 'plan';
 
@@ -37,6 +33,9 @@ const INTRO_BY_TAB: Record<WorkspaceTab, { eyebrow: string; title: string; body:
   },
 };
 
+const TABLIST_SCROLL =
+  '-mx-1 min-w-0 flex-nowrap gap-0 overflow-x-auto overscroll-x-contain pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] snap-x snap-mandatory lg:flex-wrap lg:overflow-visible lg:pb-0 lg:snap-none [&::-webkit-scrollbar]:hidden';
+
 /**
  * Archive + household + plan. Tools & relay live under the app Tools tab.
  */
@@ -57,12 +56,8 @@ export function FinanceWorkspaceShell({
       data-tour="tour-workspace"
       className={`scroll-mt-40 overflow-hidden sm:scroll-mt-36 ${WORKSPACE_SECTION_SHELL}`}
     >
-      <div className={WORKSPACE_TAB_TOOLBAR}>
-        <div
-          role="tablist"
-          aria-label="Workspace sections"
-          className="-mx-1 flex flex-nowrap items-center gap-2 overflow-x-auto overscroll-x-contain pb-1 [-ms-overflow-style:none] [scrollbar-width:none] snap-x snap-mandatory lg:flex-wrap lg:overflow-visible lg:pb-0 lg:snap-none [&::-webkit-scrollbar]:hidden"
-        >
+      <div className="border-b-2 border-slate-200/90 bg-slate-100/95 px-4 py-3 dark:border-moss-border dark:bg-moss-surface sm:px-6 sm:py-4">
+        <div role="tablist" aria-label="Workspace sections" className={`${SEGMENTED_TRACK_CLASS} ${TABLIST_SCROLL}`}>
           {TAB_DEF.map(({ id, label }) => {
             const selected = tab === id;
             return (
@@ -73,9 +68,7 @@ export function FinanceWorkspaceShell({
                 id={`workspace-tab-${id}`}
                 aria-selected={selected}
                 aria-controls={`workspace-panel-${id}`}
-                className={`shrink-0 snap-start rounded-lg border px-4 py-2.5 text-sm font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-moss-bg ${
-                  selected ? workspaceTabSelected : workspaceTabIdle
-                }`}
+                className={`${segmentedTriggerClass(selected)} shrink-0 snap-start`}
                 onClick={() => onTabChange(id)}
               >
                 {label}

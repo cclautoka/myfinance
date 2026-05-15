@@ -9,9 +9,7 @@ import type {
 } from '../types/finance';
 import { householdDataTip } from '../copy/tooltips';
 import {
-  DEBT_KIND_OPTIONS,
   ESSENTIAL_CADENCE_OPTIONS,
-  PAY_SCHEDULE_OPTIONS,
   WEEKLY_ESSENTIAL_DAY_OPTIONS,
 } from '../data/selectOptions';
 import { Card } from './ui/Card';
@@ -23,7 +21,21 @@ import {
 } from './ui/NumericInputs';
 import { HoverTip } from './ui/HoverTip';
 import { ListboxSelect } from './ui/ListboxSelect';
+import { SegmentedChoice } from './ui/SegmentedChoice';
 import { ScheduledPayAutomationFields } from './ScheduledPayAutomationFields';
+
+const PAY_SCHEDULE_SEGMENT: { id: PaySchedule; label: string }[] = [
+  { id: 'weekly', label: 'Weekly' },
+  { id: 'biweekly', label: 'Biweekly' },
+  { id: 'monthly', label: 'Monthly' },
+];
+
+const DEBT_KIND_SEGMENT: { id: DebtKind; label: string }[] = [
+  { id: 'card', label: 'Card' },
+  { id: 'installment', label: 'HP' },
+  { id: 'loan', label: 'Loan' },
+  { id: 'personal', label: 'Personal' },
+];
 
 type EditorDialogState =
   | null
@@ -185,25 +197,21 @@ export function DataEditor({
               />
             </Field>
             <Field label="Husband usual pay rhythm">
-              <ListboxSelect
-                ariaLabel="Husband usual pay rhythm"
-                buttonClassName="min-w-0 rounded-lg px-2 py-1.5 shadow-none"
+              <SegmentedChoice
+                name="pay-rhythm-husband"
+                aria-label="Husband usual pay rhythm"
                 value={state.income.husbandPaySchedule}
-                options={[...PAY_SCHEDULE_OPTIONS]}
-                onChange={(v) =>
-                  onIncome({ ...state.income, husbandPaySchedule: v as PaySchedule })
-                }
+                options={PAY_SCHEDULE_SEGMENT}
+                onChange={(v) => onIncome({ ...state.income, husbandPaySchedule: v as PaySchedule })}
               />
             </Field>
             <Field label="Wife usual pay rhythm">
-              <ListboxSelect
-                ariaLabel="Wife usual pay rhythm"
-                buttonClassName="min-w-0 rounded-lg px-2 py-1.5 shadow-none"
+              <SegmentedChoice
+                name="pay-rhythm-wife"
+                aria-label="Wife usual pay rhythm"
                 value={state.income.wifePaySchedule}
-                options={[...PAY_SCHEDULE_OPTIONS]}
-                onChange={(v) =>
-                  onIncome({ ...state.income, wifePaySchedule: v as PaySchedule })
-                }
+                options={PAY_SCHEDULE_SEGMENT}
+                onChange={(v) => onIncome({ ...state.income, wifePaySchedule: v as PaySchedule })}
               />
             </Field>
             <Field label="Husband usual amount per cheque (0 = infer from monthly)">
@@ -288,13 +296,13 @@ export function DataEditor({
                         onValueChange={(n) => patchEssential(ex.id, { amount: n })}
                       />
                     </td>
-                    <td className="py-2 pr-2 align-middle">
-                      <ListboxSelect
-                        ariaLabel={`Cadence for ${ex.name}`}
-                        popoverFixed
-                        buttonClassName="min-w-0 w-full max-w-[9rem] rounded-lg px-2 py-1 text-xs shadow-none"
+                    <td className="min-w-[13rem] py-2 pr-2 align-middle">
+                      <SegmentedChoice
+                        name={`ess-cadence-${ex.id}`}
+                        aria-label={`Cadence for ${ex.name}`}
+                        size="compact"
                         value={ex.cadence}
-                        options={[...ESSENTIAL_CADENCE_OPTIONS]}
+                        options={ESSENTIAL_CADENCE_OPTIONS.map((o) => ({ id: o.value, label: o.label }))}
                         onChange={(v) => {
                           const cadence = v as EssentialExpense['cadence'];
                           patchEssential(ex.id, {
@@ -423,13 +431,13 @@ export function DataEditor({
               <tbody>
                 {state.debts.map((d) => (
                   <tr key={d.id} className="border-t border-sage-200/80 dark:border-moss-border">
-                    <td className="py-2 pr-2 align-middle">
-                      <ListboxSelect
-                        ariaLabel={`Account type for ${d.name}`}
-                        popoverFixed
-                        buttonClassName="min-w-0 w-[10rem] max-w-[10.5rem] rounded-lg px-2 py-1 text-xs shadow-none"
+                    <td className="min-w-[14rem] py-2 pr-2 align-middle">
+                      <SegmentedChoice
+                        name={`debt-kind-${d.id}`}
+                        aria-label={`Account type for ${d.name}`}
+                        size="compact"
                         value={d.kind}
-                        options={[...DEBT_KIND_OPTIONS]}
+                        options={DEBT_KIND_SEGMENT}
                         onChange={(v) => patchDebt(d.id, { kind: v as DebtKind })}
                       />
                     </td>

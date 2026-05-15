@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { FinanceState, IncomeEarner, IncomeLogEntry } from '../types/finance';
 import { formatCalendarMonthHeading } from '../data/defaults';
-import { INCOME_EARNER_OPTIONS, INCOME_EARNER_OPTIONS_SHORT } from '../data/selectOptions';
+import { INCOME_EARNER_OPTIONS_SHORT } from '../data/selectOptions';
 import { payLoggedVersusPlannedLine } from '../copy/payVsPlannedNotes';
 import { incomeLogTip } from '../copy/tooltips';
 import { expectedPaychequeForLoggedEarner, incomeLogOvertimeMonthTotal, overtimeOnIncomeLogRow } from '../utils/expectedPaycheque';
@@ -11,8 +11,10 @@ import { combinedMonthlyIncome } from '../utils/calculations';
 import { formatMoney } from '../utils/format';
 import { Card } from './ui/Card';
 import { HoverTip } from './ui/HoverTip';
-import { ListboxSelect } from './ui/ListboxSelect';
+import { SegmentedChoice } from './ui/SegmentedChoice';
 import { NumericAmountInput } from './ui/NumericInputs';
+
+const INCOME_EARNER_SEGMENT = INCOME_EARNER_OPTIONS_SHORT.map((o) => ({ id: o.value, label: o.label }));
 
 const uid = (): string => Math.random().toString(36).slice(2, 10);
 
@@ -172,12 +174,12 @@ export function IncomeLogPanel({
                 </label>
                 <label className="block text-sm font-medium text-sage-800 dark:text-moss-fg">
                   Tagged for
-                  <div className="mt-1">
-                    <ListboxSelect
-                      ariaLabel="Earner lane for this deposit"
-                      buttonClassName="min-w-0 rounded-xl px-3 py-2 shadow-none"
+                  <div className="mt-1 max-w-md">
+                    <SegmentedChoice
+                      name={`income-earner-new-${monthKey}`}
+                      aria-label="Earner lane for this deposit"
                       value={earner}
-                      options={[...INCOME_EARNER_OPTIONS]}
+                      options={INCOME_EARNER_SEGMENT}
                       onChange={(v) => setEarner(v as IncomeEarner)}
                     />
                   </div>
@@ -251,12 +253,13 @@ export function IncomeLogPanel({
                         </label>
                         <label className="block text-xs font-medium text-sage-800 dark:text-moss-fg">
                           Earner
-                          <div className="mt-1">
-                            <ListboxSelect
-                              ariaLabel="Earner lane for edited deposit"
-                              buttonClassName="min-w-0 rounded-lg px-2 py-1.5 text-sm shadow-none"
+                          <div className="mt-1 max-w-md">
+                            <SegmentedChoice
+                              name={`income-earner-edit-${e.id}`}
+                              aria-label="Earner lane for edited deposit"
+                              size="compact"
                               value={editEarner}
-                              options={[...INCOME_EARNER_OPTIONS_SHORT]}
+                              options={INCOME_EARNER_SEGMENT}
                               onChange={(v) => setEditEarner(v as IncomeEarner)}
                             />
                           </div>
