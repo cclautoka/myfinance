@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type {
   DebtAccount,
   EssentialExpense,
@@ -424,23 +424,12 @@ export function HouseholdSetupWizard({
           ) : null}
 
           {step === 2 ? (
-            <div className="space-y-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-                <p className="text-sm font-semibold text-slate-800 dark:text-moss-fg">
-                  We are not tracking loans or cards yet
-                </p>
-                <SegmentedToggle
-                  name="setup-no-debts"
-                  aria-label="Skip debt tracking"
-                  size="compact"
-                  offLabel="No"
-                  onLabel="Yes"
-                  checked={noDebts}
-                  className="w-full max-w-[11rem] shrink-0 sm:w-auto"
-                  onCheckedChange={setNoDebts}
-                />
-              </div>
-              {!noDebts ? <SetupDebtRows rows={debtRows} onChange={setDebtRows} errors={errors} /> : null}
+            <div className="space-y-3">
+              <p className="text-sm text-slate-700 dark:text-moss-subtle">
+                Add every loan, card, and HP payment — remove rows you do not have. They feed the bill calendar and debt
+                totals like in Your numbers.
+              </p>
+              <SetupDebtRows rows={debtRows} onChange={setDebtRows} errors={errors} />
             </div>
           ) : null}
 
@@ -450,13 +439,6 @@ export function HouseholdSetupWizard({
                 Planned savings is how much you intend to set aside each month. Emergency balance is what is already in
                 your saver today.
               </p>
-              <div className="rounded-xl border border-dashed border-slate-300/80 bg-slate-50/80 px-3 py-2 text-xs text-slate-700 dark:border-moss-border dark:bg-moss-bg/50 dark:text-moss-subtle">
-                <p className="font-semibold text-slate-900 dark:text-moss-fg">Other savings goals?</p>
-                <p className="mt-1">
-                  Holiday fund, school fees, etc. belong as bill rows on the previous step. This step is for monthly
-                  savings intent and emergency cash on hand.
-                </p>
-              </div>
               <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
                 Planned savings (this month) ($)
                 <NumericAmountInput
@@ -475,18 +457,7 @@ export function HouseholdSetupWizard({
                   onValueChange={(n) => setEmergencyFund(String(n))}
                 />
               </label>
-              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-moss-muted">
-                3-month cushion target ($)
-                <FieldHelp label="3-month target">
-                  Suggested from your bills: {formatMoney(suggestedThreeMonth)} (essentials + debt payments × 3).
-                </FieldHelp>
-                <NumericAmountInput
-                  min={0}
-                  className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
-                  value={Number(threeMonthFundTarget || suggestedThreeMonth || 0)}
-                  onValueChange={(n) => setThreeMonthFundTarget(String(n))}
-                />
-              </label>
+              <SetupSavingsGoalsRows rows={savingsGoalRows} onChange={setSavingsGoalRows} errors={errors} />
             </div>
           ) : null}
 

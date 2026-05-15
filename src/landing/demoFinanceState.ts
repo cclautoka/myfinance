@@ -37,6 +37,9 @@ export function buildDemoFinanceState(): FinanceState {
     wallets: { husbandBudget: 400, wifeBudget: 350, husbandSpent: 120, wifeSpent: 85 },
     emergencyFund: 3200,
     threeMonthFundTarget: 12000,
+    savingsGoals: [
+      { id: 'demo-holiday', name: 'Holiday', targetAmount: 4000, balance: 1200 },
+    ],
     plannedSavingsMonthly: 600,
     plannedPersonalMonthly: 400,
     incomeLog: [

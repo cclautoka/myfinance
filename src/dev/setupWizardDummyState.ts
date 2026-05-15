@@ -10,7 +10,11 @@ export function createSetupWizardDummyState(): FinanceState {
       ...base.income,
       husbandMonthly: 3200,
       wifeMonthly: 2800,
-      otherPlannedMonthly: 400,
+      otherPlannedIncome: [
+        { id: 'dev-rental', label: 'Rental property', amount: 400 },
+        { id: 'dev-benefits', label: 'Child benefit', amount: 150 },
+      ],
+      otherPlannedMonthly: 0,
     },
     essentials: [
       { id: 'dev-rent', name: 'Rent', amount: 400, cadence: 'month', dueDay: 22 },
@@ -45,7 +49,11 @@ export function createSetupWizardDummyState(): FinanceState {
     plannedSavingsMonthly: 500,
     plannedPersonalMonthly: 500,
     emergencyFund: 2400,
-    threeMonthFundTarget: 10200,
+    threeMonthFundTarget: 10000,
+    savingsGoals: [
+      { id: 'dev-holiday', name: 'Holiday fund', targetAmount: 3000, balance: 800 },
+      { id: 'dev-school', name: 'School fees', targetAmount: 2000, balance: 500 },
+    ],
     wallets: {
       husbandBudget: 250,
       wifeBudget: 250,

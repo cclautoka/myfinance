@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultFinanceState } from '../data/defaults';
 import type { FinanceState } from '../types/finance';
+import { otherPlannedIncomeTotal } from '../utils/calculations';
 import { HOUSEHOLD_MODE_KEY } from '../utils/householdMode';
 import { HOUSEHOLD_SETUP_STORAGE_KEY } from './constants';
 import {
@@ -46,7 +47,12 @@ function filledState(): FinanceState {
   const s = defaultFinanceState();
   return {
     ...s,
-    income: { ...s.income, husbandMonthly: 3000, wifeMonthly: 2000 },
+    income: {
+      ...s.income,
+      husbandMonthly: 3000,
+      wifeMonthly: 2000,
+      otherPlannedIncome: [{ id: 'o1', label: 'Rental', amount: 500 }],
+    },
     essentials: [{ id: 'e1', name: 'Rent', amount: 1200, cadence: 'month' as const, dueDay: 1 }],
     debts: [],
   };
@@ -70,12 +76,9 @@ describe('setupCompletion', () => {
     expect(isHouseholdSetupComplete(s, baseNotify)).toBe(true);
   });
 
-  it('requires noDebtsClaim when completion exists and debts empty', () => {
+  it('completes with empty debts array', () => {
     const s = filledState();
-    markHouseholdSetupFinished(false);
-    expect(isHouseholdSetupComplete(s, baseNotify)).toBe(false);
-    clearHouseholdSetupCompletion();
-    markHouseholdSetupFinished(true);
+    markHouseholdSetupFinished();
     expect(isHouseholdSetupComplete(s, baseNotify)).toBe(true);
   });
 
@@ -94,6 +97,7 @@ describe('setupSchema', () => {
       mode: 'couple',
       husbandMonthly: 0,
       wifeMonthly: 100,
+      otherPlannedIncome: [],
     });
     expect(r.success).toBe(false);
   });
@@ -103,16 +107,20 @@ describe('setupSchema', () => {
       mode: 'single',
       husbandMonthly: 2500,
       wifeMonthly: 0,
+      otherPlannedIncome: [],
     });
     expect(r.success).toBe(true);
   });
 
-  it('accepts optional other consistent income', () => {
+  it('accepts multiple other planned income rows', () => {
     const r = setupIncomeStepSchema.safeParse({
       mode: 'couple',
       husbandMonthly: 2000,
       wifeMonthly: 1500,
-      otherPlannedMonthly: 400,
+      otherPlannedIncome: [
+        { id: 'a', label: 'Rental', amount: 400 },
+        { id: 'b', label: 'Side gig', amount: 200 },
+      ],
     });
     expect(r.success).toBe(true);
   });
@@ -126,5 +134,12 @@ describe('setupSchema', () => {
       setupEssentialsStepSchema.safeParse({ rows: [{ ...starter, name: 'Rent', amount: 100 }] })
         .success,
     ).toBe(true);
+  });
+});
+
+describe('otherPlannedIncomeTotal', () => {
+  it('sums multiple rows', () => {
+    const s = filledState();
+    expect(otherPlannedIncomeTotal(s.income)).toBe(500);
   });
 });

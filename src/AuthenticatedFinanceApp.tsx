@@ -517,7 +517,12 @@ export function AuthenticatedFinanceApp() {
                       </p>
                       <div className="grid gap-8 lg:grid-cols-2 lg:items-start">
                         <WalletPanel state={state} onWallets={setWallets} />
-                        <EmergencyFund state={state} onFund={setEmergency} onTarget={setThreeMonthTarget} />
+                        <EmergencyFund
+                          state={state}
+                          onFund={setEmergency}
+                          onTarget={setThreeMonthTarget}
+                          onSavingsGoals={(savingsGoals) => update({ savingsGoals })}
+                        />
                       </div>
                     </div>
                     <DebtBalancesPanel state={state} />

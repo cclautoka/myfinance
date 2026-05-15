@@ -104,7 +104,7 @@ function notifyOk(cfg: NotifyRelayConfig): boolean {
 export function householdSetupMirrorsComplete(
   state: FinanceState,
   cfg: NotifyRelayConfig,
-  completion: HouseholdSetupCompletion | null = readHouseholdSetupCompletion(),
+  _completion: HouseholdSetupCompletion | null = readHouseholdSetupCompletion(),
 ): boolean {
   const mode = readHouseholdMode();
   if (!incomeOk(mode, state.income)) return false;

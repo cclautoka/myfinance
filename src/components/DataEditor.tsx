@@ -5,8 +5,11 @@ import type {
   DebtKind,
   EssentialExpense,
   FinanceState,
+  OtherPlannedIncomeEntry,
   PaySchedule,
 } from '../types/finance';
+import { SetupOtherIncomeRows } from '../setup/SetupOtherIncomeRows';
+import { sanitizeOtherPlannedIncome } from '../setup/setupSchema';
 import { householdDataTip } from '../copy/tooltips';
 import {
   ESSENTIAL_CADENCE_OPTIONS,
@@ -206,18 +209,22 @@ export function DataEditor({
                 onValueChange={(n) => onIncome({ ...state.income, wifeMonthly: n })}
               />
             </Field>
-            <Field label="Other consistent monthly (0 = none)">
-              <NumericAmountInput
-                min={0}
-                className="w-full rounded-lg border border-sage-300 bg-white px-2 py-1.5 dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
-                value={state.income.otherPlannedMonthly ?? 0}
-                onValueChange={(n) => onIncome({ ...state.income, otherPlannedMonthly: n })}
+            <div className="sm:col-span-2">
+              <p className="mb-2 text-xs font-medium text-sage-700 dark:text-moss-subtle">
+                Other consistent monthly income
+              </p>
+              <SetupOtherIncomeRows
+                rows={state.income.otherPlannedIncome ?? []}
+                onChange={(rows: OtherPlannedIncomeEntry[]) => {
+                  const otherPlannedIncome = sanitizeOtherPlannedIncome(rows);
+                  onIncome({ ...state.income, otherPlannedIncome, otherPlannedMonthly: 0 });
+                }}
               />
-            </Field>
-            <p className="sm:col-span-2 text-xs leading-relaxed text-sage-700 dark:text-moss-muted">
-              Bonuses, gifts, and one-off cash can be added later on the Dashboard. Only use this lane for income
-              that is steady every month (rental, benefits, side gig, etc.).
-            </p>
+              <p className="mt-2 text-xs leading-relaxed text-sage-700 dark:text-moss-muted">
+                Each row is included in planned monthly income on the Dashboard. One-off cash belongs under extra
+                income on the Dashboard.
+              </p>
+            </div>
             <Field label="Husband usual pay rhythm">
               <SegmentedChoice
                 name="pay-rhythm-husband"

@@ -173,7 +173,8 @@ export function DashboardOverview({
               </p>
               <p className={`mt-2 text-sage-950 dark:text-moss-fg ${METRIC_HERO_SIZE}`}>{formatMoney(income)}</p>
               <p className="mt-3 text-xs leading-snug text-sage-700 dark:text-moss-subtle">
-                Total of both salary lines from your household worksheet; excludes irregular items unless logged separately.
+                Husband + wife pay plus any other consistent monthly sources from Your numbers. One-off cash is logged
+                separately on the Dashboard.
               </p>
               <div className="mt-4 rounded-xl border border-sage-200/80 bg-sage-50/70 px-4 py-3 dark:border-moss-border dark:bg-moss-bg/40">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-sage-600 dark:text-moss-muted">
@@ -421,12 +422,23 @@ export function DashboardOverview({
               sublabel={`Balance ${formatMoney(state.emergencyFund)}`}
               tip={ringFirst1kTip()}
             />
-            <ProgressRing
-              value={fund3}
-              label="Extended reserve target"
-              sublabel={`Target ${formatMoney(state.threeMonthFundTarget)}`}
-              tip={ringThreeMonthTip(state.threeMonthFundTarget, suggested3month)}
-            />
+            {(state.savingsGoals ?? []).map((g) => (
+              <ProgressRing
+                key={g.id}
+                value={Math.min(1, g.balance / Math.max(g.targetAmount, 1))}
+                label={g.name}
+                sublabel={`${formatMoney(g.balance)} of ${formatMoney(g.targetAmount)}`}
+                tip={`Savings goal “${g.name}” — edit under Plan & bills.`}
+              />
+            ))}
+            {(state.savingsGoals ?? []).length === 0 && state.threeMonthFundTarget > 0 ? (
+              <ProgressRing
+                value={fund3}
+                label="Extended reserve target"
+                sublabel={`Target ${formatMoney(state.threeMonthFundTarget)}`}
+                tip={ringThreeMonthTip(state.threeMonthFundTarget, suggested3month)}
+              />
+            ) : null}
           </div>
         </div>
       </div>
