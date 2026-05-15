@@ -1,5 +1,6 @@
-import { lazy, Suspense, useEffect, useSyncExternalStore } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { PublicLandingShell } from './landing/PublicLandingShell';
+import { SignedInWorkbook, preloadWorkbookModule } from './SignedInWorkbook';
 import { ToastProvider } from './ui/toast/ToastProvider';
 import { pushToast } from './ui/toast/toastBus';
 import { bootstrapPublicApiConfig } from './utils/publicApiBootstrap';
@@ -11,10 +12,6 @@ import {
 } from './utils/notifyRelayConfig';
 import { readHouseholdSession, subscribeHouseholdSessionChanged, writeHouseholdSession } from './utils/householdSession';
 import { clearLocalFinanceCache } from './utils/clearLocalFinanceCache';
-
-const AuthenticatedFinanceApp = lazy(() =>
-  import('./AuthenticatedFinanceApp').then((m) => ({ default: m.AuthenticatedFinanceApp })),
-);
 
 export default function App() {
   const householdSignedIn = useSyncExternalStore(
@@ -28,6 +25,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (readHouseholdSession()?.token) {
+      void preloadWorkbookModule();
+    }
+  }, [householdSignedIn]);
+
+  useEffect(() => {
     const vt = parseVerifyTokenFromHash();
     if (!vt) return;
     let cancelled = false;
@@ -37,7 +40,7 @@ export default function App() {
           token?: string;
           verified?: boolean;
           finishInviteWithPairingCode?: boolean;
-          member?: { email?: string; role?: string; householdId?: string };
+          member?: { email?: string; role?: string; householdId?: string; emailVerified?: boolean };
         };
         if (cancelled) return;
         if (j.finishInviteWithPairingCode) {
@@ -59,7 +62,9 @@ export default function App() {
             householdId: j.member.householdId,
             email: j.member.email,
             role: j.member.role,
+            emailVerified: j.member.emailVerified ?? true,
           });
+          void preloadWorkbookModule();
           pushToast({ type: 'success', message: 'Email verified — welcome.' });
           try {
             history.replaceState(null, '', window.location.pathname + window.location.search);
@@ -93,7 +98,7 @@ export default function App() {
       try {
         const j = (await postNotifyRelayPublicJson('/v1/household/auth/consume-magic-login', { token: t })) as {
           token?: string;
-          member?: { email?: string; role?: string; householdId?: string };
+          member?: { email?: string; role?: string; householdId?: string; emailVerified?: boolean };
         };
         if (cancelled) return;
         if (j.token && j.member?.householdId) {
@@ -104,7 +109,9 @@ export default function App() {
             householdId: j.member.householdId,
             email: j.member.email,
             role: j.member.role,
+            emailVerified: j.member.emailVerified ?? true,
           });
+          void preloadWorkbookModule();
         }
         pushToast({ type: 'success', message: 'Signed in via email link.' });
         try {
@@ -126,19 +133,7 @@ export default function App() {
   return (
     <>
       <ToastProvider />
-      {householdSignedIn ? (
-        <Suspense
-          fallback={
-            <div className="flex min-h-svh items-center justify-center bg-gradient-to-br from-teal-50/90 via-[#f4f7fb] to-slate-100 text-sm font-medium text-slate-600 dark:from-moss-bg dark:via-moss-elevated dark:to-moss-bg dark:text-moss-muted">
-              Loading your workbook…
-            </div>
-          }
-        >
-          <AuthenticatedFinanceApp />
-        </Suspense>
-      ) : (
-        <PublicLandingShell />
-      )}
+      {householdSignedIn ? <SignedInWorkbook /> : <PublicLandingShell />}
     </>
   );
 }

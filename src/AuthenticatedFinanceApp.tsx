@@ -44,7 +44,12 @@ import {
 } from './setup/setupCompletion';
 import { zLayers } from './ui/zLayers';
 import { requiresMonthCashflowOpening } from './utils/monthOpening';
-import { readHouseholdSession, subscribeHouseholdSessionChanged, writeHouseholdSession } from './utils/householdSession';
+import {
+  clearHouseholdSession,
+  readHouseholdSession,
+  subscribeHouseholdSessionChanged,
+  writeHouseholdSession,
+} from './utils/householdSession';
 import {
   apiBaseFromNotifyUrl,
   parseVerifyTokenFromHash,
@@ -125,7 +130,12 @@ export function AuthenticatedFinanceApp() {
   const [setupTick, setSetupTick] = useState(0);
   const notifyCfgForVerify = readNotifyRelayConfig();
   const apiConfiguredForVerify = Boolean(apiBaseFromNotifyUrl(notifyCfgForVerify.url));
-  const [emailVerified, setEmailVerified] = useState(() => !apiConfiguredForVerify);
+  const [emailVerified, setEmailVerified] = useState(() => {
+    const sess = readHouseholdSession();
+    if (sess?.emailVerified === true) return true;
+    if (sess?.emailVerified === false) return false;
+    return !apiConfiguredForVerify;
+  });
 
   useEffect(() => {
     const cfg = readNotifyRelayConfig();
@@ -190,24 +200,38 @@ export function AuthenticatedFinanceApp() {
       headers: { Authorization: `Bearer ${sess.token}` },
     })
       .then(async (res) => {
+        if (res.status === 401) return 'unauthorized' as const;
         if (res.status === 403) {
           try {
-            const j = (await res.json()) as { code?: string };
-            if (j.code === 'EMAIL_NOT_VERIFIED') return false;
+            const j = (await res.json()) as { code?: string; member?: { emailVerified?: boolean } };
+            if (j.code === 'EMAIL_NOT_VERIFIED') return 'unverified' as const;
           } catch {
             /* ignore */
           }
-          return false;
+          return 'unverified' as const;
         }
-        if (!res.ok) return false;
+        if (!res.ok) return 'unknown' as const;
         const j = (await res.json()) as { member?: { emailVerified?: boolean } };
-        return Boolean(j.member?.emailVerified);
+        return j.member?.emailVerified ? ('verified' as const) : ('unverified' as const);
       })
-      .then((v) => {
-        if (!cancelled) setEmailVerified(v);
+      .then((status) => {
+        if (cancelled || !status) return;
+        if (status === 'unauthorized') {
+          clearHouseholdSession();
+          return;
+        }
+        if (status === 'unverified') {
+          setEmailVerified(false);
+          writeHouseholdSession({ ...sess, emailVerified: false });
+          return;
+        }
+        setEmailVerified(true);
+        writeHouseholdSession({ ...sess, emailVerified: true });
       })
       .catch(() => {
-        if (!cancelled) setEmailVerified(false);
+        if (!cancelled && sess.emailVerified !== false) {
+          setEmailVerified(true);
+        }
       });
     return () => {
       cancelled = true;

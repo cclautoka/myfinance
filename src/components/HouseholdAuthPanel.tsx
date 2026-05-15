@@ -14,6 +14,7 @@ import { pushToast } from '../ui/toast/toastBus';
 import { PartnerInviteModal } from './PartnerInviteModal';
 import { resolvePartnerEmailForInvite } from '../utils/resolvePartnerEmail';
 import { applyNotifyEmails } from '../utils/applyNotifyEmails';
+import { preloadWorkbookModule } from '../SignedInWorkbook';
 
 function isValidEmail(v: string) {
   const t = v.trim();
@@ -203,8 +204,9 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
         password,
       })) as {
         token?: string;
+        needsEmailVerification?: boolean;
         notifyEmails?: { husbandEmail?: string; wifeEmail?: string };
-        member?: { email?: string; role?: string; householdId?: string };
+        member?: { email?: string; role?: string; householdId?: string; emailVerified?: boolean };
       };
       if (j.token && j.member?.householdId) {
         applyNotifyEmails(j.notifyEmails);
@@ -213,7 +215,9 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
           householdId: j.member.householdId,
           email: j.member.email,
           role: j.member.role,
+          emailVerified: j.needsEmailVerification ? false : Boolean(j.member.emailVerified ?? true),
         });
+        void preloadWorkbookModule();
       }
       pushToast({ type: 'success', message: 'Signed in.' });
       onAuthChange?.();

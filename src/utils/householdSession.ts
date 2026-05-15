@@ -22,6 +22,8 @@ export type HouseholdSession = {
   householdId: string;
   email?: string;
   role?: string;
+  /** Cached from login / verify so the app does not block on /me when already verified. */
+  emailVerified?: boolean;
 };
 
 export function readHouseholdSession(): HouseholdSession | null {

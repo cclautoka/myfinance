@@ -19,14 +19,16 @@ import { SegmentedChoice } from '../components/ui/SegmentedChoice';
 import { THEME_SEGMENT_OPTIONS } from '../components/ui/themeSegmentedOptions';
 import { pushToast } from '../ui/toast/toastBus';
 import { applyNotifyEmails } from '../utils/applyNotifyEmails';
+import { preloadWorkbookModule } from '../SignedInWorkbook';
 
 type Tab = 'signin' | 'register';
 type AuthPanel = 'default' | 'forgot' | 'reset';
 
 function finishAuth(
-  member: { email?: string; role?: string; householdId?: string },
+  member: { email?: string; role?: string; householdId?: string; emailVerified?: boolean },
   token: string,
   onAuthed?: () => void | Promise<void>,
+  opts?: { emailVerified?: boolean },
 ) {
   clearLocalFinanceCache();
   if (member.householdId) setNotifyRelayHouseholdId(member.householdId);
@@ -35,7 +37,9 @@ function finishAuth(
     householdId: member.householdId!,
     email: member.email,
     role: member.role,
+    emailVerified: opts?.emailVerified ?? member.emailVerified ?? true,
   });
+  void preloadWorkbookModule();
   void Promise.resolve(onAuthed?.());
 }
 
@@ -203,8 +207,9 @@ export function HouseholdAuthForm({
         password,
       })) as {
         token?: string;
+        needsEmailVerification?: boolean;
         notifyEmails?: { husbandEmail?: string; wifeEmail?: string };
-        member?: { email?: string; role?: string; householdId?: string };
+        member?: { email?: string; role?: string; householdId?: string; emailVerified?: boolean };
       };
       if (j.token && j.member?.householdId) {
         applyNotifyEmails(j.notifyEmails);
@@ -214,7 +219,9 @@ export function HouseholdAuthForm({
           /* ignore */
         }
         pushToast({ type: 'success', message: 'Signed in.' });
-        finishAuth(j.member, j.token, onAuthed);
+        finishAuth(j.member, j.token, onAuthed, {
+          emailVerified: j.needsEmailVerification ? false : Boolean(j.member.emailVerified ?? true),
+        });
       }
     } catch (e) {
       pushToast({ type: 'error', message: String((e as Error)?.message ?? e) });
