@@ -51,6 +51,8 @@ function hashFinanceState(s: FinanceState): string {
 export function usePersistedFinance() {
   const [state, setState] = useState<FinanceState>(() => loadFinanceState());
   const stateRef = useRef(state);
+  /** Skip one debounced PUT right after hydrating from server (avoids redundant write-back on load). */
+  const skipNextServerSaveRef = useRef(false);
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
@@ -71,6 +73,7 @@ export function usePersistedFinance() {
       const remote = await fetchServerFinanceState();
       if (cancelled) return;
       if (remote.ok) {
+        skipNextServerSaveRef.current = true;
         setState(remote.state);
         maybeMigrateLegacyHouseholdSetup(remote.state, readNotifyRelayConfig());
       }
@@ -99,6 +102,7 @@ export function usePersistedFinance() {
       pushToast({ type: 'error', message: error });
       return { ok: false as const, error };
     }
+    skipNextServerSaveRef.current = true;
     setState(remote.state);
     maybeMigrateLegacyHouseholdSetup(remote.state, readNotifyRelayConfig());
     pushToast({ type: 'success', message: 'Synced from server.' });
@@ -112,6 +116,10 @@ export function usePersistedFinance() {
     if (!readHouseholdSession()?.token) return;
     const cfg = getServerStorageConfig();
     if (!cfg.enabled) return;
+    if (skipNextServerSaveRef.current) {
+      skipNextServerSaveRef.current = false;
+      return;
+    }
     if (serverSaveRef.current !== null) clearTimeout(serverSaveRef.current);
     serverSaveRef.current = setTimeout(() => {
       serverSaveRef.current = null;

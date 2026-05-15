@@ -324,10 +324,6 @@ export function AuthenticatedFinanceApp() {
     setTourReplay((n) => n + 1);
   };
 
-  useEffect(() => {
-    void reloadFromServer().catch(() => {});
-  }, [reloadFromServer]);
-
   if (needsVerifyGate) {
     return (
       <VerifyEmailGate
