@@ -1,0 +1,19 @@
+#!/bin/sh
+# Dokploy → frontend app → Schedules → paste this command (Shell: sh)
+# Cron: 0 7 * * *  |  Timezone: Pacific/Fiji
+#
+# Replace each hk_* key and household_id after creating keys (Tools → Cron API key, or
+# `cd server && node scripts/create-cron-bearer-key.mjs HOUSEHOLD_ID`).
+#
+# List households: npm run server:list:households
+
+for pair in \
+  "hk_REPLACE_ME:household_id_one" \
+  "hk_REPLACE_ME:household_id_two"; do
+  key="${pair%%:*}"
+  hid="${pair#*:}"
+  curl -sS -X POST "http://127.0.0.1:8787/v1/reminders/send" \
+    -H "Authorization: Bearer $key" \
+    -H "Content-Type: application/json" \
+    -d "{\"id\":\"$hid\"}" || true
+done

@@ -10,6 +10,7 @@ import {
   postNotifyRelayPublicJson,
   setNotifyRelayHouseholdId,
 } from './utils/notifyRelayConfig';
+import { fetchAndApplyNotifyEmails } from './utils/applyNotifyEmails';
 import { readHouseholdSession, subscribeHouseholdSessionChanged, writeHouseholdSession } from './utils/householdSession';
 import { clearLocalFinanceCache } from './utils/clearLocalFinanceCache';
 import { SetupWizardDevPage } from './dev/SetupWizardDevPage';
@@ -71,6 +72,7 @@ export default function App() {
             role: j.member.role,
             emailVerified: j.member.emailVerified ?? true,
           });
+          void fetchAndApplyNotifyEmails();
           void preloadWorkbookModule();
           pushToast({ type: 'success', message: 'Email verified — welcome.' });
           try {
@@ -118,6 +120,7 @@ export default function App() {
             role: j.member.role,
             emailVerified: j.member.emailVerified ?? true,
           });
+          void fetchAndApplyNotifyEmails();
           void preloadWorkbookModule();
         }
         pushToast({ type: 'success', message: 'Signed in via email link.' });

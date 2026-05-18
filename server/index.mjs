@@ -3,7 +3,6 @@ import Fastify from 'fastify';
 import compress from '@fastify/compress';
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
-import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -17,6 +16,18 @@ import {
   renderEmailHtml,
   renderEmailText,
 } from './templates.mjs';
+import {
+  normalizeRecipientList,
+  notifyToRecipients,
+  sendMail,
+  splitRecipients,
+} from './mail.mjs';
+import {
+  coupleNotifyEmailsFromOwnerSlot,
+  resolveNotifyEmailsForHousehold,
+} from './notifyEmails.mjs';
+import { sendRemindersForHousehold } from './reminderSend.mjs';
+import { runDailyRemindersJob, startReminderCronScheduler } from './reminderCron.mjs';
 import { readSnapshot, writeSnapshot } from './snapshots.mjs';
 import {
   getDbEnabled,
@@ -53,14 +64,12 @@ import {
   listBearerKeysForHousehold,
   revokeBearerKey,
 } from './db.mjs';
-import { computeReminderEmailPayload } from './reminders.mjs';
 import { hashPassword, verifyPassword } from './password.mjs';
 import { signFinanceSession, verifyFinanceSession } from './sessionToken.mjs';
 import { buildEmptyFinanceState } from './emptyFinanceState.mjs';
 import { applyStaticCacheHeaders } from './staticCache.mjs';
 
 const port = Number(process.env.PORT ?? 8787);
-const notifyTo = process.env.NOTIFY_TO ?? '';
 
 function timingSafeEqual(a, b) {
   const ab = Buffer.from(a, 'utf8');
@@ -75,44 +84,10 @@ function parseBearer(authHeader) {
   return m ? m[1].trim() : '';
 }
 
-function splitRecipients(raw) {
-  if (!raw) return [];
-  return String(raw)
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-function normalizeRecipientList(arr) {
-  if (!Array.isArray(arr)) return [];
-  const seen = new Set();
-  const out = [];
-  for (const v of arr) {
-    if (typeof v !== 'string') continue;
-    const s = v.trim();
-    if (!s) continue;
-    const k = s.toLowerCase();
-    if (seen.has(k)) continue;
-    seen.add(k);
-    out.push(s);
-    if (out.length >= 5) break;
-  }
-  return out;
-}
-
-/** Reminder cron: body.to if set, else notifyRecipientEmails from snapshot/state, else NOTIFY_TO (legacy). */
-function pickReminderRecipients(body, stateData) {
-  const fromBody = normalizeRecipientList(body?.to);
-  if (fromBody.length) return fromBody;
-  const fromSnapshot = normalizeRecipientList(stateData?.notifyRecipientEmails);
-  if (fromSnapshot.length) return fromSnapshot;
-  return splitRecipients(notifyTo.trim());
-}
-
 async function resolveNotifyRecipients(body, log) {
   const fromBody = normalizeRecipientList(body?.to);
   if (fromBody.length) return fromBody;
-  const fromEnv = splitRecipients(notifyTo.trim());
+  const fromEnv = notifyToRecipients();
   if (fromEnv.length) return fromEnv;
   const id = typeof body?.id === 'string' && body.id.trim() ? body.id.trim().slice(0, 64) : '';
   if (!id) return [];
@@ -125,59 +100,28 @@ async function resolveNotifyRecipients(body, log) {
       data = stored?.state ?? null;
     }
   }
-  return normalizeRecipientList(data?.notifyRecipientEmails);
+  const fromSnapshot = normalizeRecipientList(data?.notifyRecipientEmails);
+  if (fromSnapshot.length) return fromSnapshot;
+  const notifyEmails = await resolveNotifyEmailsForHousehold(id);
+  return normalizeRecipientList(
+    [notifyEmails.husbandEmail, notifyEmails.wifeEmail].filter((e) => e.includes('@')),
+  );
 }
 
-async function sendWithResend({ to, subject, text, html }) {
-  const key = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM;
-  if (!key || !from) throw new Error('RESEND_API_KEY and RESEND_FROM must be set');
-  const toList = Array.isArray(to) ? to : splitRecipients(to);
-  if (toList.length === 0) throw new Error('No recipients configured');
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${key}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ from, to: toList, subject, text, ...(html ? { html } : {}) }),
-  });
-  const body = await res.text();
-  if (!res.ok) throw new Error(`Resend ${res.status}: ${body}`);
-  return { provider: 'resend' };
+function reminderCronSecret() {
+  return (process.env.REMINDER_CRON_SECRET ?? '').trim();
 }
 
-function createSmtpTransport() {
-  const host = process.env.SMTP_HOST;
-  if (!host) return null;
-  return nodemailer.createTransport({
-    host,
-    port: Number(process.env.SMTP_PORT ?? 587),
-    secure: String(process.env.SMTP_SECURE).toLowerCase() === 'true',
-    auth:
-      process.env.SMTP_USER || process.env.SMTP_PASS
-        ? { user: process.env.SMTP_USER ?? '', pass: process.env.SMTP_PASS ?? '' }
-        : undefined,
-  });
-}
-
-async function sendWithSmtp({ to, subject, text }) {
-  const transport = createSmtpTransport();
-  if (!transport) throw new Error('SMTP_HOST not configured');
-  const from = process.env.MAIL_FROM ?? process.env.SMTP_USER;
-  if (!from) throw new Error('MAIL_FROM or SMTP_USER required for SMTP');
-  await transport.sendMail({ from, to, subject, text, html: undefined });
-  return { provider: 'smtp' };
-}
-
-async function sendMail({ to, subject, text, html }) {
-  if (process.env.RESEND_API_KEY) return sendWithResend({ to, subject, text, html });
-  const transport = createSmtpTransport();
-  if (!transport) throw new Error('SMTP_HOST not configured');
-  const from = process.env.MAIL_FROM ?? process.env.SMTP_USER;
-  if (!from) throw new Error('MAIL_FROM or SMTP_USER required for SMTP');
-  await transport.sendMail({ from, to, subject, text, ...(html ? { html } : {}) });
-  return { provider: 'smtp' };
+async function assertReminderCronAuthorized(request, reply) {
+  const secret = reminderCronSecret();
+  if (secret.length < 16) {
+    reply.code(503).send({ error: 'REMINDER_CRON_SECRET not configured (min 16 chars).' });
+    return false;
+  }
+  const bearer = parseBearer(request.headers.authorization ?? '');
+  if (bearer && timingSafeEqual(bearer, secret)) return true;
+  reply.code(401).send({ error: 'Unauthorized' });
+  return false;
 }
 
 const fastify = Fastify({ logger: true });
@@ -307,41 +251,6 @@ function normalizeEmail(v) {
 
 function parseOwnerSlot(v) {
   return v === 'wife' ? 'wife' : 'husband';
-}
-
-function coupleNotifyEmailsFromOwnerSlot(ownerSlot, ownerEmail, partnerEmail) {
-  const owner = String(ownerEmail ?? '').trim();
-  const partner = String(partnerEmail ?? '').trim();
-  if (parseOwnerSlot(ownerSlot) === 'wife') {
-    return { husbandEmail: partner, wifeEmail: owner };
-  }
-  return { husbandEmail: owner, wifeEmail: partner };
-}
-
-async function resolveNotifyEmailsForHousehold(householdId) {
-  const snap = await readSnapshot(householdId).catch(() => null);
-  const data = snap?.data;
-  if (data?.notifyEmails && typeof data.notifyEmails === 'object') {
-    const he = String(data.notifyEmails.husbandEmail ?? '').trim();
-    const we = String(data.notifyEmails.wifeEmail ?? '').trim();
-    if (he || we) return { husbandEmail: he, wifeEmail: we };
-  }
-  const list = normalizeRecipientList(data?.notifyRecipientEmails);
-  if (list.length >= 2) {
-    return { husbandEmail: list[0], wifeEmail: list[1] };
-  }
-  if (list.length === 1) {
-    return { husbandEmail: list[0], wifeEmail: '' };
-  }
-  if (!getDbEnabled()) return { husbandEmail: '', wifeEmail: '' };
-  const members = await listMembersForHousehold(householdId);
-  const owner = members.find((m) => m.role === 'owner');
-  const partner = members.find((m) => m.role === 'partner');
-  if (owner?.email && partner?.email) {
-    return { husbandEmail: owner.email.trim(), wifeEmail: partner.email.trim() };
-  }
-  if (owner?.email) return { husbandEmail: owner.email.trim(), wifeEmail: '' };
-  return { husbandEmail: '', wifeEmail: '' };
 }
 
 /** Optional partner row + verification email during owner registration (couple households). */
@@ -1656,62 +1565,27 @@ fastify.post('/v1/snapshot', async (request, reply) => {
   return reply.send({ ok: true });
 });
 
-/** Manual trigger (or Dokploy Schedule cron) to send due/overdue reminders. */
+/** Manual trigger (debug / per-household hk_ key) to send due/overdue reminders. */
 fastify.post('/v1/reminders/send', async (request, reply) => {
-  const body = request.body;
-  const id = typeof body?.id === 'string' && body.id.trim() ? body.id.trim().slice(0, 64) : '';
+  const body = request.body ?? {};
+  const id = typeof body.id === 'string' && body.id.trim() ? body.id.trim().slice(0, 64) : '';
   if (!id) return reply.code(400).send({ error: 'Body must include "id" string.' });
   if (!(await assertAuthorized(request, reply, id))) return;
 
-  const snap = await readSnapshot(id).catch(() => null);
-  let stateData = snap?.data ?? null;
-  if (!stateData) {
-    await initDbIfNeeded(request.log);
-    if (getDbEnabled()) {
-      const stored = await readState(id).catch(() => null);
-      stateData = stored?.state ?? null;
-    }
+  const result = await sendRemindersForHousehold(id, { log: request.log, body });
+  if (!result.ok) {
+    if (result.code === 'NOT_FOUND') return reply.code(404).send({ error: result.error });
+    if (result.code === 'NO_RECIPIENTS') return reply.code(400).send({ error: result.error });
+    return reply.code(502).send({ error: result.error });
   }
-  if (!stateData) return reply.code(404).send({ error: 'No snapshot or stored state found for id.' });
+  return reply.send(result);
+});
 
-  const { monthKey: mk, dueSoon, overdue, horizon, counts } = computeReminderEmailPayload(stateData, new Date());
-  if (counts.dueSoon === 0 && counts.overdue === 0 && counts.horizon === 0) {
-    return reply.send({ ok: true, skipped: true, counts });
-  }
-
-  const template = buildReminderEmailTemplate({ monthKey: mk, dueSoon, overdue, horizon });
-  const footerHint =
-    counts.overdue > 0
-      ? 'Overdue items are past your grace window. Open the app and mark handled to keep reminders quiet.'
-      : 'Open the app to mark bills paid and keep reminders quiet.';
-  const html = renderEmailHtml({
-    title: template.title,
-    preheader: template.preheader,
-    sections: template.sections,
-    footerHint,
-  });
-  const text = renderEmailText({
-    title: template.title,
-    preheader: template.preheader,
-    sections: template.sections,
-    footerHint,
-  });
-
-  const to = pickReminderRecipients(body, stateData);
-  if (!to.length) {
-    return reply.code(400).send({
-      error:
-        'No recipient emails for reminders. Add husband/wife emails in Tools & alerts, save to refresh the snapshot, pass "to" in the cron body, or set NOTIFY_TO (legacy).',
-    });
-  }
-
-  try {
-    const result = await sendMail({ to, subject: template.subject.slice(0, 200), text, html });
-    return reply.send({ ok: true, ...result, counts });
-  } catch (e) {
-    request.log.error(e);
-    return reply.code(502).send({ error: 'Failed to send email' });
-  }
+/** Ops trigger: fan-out daily reminders to all households (optional; in-process cron is preferred). */
+fastify.post('/v1/reminders/send-all', async (request, reply) => {
+  if (!(await assertReminderCronAuthorized(request, reply))) return;
+  const summary = await runDailyRemindersJob(request.log);
+  return reply.send(summary);
 });
 
 fastify.get('/preview/email', async (request, reply) => {
@@ -1830,6 +1704,7 @@ if (getDbEnabled()) {
 try {
   await fastify.listen({ port, host: '0.0.0.0' });
   fastify.log.info(`Listening on ${port}`);
+  startReminderCronScheduler(fastify.log);
 } catch (err) {
   fastify.log.error(err);
   process.exit(1);

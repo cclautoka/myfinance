@@ -21,6 +21,10 @@ COPY server/snapshots.mjs ./snapshots.mjs
 COPY server/db.mjs ./db.mjs
 COPY server/emptyFinanceState.mjs ./emptyFinanceState.mjs
 COPY server/reminders.mjs ./reminders.mjs
+COPY server/mail.mjs ./mail.mjs
+COPY server/notifyEmails.mjs ./notifyEmails.mjs
+COPY server/reminderSend.mjs ./reminderSend.mjs
+COPY server/reminderCron.mjs ./reminderCron.mjs
 COPY server/scripts/db-migrate.mjs ./scripts/db-migrate.mjs
 COPY --from=frontend-build /web/dist ./public
 ENV NODE_ENV=production

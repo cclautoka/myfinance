@@ -32,6 +32,7 @@ import {
 } from '../utils/notifyRelay';
 import { readHouseholdSession } from '../utils/householdSession';
 import { readNotifyRelayConfig } from '../utils/notifyRelayConfig';
+import { serverAuthBearer } from '../utils/serverAuth';
 import { maybeMigrateLegacyHouseholdSetup } from '../setup/setupCompletion';
 import { pushToast } from '../ui/toast/toastBus';
 
@@ -94,6 +95,14 @@ export function usePersistedFinance() {
           skipNextNotifyRef.current = true;
           setState(remote.state);
           maybeMigrateLegacyHouseholdSetup(remote.state, readNotifyRelayConfig());
+          const relayCfg = readNotifyRelayConfig();
+          if (relayCfg.enabled && relayCfg.url && serverAuthBearer()) {
+            void postSnapshotRelay(buildSnapshotForReminders(remote.state)).then((r) => {
+              if (!r.ok && typeof console !== 'undefined') {
+                console.warn('[notify relay snapshot on login]', r.error);
+              }
+            });
+          }
         }
       } catch {
         /* offline / ignore */
@@ -468,12 +477,22 @@ export function usePersistedFinance() {
       const mk = currentMonthKey();
       const pocket = pocketLeftSoFar(latest);
       void postNotifyRelay('', { digest, monthKey: mk, pocketLeft: pocket }).then((r) => {
-        if (!r.ok && typeof console !== 'undefined') {
-          console.warn('[notify relay]', r.error);
+        if (!r.ok) {
+          if (typeof console !== 'undefined') console.warn('[notify relay]', r.error);
+          pushToast({
+            type: 'error',
+            message: `Change summary email failed: ${r.error}`.slice(0, 240),
+          });
         }
       });
       void postSnapshotRelay(buildSnapshotForReminders(latest)).then((r) => {
-        if (!r.ok && typeof console !== 'undefined') console.warn('[notify relay snapshot]', r.error);
+        if (!r.ok) {
+          if (typeof console !== 'undefined') console.warn('[notify relay snapshot]', r.error);
+          pushToast({
+            type: 'error',
+            message: `Reminder snapshot failed: ${r.error}`.slice(0, 240),
+          });
+        }
       });
     }, debounceMs);
 

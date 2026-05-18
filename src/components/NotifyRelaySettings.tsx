@@ -17,7 +17,12 @@ import {
 import type { FinanceState } from '../types/finance';
 import { HouseholdAuthPanel } from './HouseholdAuthPanel';
 import { readHouseholdSession } from '../utils/householdSession';
+import {
+  buildReminderCronCurl,
+  createHouseholdBearerKey,
+} from '../utils/householdBearerKey';
 import { fetchAndApplyNotifyEmails } from '../utils/applyNotifyEmails';
+import { pushToast } from '../ui/toast/toastBus';
 import { readHouseholdMode } from '../setup/setupCompletion';
 import { FieldError } from './ui/FieldError';
 import { fieldErrorId } from './ui/fieldErrorId';
@@ -49,6 +54,9 @@ export function NotifyRelaySettings({
       : null;
   });
   const [busy, setBusy] = useState(false);
+  const [cronKeyBusy, setCronKeyBusy] = useState(false);
+  const [cronKeyReveal, setCronKeyReveal] = useState<{ key: string; curl: string } | null>(null);
+  const [cronAdvancedOpen, setCronAdvancedOpen] = useState(false);
   const [authTick, setAuthTick] = useState(0);
   const stateRef = useRef(state);
   const snapshotPushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -129,6 +137,40 @@ export function NotifyRelaySettings({
   };
   const husbandEmailErr = emailErr(cfg.husbandEmail, 'Husband email');
   const wifeEmailErr = emailErr(cfg.wifeEmail, 'Wife email');
+
+  const session = typeof window !== 'undefined' ? readHouseholdSession() : null;
+  const isOwner = session?.role === 'owner';
+  const householdId = (session?.householdId ?? cfg.householdId).trim();
+
+  const createCronKey = useCallback(async () => {
+    if (!householdId) {
+      pushToast({ type: 'error', message: 'Sign in to create a cron API key for your household.' });
+      return;
+    }
+    setCronKeyBusy(true);
+    setCronKeyReveal(null);
+    const r = await createHouseholdBearerKey(householdId);
+    setCronKeyBusy(false);
+    if (!r.ok) {
+      pushToast({ type: 'error', message: r.error });
+      return;
+    }
+    const curl = buildReminderCronCurl(householdId, r.key);
+    setCronKeyReveal({ key: r.key, curl });
+    pushToast({
+      type: 'success',
+      message: 'Cron API key created — copy it now (shown once). Update your Dokploy schedule.',
+    });
+  }, [householdId]);
+
+  const copyText = useCallback(async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      pushToast({ type: 'success', message: `${label} copied.` });
+    } catch {
+      pushToast({ type: 'error', message: `Could not copy ${label.toLowerCase()}.` });
+    }
+  }, []);
 
   const householdMode = readHouseholdMode();
   const husbandTrim = cfg.husbandEmail.trim();
@@ -285,6 +327,80 @@ export function NotifyRelaySettings({
           </div>
         ) : null}
       </div>
+
+      <p className="mt-4 text-xs leading-snug text-sage-600 dark:text-moss-muted">
+        <strong className="text-sage-900 dark:text-moss-fg">Daily bill reminders</strong> are sent automatically by the
+        server (no setup required). Enable summaries above for change heads-ups after edits (~60s debounce).
+      </p>
+
+      {isOwner && session?.token ? (
+        <div className="mt-4 rounded-xl border border-slate-200/80 bg-slate-50/70 dark:border-moss-border dark:bg-moss-surface/50">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold text-sage-900 dark:text-moss-fg"
+            aria-expanded={cronAdvancedOpen}
+            onClick={() => setCronAdvancedOpen((o) => !o)}
+          >
+            Self-hosted / advanced (Dokploy cron key)
+            <span className="text-sage-500 dark:text-moss-muted">{cronAdvancedOpen ? '−' : '+'}</span>
+          </button>
+          {cronAdvancedOpen ? (
+            <div className="border-t border-slate-200/80 px-4 py-3 dark:border-moss-border">
+              <p className="text-xs leading-snug text-sage-600 dark:text-moss-muted">
+                Hosted deployments use in-process scheduling. Only use this if you run your own server without{' '}
+                <code className="rounded bg-sage-100 px-1 dark:bg-moss-bg">REMINDER_CRON_ENABLED</code>.
+              </p>
+          {householdId ? (
+            <p className="mt-2 font-mono text-[11px] text-sage-700 dark:text-moss-subtle">
+              Household id: {householdId}
+            </p>
+          ) : null}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="btn-secondary btn-secondary-sm font-bold"
+              disabled={cronKeyBusy || !householdId}
+              onClick={() => void createCronKey()}
+            >
+              {cronKeyBusy ? 'Creating…' : 'Create cron API key'}
+            </button>
+            {cronKeyReveal ? (
+              <>
+                <button
+                  type="button"
+                  className="btn-secondary btn-secondary-sm font-bold"
+                  onClick={() => void copyText(cronKeyReveal.key, 'API key')}
+                >
+                  Copy key
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary btn-secondary-sm font-bold"
+                  onClick={() => void copyText(cronKeyReveal.curl, 'Dokploy curl')}
+                >
+                  Copy Dokploy curl
+                </button>
+              </>
+            ) : null}
+          </div>
+          {cronKeyReveal ? (
+            <div className="mt-3 space-y-2">
+              <p className="text-xs font-medium text-amber-900 dark:text-amber-100">
+                Save this key in Dokploy now — it will not be shown again.
+              </p>
+              <textarea
+                readOnly
+                rows={5}
+                className="w-full rounded-lg border border-sage-300 bg-white px-3 py-2 font-mono text-[11px] leading-relaxed dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
+                value={cronKeyReveal.curl}
+                aria-label="Dokploy reminder curl command"
+              />
+            </div>
+          ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="mt-4 flex flex-wrap gap-2">
         <button type="button" className="btn-secondary btn-secondary-sm font-bold" disabled={busy} onClick={testSend}>

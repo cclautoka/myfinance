@@ -64,3 +64,35 @@ Keep **`REMINDER_EMAIL_HORIZON_CALENDAR_DAYS`** in `server/reminders.mjs` aligne
 **Due soon vs lead days:** “Closing in” / reminder **Due soon** counts **weekdays from tomorrow** through the bill’s due date (inclusive of the due date), up to your **Bill upcoming lead (business days)** setting in the app (default 3). **Due today** is classified as **overdue** for reminders and the bill strip.
 
 **Cron / “today”:** `/v1/reminders/send` uses the server’s **`new Date()`** (the host’s local timezone). If your household is in another zone, “today” in the email may differ from your wall clock until you add a dedicated timezone (future enhancement).
+
+## Automatic daily reminders (hosted default)
+
+When **`DATABASE_URL`** and **`REMINDER_CRON_ENABLED=1`** are set, the Node server schedules daily reminders **in-process** on boot. **End users do not configure cron or API keys.**
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `REMINDER_CRON_ENABLED` | `1` (set in production) | Start in-process scheduler |
+| `REMINDER_CRON_EXPRESSION` | `0 7 * * *` | Cron syntax |
+| `REMINDER_CRON_TIMEZONE` | `Pacific/Fiji` | Schedule timezone |
+
+Each run fans out to **every** row in **`finance_state`**, uses bill data from snapshot or Postgres state, and sends to owner/partner login emails (or snapshot / `NOTIFY_TO` fallback). A Postgres advisory lock ensures only one replica sends if you scale containers.
+
+**Operator checklist after deploy:**
+
+1. Set `REMINDER_CRON_ENABLED=1` (and `DATABASE_URL`, mail env).
+2. **Remove** any old Dokploy schedule that called `/v1/reminders/send` with `NOTIFY_API_SECRET` (it returns **401** when legacy auth is disabled).
+3. Optional manual test: `POST /v1/reminders/send-all` with `Authorization: Bearer $REMINDER_CRON_SECRET` (min 16 chars).
+
+### Change-summary emails (browser)
+
+After edits, the browser POSTs **`/v1/notify`** after **~60s** debounce. Summaries default **on** once sign-in emails are known. Users can turn them off in **Tools & alerts**. Failures show a toast.
+
+---
+
+## Self-hosted appendix (external Dokploy cron)
+
+Only if you disable in-process cron (`REMINDER_CRON_ENABLED=0`):
+
+- Per-household **`hk_…`** key: **Tools & alerts** → **Self-hosted / advanced**, or `npm run server:create-cron-key -- HOUSEHOLD_ID`.
+- Multi-household shell: [`docs/dokploy-daily-reminders.sh.example`](dokploy-daily-reminders.sh.example).
+- Single-household: `POST /v1/reminders/send` with `hk_…` bearer (not `NOTIFY_API_SECRET` when `NOTIFY_LEGACY_SECRET_DISABLED=1`).

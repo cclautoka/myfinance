@@ -20,12 +20,17 @@ export function applyNotifyEmails(payload: NotifyEmailsPayload | undefined | nul
   } catch {
     /* ignore */
   }
-  const bothFilled = Boolean((he || base.husbandEmail) && (we || base.wifeEmail));
+  const husband = he || base.husbandEmail;
+  const wife = we || base.wifeEmail;
+  const hasRecipient =
+    coupleMode
+      ? Boolean(husband.includes('@') && wife.includes('@'))
+      : Boolean(husband.includes('@') || wife.includes('@'));
   writeNotifyRelayConfig({
     ...base,
-    husbandEmail: he || base.husbandEmail,
-    wifeEmail: we || base.wifeEmail,
-    ...(coupleMode && bothFilled && !base.enabled ? { enabled: true } : {}),
+    husbandEmail: husband,
+    wifeEmail: wife,
+    ...(hasRecipient && !base.enabled ? { enabled: true } : {}),
   });
 }
 

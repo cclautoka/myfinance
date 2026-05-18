@@ -13,7 +13,7 @@ import { SegmentedChoice } from './ui/SegmentedChoice';
 import { pushToast } from '../ui/toast/toastBus';
 import { PartnerInviteModal } from './PartnerInviteModal';
 import { resolvePartnerEmailForInvite } from '../utils/resolvePartnerEmail';
-import { applyNotifyEmails } from '../utils/applyNotifyEmails';
+import { applyNotifyEmails, fetchAndApplyNotifyEmails } from '../utils/applyNotifyEmails';
 import { clearLocalFinanceCache } from '../utils/clearLocalFinanceCache';
 import { preloadWorkbookModule } from '../SignedInWorkbook';
 
@@ -223,6 +223,7 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
           role: j.member.role,
           emailVerified: j.needsEmailVerification ? false : Boolean(j.member.emailVerified ?? true),
         });
+        void fetchAndApplyNotifyEmails();
         void preloadWorkbookModule();
       }
       pushToast({ type: 'success', message: 'Signed in.' });

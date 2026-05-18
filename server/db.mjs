@@ -141,6 +141,23 @@ export async function initDbIfNeeded(log) {
   return initPromise;
 }
 
+export async function listHouseholdIdsWithState() {
+  if (!pool) throw new Error('DB not initialized');
+  const r = await pool.query(`select household_id from finance_state order by household_id`);
+  return r.rows.map((row) => String(row.household_id));
+}
+
+export async function tryAdvisoryLock(lockKey) {
+  if (!pool) throw new Error('DB not initialized');
+  const r = await pool.query(`select pg_try_advisory_lock($1::bigint) as locked`, [lockKey]);
+  return Boolean(r.rows[0]?.locked);
+}
+
+export async function advisoryUnlock(lockKey) {
+  if (!pool) throw new Error('DB not initialized');
+  await pool.query(`select pg_advisory_unlock($1::bigint)`, [lockKey]);
+}
+
 export async function readState(householdId) {
   if (!pool) throw new Error('DB not initialized');
   const r = await pool.query(
