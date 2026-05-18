@@ -14,7 +14,20 @@ dist-ssr
 .env
 .env.*
 !.env.example
+!.env.capacitor
 server/public
+server/data/
+
+# Capacitor / native
+android/.gradle/
+android/.idea/
+android/local.properties
+android/app/build/
+android/build/
+android/captures/
+ios/App/Pods/
+ios/App/build/
+ios/DerivedData/
 
 # Editor directories and files
 .vscode/*

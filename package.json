@@ -6,15 +6,23 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:capacitor": "CAPACITOR=true tsc -b && CAPACITOR=true vite build --mode capacitor",
+    "cap:sync": "npm run build:capacitor && npx cap sync",
+    "cap:open:ios": "npx cap open ios",
+    "cap:open:android": "npx cap open android",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
     "server:start": "npm --prefix server start",
     "server:db:migrate": "npm --prefix server run db:migrate",
     "server:seed:shahil": "npm --prefix server run seed:shahil",
-    "server:list:households": "npm --prefix server run list:households"
+    "server:list:households": "npm --prefix server run list:households",
+    "server:create-cron-key": "npm --prefix server run create-cron-key"
   },
   "dependencies": {
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/core": "^8.3.4",
+    "@capacitor/ios": "^8.3.4",
     "@fontsource-variable/plus-jakarta-sans": "^5.2.8",
     "@fontsource-variable/syne": "^5.2.7",
     "@tailwindcss/vite": "^4.3.0",
@@ -25,6 +33,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.3.4",
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.12.2",
     "@types/react": "^19.2.14",

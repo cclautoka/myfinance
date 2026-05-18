@@ -5,8 +5,11 @@ import { defineConfig } from 'vite';
 
 // https://vite.dev/config/
 const apiProxyTarget = process.env.VITE_API_PROXY_TARGET ?? 'http://127.0.0.1:8787';
+/** Relative asset paths required for Capacitor native WebView — see docs/capacitor.md */
+const isCapacitorBuild = process.env.CAPACITOR === 'true';
 
 export default defineConfig({
+  base: isCapacitorBuild ? './' : '/',
   plugins: [react(), tailwindcss()],
   build: {
     rollupOptions: {
