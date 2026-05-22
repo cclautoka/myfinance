@@ -105,9 +105,11 @@
 
 @layer components {
   .btn-primary {
-    @apply inline-flex items-center justify-center rounded-lg px-5 py-2.5 text-sm font-bold shadow-md transition-all duration-200;
+    @apply inline-flex min-w-[5.5rem] items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold shadow-md transition-all duration-200;
     @apply bg-teal-600 text-white shadow-teal-900/20 hover:bg-teal-500 hover:shadow-lg active:scale-[0.98] active:bg-teal-700;
+    @apply disabled:cursor-wait disabled:opacity-80 disabled:shadow-inner disabled:hover:bg-teal-600 disabled:active:scale-100;
     @apply dark:bg-teal-500 dark:text-slate-950 dark:shadow-teal-950/50 dark:hover:bg-teal-400 dark:active:opacity-95;
+    @apply dark:disabled:hover:bg-teal-500;
   }
   .btn-primary-sm {
     @apply rounded-md px-3 py-1.5 text-xs;

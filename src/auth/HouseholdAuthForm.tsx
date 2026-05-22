@@ -606,9 +606,10 @@ export function HouseholdAuthForm({
                   type="button"
                   className="btn-primary btn-primary-sm font-bold"
                   disabled={busy}
+                  aria-busy={busy}
                   onClick={() => void joinAsPartner()}
                 >
-                  Join household
+                  {busy ? 'Joining…' : 'Join household'}
                 </button>
               </>
             ) : null}
@@ -638,6 +639,7 @@ export function HouseholdAuthForm({
                   type="button"
                   className="btn-primary btn-primary-sm font-bold"
                   disabled={busy}
+                  aria-busy={busy}
                   onClick={() =>
                     void partnerSignIn({
                       email: partnerSignInEmail,
@@ -646,7 +648,7 @@ export function HouseholdAuthForm({
                     })
                   }
                 >
-                  Sign in
+                  {busy ? 'Signing in…' : 'Sign in'}
                 </button>
               </>
             ) : null}
@@ -761,9 +763,10 @@ export function HouseholdAuthForm({
                 type="button"
                 className="btn-primary btn-primary-sm font-bold"
                 disabled={busy || !email.trim()}
+                aria-busy={busy}
                 onClick={() => void requestForgot()}
               >
-                Send reset link
+                {busy ? 'Sending…' : 'Send reset link'}
               </button>
               <button
                 type="button"
@@ -801,8 +804,9 @@ export function HouseholdAuthForm({
               type="submit"
               className="btn-primary btn-primary-sm mt-2 font-bold"
               disabled={busy || newPasswordAfterReset.length < 8}
+              aria-busy={busy}
             >
-              Update password
+              {busy ? 'Updating…' : 'Update password'}
             </button>
           </form>
         ) : null}
@@ -810,21 +814,34 @@ export function HouseholdAuthForm({
         {authPanel === 'default' && !partnerInviteMode ? (
           <div className="flex flex-wrap gap-2">
             {tab === 'register' ? (
-              <button type="button" className="btn-primary btn-primary-sm font-bold" disabled={busy} onClick={() => void register()}>
-                Create account
+              <button
+                type="button"
+                className="btn-primary btn-primary-sm font-bold"
+                disabled={busy}
+                aria-busy={busy}
+                onClick={() => void register()}
+              >
+                {busy ? 'Creating…' : 'Create account'}
               </button>
             ) : tab === 'partner' ? (
               <button
                 type="button"
                 className="btn-primary btn-primary-sm font-bold"
                 disabled={busy}
+                aria-busy={busy}
                 onClick={() => void partnerSignIn()}
               >
-                Partner sign in
+                {busy ? 'Signing in…' : 'Partner sign in'}
               </button>
             ) : (
-              <button type="button" className="btn-primary btn-primary-sm font-bold" disabled={busy} onClick={() => void login()}>
-                Sign in
+              <button
+                type="button"
+                className="btn-primary btn-primary-sm font-bold"
+                disabled={busy}
+                aria-busy={busy}
+                onClick={() => void login()}
+              >
+                {busy ? 'Signing in…' : 'Sign in'}
               </button>
             )}
             {tab === 'signin' ? (

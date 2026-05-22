@@ -12,10 +12,14 @@ export function segmentedTriggerClass(
   const text = opts?.frame
     ? 'text-[9px] font-semibold leading-tight'
     : opts?.compact
-      ? 'text-[10px] font-semibold sm:text-xs'
-      : 'text-sm font-semibold';
-  const pad = opts?.frame ? 'px-1 py-1' : opts?.compact ? 'px-1.5 py-1.5 sm:px-2.5' : 'px-2 py-2 sm:px-4';
-  const base = `relative flex ${h} min-w-0 flex-1 cursor-pointer select-none items-center justify-center rounded-md ${pad} text-center ${text} transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-moss-bg`;
+      ? 'text-[10px] font-semibold leading-tight sm:text-xs'
+      : 'text-xs font-semibold leading-tight sm:text-sm';
+  const pad = opts?.frame
+    ? 'px-1 py-1'
+    : opts?.compact
+      ? 'px-1.5 py-1.5 sm:px-2'
+      : 'px-2 py-2 sm:px-3 lg:px-4';
+  const base = `relative flex ${h} min-w-0 flex-1 cursor-pointer select-none items-center justify-center rounded-md ${pad} text-center ${text} transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-moss-bg whitespace-nowrap`;
   const state = selected
     ? 'bg-teal-600 text-white shadow-sm dark:bg-teal-500 dark:text-slate-950'
     : 'text-slate-700 hover:bg-white/80 dark:text-moss-subtle dark:hover:bg-moss-surface';

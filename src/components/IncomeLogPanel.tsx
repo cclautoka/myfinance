@@ -172,14 +172,15 @@ export function IncomeLogPanel({
                     onValueChange={setAmount}
                   />
                 </label>
-                <label className="block text-sm font-medium text-sage-800 dark:text-moss-fg">
+                <label className="col-span-2 block text-sm font-medium text-sage-800 dark:text-moss-fg">
                   Tagged for
-                  <div className="mt-1 max-w-md">
+                  <div className="mt-1 w-full min-w-0">
                     <SegmentedChoice
                       name={`income-earner-new-${monthKey}`}
                       aria-label="Earner lane for this deposit"
                       value={earner}
                       options={INCOME_EARNER_SEGMENT}
+                      size="compact"
                       onChange={(v) => setEarner(v as IncomeEarner)}
                     />
                   </div>
@@ -251,9 +252,9 @@ export function IncomeLogPanel({
                             onValueChange={setEditAmount}
                           />
                         </label>
-                        <label className="block text-xs font-medium text-sage-800 dark:text-moss-fg">
+                        <label className="block text-xs font-medium text-sage-800 dark:text-moss-fg sm:col-span-2 lg:col-span-1">
                           Earner
-                          <div className="mt-1 max-w-md">
+                          <div className="mt-1 w-full min-w-0">
                             <SegmentedChoice
                               name={`income-earner-edit-${e.id}`}
                               aria-label="Earner lane for edited deposit"

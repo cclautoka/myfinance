@@ -106,22 +106,30 @@ function expenseMonthKey(dateIso: string): string | null {
   return `${m[1]}-${m[2]}`;
 }
 
-/** Unexpected expenses logged since tracking started (one bar per entry). */
+/** Unexpected expenses logged since tracking started (one aggregated bar). */
 export function lifetimeSurpriseSpend(state: FinanceState): LifetimeLifeSpendRow[] {
-  return state.surpriseExpenses
-    .filter((e) => {
-      const mk = expenseMonthKey(e.date);
-      return mk != null && mk >= HISTORY_TRACKING_STARTED_MONTH_KEY;
-    })
-    .map((e) => ({
-      id: e.id,
-      name: e.label.trim() || 'Unexpected',
+  const entries = state.surpriseExpenses.filter((e) => {
+    const mk = expenseMonthKey(e.date);
+    return mk != null && mk >= HISTORY_TRACKING_STARTED_MONTH_KEY;
+  });
+  if (entries.length === 0) return [];
+
+  const total = round2(entries.reduce((sum, e) => sum + e.amount, 0));
+  const lastPaidDate = entries.reduce<string | null>((latest, e) => {
+    if (!latest || e.date > latest) return e.date;
+    return latest;
+  }, null);
+
+  return [
+    {
+      id: 'surprise-aggregate',
+      name: 'Unexpected Expense',
       kind: 'surprise' as const,
-      total: round2(e.amount),
-      paidOccurrences: 1,
-      lastPaidDate: e.date,
-    }))
-    .sort((a, b) => b.total - a.total);
+      total,
+      paidOccurrences: entries.length,
+      lastPaidDate,
+    },
+  ];
 }
 
 /** Bills marked handled + unexpected expenses for the lifetime chart. */

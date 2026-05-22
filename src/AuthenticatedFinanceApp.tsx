@@ -2,7 +2,6 @@ import { lazy, Suspense, useEffect, useMemo, useState, useSyncExternalStore } fr
 import { TimelineColumnSpotlight } from './components/TimelineColumnSpotlight';
 import { BudgetSurplusPanel } from './components/BudgetSurplusPanel';
 import { BillsTimeline } from './components/BillsTimeline';
-import { DashboardIncomeBridge } from './components/DashboardIncomeBridge';
 import { DashboardOverview } from './components/DashboardOverview';
 import { DataEditor } from './components/DataEditor';
 import { DebtBalancesPanel } from './components/DebtBalancesPanel';
@@ -25,6 +24,7 @@ import { SurpriseExpenses } from './components/SurpriseExpenses';
 import { ConfirmDialog } from './components/ui/ConfirmDialog';
 import { UpcomingBillsStrip } from './components/UpcomingBillsStrip';
 import { WalletPanel } from './components/WalletPanel';
+import { useDashboardMoreMonthOpen } from './hooks/useDashboardMoreMonthOpen';
 import { ONBOARDING_STORAGE_KEY, ONBOARDING_STEPS, ONBOARDING_TOUR_LATER_KEY } from './onboarding/constants';
 import {
   HISTORY_EARLIEST_MONTH_KEY,
@@ -87,6 +87,7 @@ export function AuthenticatedFinanceApp() {
     const keys = historySelectableMonthKeys();
     return keys[0] ?? HISTORY_EARLIEST_MONTH_KEY;
   });
+  const dashboardMoreMonth = useDashboardMoreMonthOpen();
 
   const scrollToBills = () => {
     setAppTab('dashboard');
@@ -344,8 +345,7 @@ export function AuthenticatedFinanceApp() {
             }
             if (t === 'tour-pay-log') {
               setAppTab('dashboard');
-              const more = document.getElementById('dashboard-more-month');
-              if (more instanceof HTMLDetailsElement) more.open = true;
+              dashboardMoreMonth.setOpen(true);
             }
             if (t === 'tour-workspace') {
               setAppTab('workspace');
@@ -395,11 +395,19 @@ export function AuthenticatedFinanceApp() {
                   </div>
                   <details
                     id="dashboard-more-month"
-                    className="group rounded-xl border border-slate-200/80 bg-white/80 open:bg-white dark:border-moss-border dark:bg-moss-surface/60 dark:open:bg-moss-surface"
+                    open={dashboardMoreMonth.open}
+                    onToggle={dashboardMoreMonth.onToggle}
+                    className="group rounded-xl border border-slate-200/80 bg-white/80 open:bg-white max-lg:open:bg-white dark:border-moss-border dark:bg-moss-surface/60 dark:open:bg-moss-surface"
                   >
-                    <summary className="cursor-pointer list-none px-3 py-2.5 text-sm font-bold text-slate-800 marker:content-none dark:text-moss-fg [&::-webkit-details-marker]:hidden">
-                      <span className="underline decoration-slate-400 decoration-2 underline-offset-2 group-open:no-underline">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-3 text-sm font-bold text-slate-800 marker:content-none dark:text-moss-fg max-lg:py-3.5 lg:py-2.5 [&::-webkit-details-marker]:hidden">
+                      <span className="underline decoration-slate-400 decoration-2 underline-offset-2 group-open:no-underline max-lg:no-underline">
                         More this month (snowball, surplus, pay)
+                      </span>
+                      <span
+                        className="shrink-0 text-xs font-semibold text-slate-500 transition-transform group-open:rotate-180 dark:text-moss-muted"
+                        aria-hidden
+                      >
+                        ▼
                       </span>
                     </summary>
                     <div className="space-y-8 border-t border-slate-200/70 px-3 pb-4 pt-4 dark:border-moss-border">
@@ -412,7 +420,6 @@ export function AuthenticatedFinanceApp() {
                         onSetMonthSpendableCarry={setMonthSpendableCarry}
                       />
                       <div data-tour="tour-pay-log" className="space-y-4">
-                        <DashboardIncomeBridge state={state} />
                         <IncomeLogPanel
                           variant="dashboard"
                           state={state}

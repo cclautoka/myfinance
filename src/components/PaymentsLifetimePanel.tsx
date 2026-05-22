@@ -50,7 +50,7 @@ export function PaymentsLifetimePanel({ state }: { state: FinanceState }) {
             </span>
             <span className="inline-flex items-center gap-1.5">
               <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: SURPRISE_FILL }} aria-hidden />
-              Unexpected
+              Unexpected Expense
             </span>
           </div>
           <div className="w-full min-w-0" style={{ height: chartHeight }}>
@@ -69,9 +69,12 @@ export function PaymentsLifetimePanel({ state }: { state: FinanceState }) {
                       paidOccurrences?: number;
                       lastPaidDate?: string | null;
                     };
-                    const label = p?.kind === 'surprise' ? 'Unexpected' : 'Total paid';
+                    const label = p?.kind === 'surprise' ? 'Unexpected Expense' : 'Total paid';
                     const parts = [formatMoney(Number(value ?? 0)), label];
                     if (p?.kind === 'bill' && p?.paidOccurrences != null) parts.push(`${p.paidOccurrences}× marked`);
+                    if (p?.kind === 'surprise' && p?.paidOccurrences != null && p.paidOccurrences > 1) {
+                      parts.push(`${p.paidOccurrences}× logged`);
+                    }
                     if (p?.lastPaidDate) parts.push(`Date: ${p.lastPaidDate}`);
                     return [parts.join(' · '), ''];
                   }}

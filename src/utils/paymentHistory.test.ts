@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { defaultFinanceState } from '../data/defaults';
 import type { FinanceState } from '../types/finance';
-import { lifetimePaidByBill, trackingMonthKeysThrough } from './paymentHistory';
+import { lifetimePaidByBill, lifetimeSurpriseSpend, trackingMonthKeysThrough } from './paymentHistory';
 
 describe('paymentHistory', () => {
   const withNet = () => ({
@@ -59,5 +59,21 @@ describe('paymentHistory', () => {
     const net = rows.find((r) => r.billId === 'net');
     expect(net?.total).toBe(210);
     expect(net?.paidOccurrences).toBe(2);
+  });
+
+  it('lifetimeSurpriseSpend aggregates entries into one bar', () => {
+    const state: FinanceState = {
+      ...defaultFinanceState(),
+      surpriseExpenses: [
+        { id: 'a', label: 'Car repair', date: '2026-05-10', amount: 200, category: 'other' },
+        { id: 'b', label: 'Vet', date: '2026-06-02', amount: 75, category: 'other' },
+      ],
+    };
+    const rows = lifetimeSurpriseSpend(state);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.name).toBe('Unexpected Expense');
+    expect(rows[0]?.total).toBe(275);
+    expect(rows[0]?.paidOccurrences).toBe(2);
+    expect(rows[0]?.lastPaidDate).toBe('2026-06-02');
   });
 });
