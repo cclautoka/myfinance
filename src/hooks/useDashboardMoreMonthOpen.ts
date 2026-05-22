@@ -12,7 +12,7 @@ function getMobileDefaultOpen() {
   return window.matchMedia(MQ).matches;
 }
 
-/** On phone/tablet, “More this month” starts expanded so snowball, surplus, and pay are visible without an extra tap. */
+/** On phone/tablet, “More this month” (snowball & surplus) starts expanded so charts are visible without an extra tap. */
 export function useDashboardMoreMonthOpen() {
   const isMobile = useSyncExternalStore(subscribeMobile, getMobileDefaultOpen, () => false);
   const [open, setOpen] = useState(() =>

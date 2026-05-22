@@ -1,5 +1,5 @@
 /** Bumped so existing users see updated tour copy for Dashboard / Workspace / Tools navigation. */
-export const ONBOARDING_STORAGE_KEY = 'finance-onboarding-tour-done-v11';
+export const ONBOARDING_STORAGE_KEY = 'finance-onboarding-tour-done-v12';
 
 /** Set when user picks “Remind me later” so the shell can offer to reopen the tour. */
 export const ONBOARDING_TOUR_LATER_KEY = 'finance-onboarding-tour-later-v1';
@@ -27,8 +27,8 @@ export const ONBOARDING_STEPS: TourStepSpec[] = [
   },
   {
     target: 'tour-pay-log',
-    title: 'More this month',
-    body: 'Open this accordion for debt snowball, budget surplus, and the paycheque log — same block as the landing demo.',
+    title: 'Paycheque log',
+    body: 'Always on the dashboard (below the snapshot): log each deposit, tag Husband / Wife / Joint, and see rows line up with the “Deposits recorded” total above.',
     scrollBlock: 'start',
   },
   {

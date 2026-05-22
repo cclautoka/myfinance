@@ -29,10 +29,10 @@ export function LandingDashboardDemo() {
         className="rounded-xl border border-slate-200/80 bg-white/80 dark:border-moss-border dark:bg-moss-surface/60"
       >
         <summary className="cursor-pointer list-none px-3 py-2 text-xs font-bold text-slate-800 marker:content-none dark:text-moss-fg [&::-webkit-details-marker]:hidden">
-          More this month (snowball, surplus, pay)
+          More this month (snowball &amp; surplus)
         </summary>
         <p className="border-t border-slate-200/70 px-3 py-2 text-[11px] leading-relaxed text-slate-600 dark:border-moss-border dark:text-moss-muted">
-          Lifetime pay chart, debt snowball, budget surplus, and the paycheque log — same accordion as the app.
+          Paycheque log sits above this block in the app; snowball and budget surplus tuck in here.
         </p>
       </details>
     </div>

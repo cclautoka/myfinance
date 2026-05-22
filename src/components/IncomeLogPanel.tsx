@@ -16,6 +16,10 @@ import { NumericAmountInput } from './ui/NumericInputs';
 
 const INCOME_EARNER_SEGMENT = INCOME_EARNER_OPTIONS_SHORT.map((o) => ({ id: o.value, label: o.label }));
 
+/** Shared column widths for deposit list header + rows (sm+). */
+const ENTRY_LIST_GRID =
+  'sm:grid sm:grid-cols-[minmax(0,1.25fr)_minmax(7.5rem,9.5rem)_5.75rem_4.75rem] sm:items-center sm:gap-x-3';
+
 const uid = (): string => Math.random().toString(36).slice(2, 10);
 
 type IncomeLogPanelProps = {
@@ -150,29 +154,31 @@ export function IncomeLogPanel({
               </div>
             </div>
 
-            <div className="mt-6 grid gap-4 rounded-2xl border border-sage-200/80 bg-sage-50/50 p-4 dark:border-moss-border dark:bg-moss-bg/60 md:grid-cols-2">
-              <div className="grid gap-3 sm:grid-cols-2">
+            <div className="mt-6 rounded-2xl border border-sage-200/80 bg-sage-50/50 p-4 dark:border-moss-border dark:bg-moss-bg/60">
+              <div className="grid gap-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block text-sm font-medium text-sage-800 dark:text-moss-fg">
+                    What hit the account?
+                    <input
+                      className="mt-1 w-full rounded-xl border border-sage-300 bg-white px-3 py-2 text-sage-900 dark:border-moss-border dark:bg-moss-elevated dark:text-moss-fg"
+                      value={label}
+                      onChange={(e) => setLabel(e.target.value)}
+                      placeholder="e.g. wife pay · husband OT…"
+                    />
+                  </label>
+                  <label className="block text-sm font-medium text-sage-800 dark:text-moss-fg">
+                    Amount deposited
+                    <NumericAmountInput
+                      min={0}
+                      commit="live"
+                      hideZeroWhenBlurred={false}
+                      className="mt-1 w-full rounded-xl border border-sage-300 bg-white px-3 py-2 text-sage-900 dark:border-moss-border dark:bg-moss-elevated dark:text-moss-fg"
+                      value={amount}
+                      onValueChange={setAmount}
+                    />
+                  </label>
+                </div>
                 <label className="block text-sm font-medium text-sage-800 dark:text-moss-fg">
-                  What hit the account?
-                  <input
-                    className="mt-1 w-full rounded-xl border border-sage-300 bg-white px-3 py-2 text-sage-900 dark:border-moss-border dark:bg-moss-elevated dark:text-moss-fg"
-                    value={label}
-                    onChange={(e) => setLabel(e.target.value)}
-                    placeholder="e.g. wife pay · husband OT…"
-                  />
-                </label>
-                <label className="block text-sm font-medium text-sage-800 dark:text-moss-fg">
-                  Amount deposited
-                  <NumericAmountInput
-                    min={0}
-                    commit="live"
-                    hideZeroWhenBlurred={false}
-                    className="mt-1 w-full rounded-xl border border-sage-300 bg-white px-3 py-2 text-sage-900 dark:border-moss-border dark:bg-moss-elevated dark:text-moss-fg"
-                    value={amount}
-                    onValueChange={setAmount}
-                  />
-                </label>
-                <label className="col-span-2 block text-sm font-medium text-sage-800 dark:text-moss-fg">
                   Tagged for
                   <div className="mt-1 w-full min-w-0">
                     <SegmentedChoice
@@ -185,21 +191,21 @@ export function IncomeLogPanel({
                     />
                   </div>
                 </label>
-                <label className="block text-sm font-medium text-sage-800 dark:text-moss-fg">
-                  Deposit date
-                  <input
-                    type="date"
-                    className="mt-1 w-full rounded-xl border border-sage-300 bg-white px-3 py-2 text-sage-900 dark:border-moss-border dark:bg-moss-elevated dark:text-moss-fg"
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                  />
-                </label>
-              </div>
-              <div className="flex flex-col justify-end">
-                <button type="button" onClick={submit} className="btn-primary">
-                  Log this deposit
-                </button>
-                <p className="mt-2 text-xs text-sage-600 dark:text-moss-muted">
+                <div className="grid gap-3 sm:grid-cols-2 sm:items-end">
+                  <label className="block text-sm font-medium text-sage-800 dark:text-moss-fg">
+                    Deposit date
+                    <input
+                      type="date"
+                      className="mt-1 w-full rounded-xl border border-sage-300 bg-white px-3 py-2 text-sage-900 dark:border-moss-border dark:bg-moss-elevated dark:text-moss-fg"
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                    />
+                  </label>
+                  <button type="button" onClick={submit} className="btn-primary w-full sm:min-h-[2.75rem]">
+                    Log this deposit
+                  </button>
+                </div>
+                <p className="text-xs leading-relaxed text-sage-600 dark:text-moss-muted">
                   Each row sticks to whichever calendar month its <strong>deposit date</strong> falls in.
                   {variant === 'pastMonth'
                     ? ' Editing an old bucket here leaves the Dashboard (current month) alone unless you accidentally date a row into the future.'
@@ -209,6 +215,17 @@ export function IncomeLogPanel({
             </div>
 
             <ul className="mt-6 space-y-2 border-t border-sage-200/70 pt-4 dark:border-moss-border">
+              {monthEntries.length > 0 ? (
+                <li
+                  aria-hidden
+                  className={`${ENTRY_LIST_GRID} hidden px-3 pb-1 text-[0.65rem] font-semibold uppercase tracking-wide text-sage-600 dark:text-moss-muted`}
+                >
+                  <span>Deposit</span>
+                  <span>Earner · date</span>
+                  <span className="text-right">Amount</span>
+                  <span className="text-right">Actions</span>
+                </li>
+              ) : null}
               {monthEntries.length === 0 && (
                 <li className="text-sm text-sage-600 dark:text-moss-muted">
                   {isPreTrackingHistoryMonth(monthKey) ? (
@@ -252,7 +269,7 @@ export function IncomeLogPanel({
                             onValueChange={setEditAmount}
                           />
                         </label>
-                        <label className="block text-xs font-medium text-sage-800 dark:text-moss-fg sm:col-span-2 lg:col-span-1">
+                        <label className="col-span-2 block text-xs font-medium text-sage-800 dark:text-moss-fg">
                           Earner
                           <div className="mt-1 w-full min-w-0">
                             <SegmentedChoice
@@ -289,20 +306,22 @@ export function IncomeLogPanel({
                 return (
                   <li
                     key={e.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white/80 px-3 py-2.5 text-sm dark:bg-moss-elevated/80"
+                    className={`${ENTRY_LIST_GRID} gap-y-1 rounded-xl bg-white/80 px-3 py-2.5 text-sm dark:bg-moss-elevated/80`}
                   >
-                    <span className="font-medium text-sage-900 dark:text-moss-fg">{e.label}</span>
-                    <span className="text-xs text-sage-600 dark:text-moss-muted">
+                    <span className="min-w-0 font-medium leading-snug text-sage-900 dark:text-moss-fg">{e.label}</span>
+                    <span className="min-w-0 text-xs leading-snug text-sage-600 dark:text-moss-muted">
                       {earnerLabel(e.earner)} · {e.date}
                       {e.earner !== 'joint' && base > 0 && (
-                        <span className="block text-[0.65rem] text-sage-500 dark:text-moss-muted">
+                        <span className="mt-0.5 block text-[0.65rem] leading-snug text-sage-500 dark:text-moss-muted">
                           Baseline {formatMoney(base)}
                           {ot > 0 ? ` · ~${formatMoney(ot)} over baseline` : ''}
                         </span>
                       )}
                     </span>
-                    <span className="font-semibold text-sage-800 dark:text-moss-tip">{formatMoney(e.amount)}</span>
-                    <div className="flex flex-wrap gap-2">
+                    <span className="shrink-0 font-semibold tabular-nums text-sage-800 sm:text-right dark:text-moss-tip">
+                      {formatMoney(e.amount)}
+                    </span>
+                    <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
                       <button type="button" className="btn-ghost text-xs" onClick={() => startEdit(e)}>
                         Edit
                       </button>

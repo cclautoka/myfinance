@@ -345,7 +345,6 @@ export function AuthenticatedFinanceApp() {
             }
             if (t === 'tour-pay-log') {
               setAppTab('dashboard');
-              dashboardMoreMonth.setOpen(true);
             }
             if (t === 'tour-workspace') {
               setAppTab('workspace');
@@ -380,7 +379,7 @@ export function AuthenticatedFinanceApp() {
               id="finance-dashboard"
               dataTour="tour-dashboard"
               title="Dashboard"
-              subtitle="This month: snapshot in the centre · bills on the sides · pay log below."
+              subtitle="This month: snapshot and pay log in the centre · bills on the sides · snowball & surplus in More this month."
               variant="band"
               accent="emerald"
               eyebrow="Live month"
@@ -393,6 +392,16 @@ export function AuthenticatedFinanceApp() {
                       <PaymentsLifetimePanel state={state} />
                     </Suspense>
                   </div>
+                  <div data-tour="tour-pay-log" className="min-w-0">
+                    <IncomeLogPanel
+                      variant="dashboard"
+                      state={state}
+                      monthKey={currentMonthKey()}
+                      onAdd={addIncomeLog}
+                      onRemove={removeIncomeLog}
+                      onUpdateIncomeLog={updateIncomeLog}
+                    />
+                  </div>
                   <details
                     id="dashboard-more-month"
                     open={dashboardMoreMonth.open}
@@ -401,7 +410,7 @@ export function AuthenticatedFinanceApp() {
                   >
                     <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-3 text-sm font-bold text-slate-800 marker:content-none dark:text-moss-fg max-lg:py-3.5 lg:py-2.5 [&::-webkit-details-marker]:hidden">
                       <span className="underline decoration-slate-400 decoration-2 underline-offset-2 group-open:no-underline max-lg:no-underline">
-                        More this month (snowball, surplus, pay)
+                        More this month (snowball &amp; surplus)
                       </span>
                       <span
                         className="shrink-0 text-xs font-semibold text-slate-500 transition-transform group-open:rotate-180 dark:text-moss-muted"
@@ -419,16 +428,6 @@ export function AuthenticatedFinanceApp() {
                         onSweepToEmergency={applyBudgetSurplusToEmergency}
                         onSetMonthSpendableCarry={setMonthSpendableCarry}
                       />
-                      <div data-tour="tour-pay-log" className="space-y-4">
-                        <IncomeLogPanel
-                          variant="dashboard"
-                          state={state}
-                          monthKey={currentMonthKey()}
-                          onAdd={addIncomeLog}
-                          onRemove={removeIncomeLog}
-                          onUpdateIncomeLog={updateIncomeLog}
-                        />
-                      </div>
                     </div>
                   </details>
                   <LifeThisMonth state={state} onAddExtra={addExtraIncome} onRemoveExtra={removeExtraIncome} />
