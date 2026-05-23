@@ -2,7 +2,8 @@
 const HASHED_ASSET =
   /\/assets\/[^/]+-[a-zA-Z0-9_-]{8,}\.(js|css|mjs|map|woff2?|ttf|eot|svg|png|jpe?g|webp|gif|ico)$/i;
 
-const ROOT_STATIC = /(?:^|[/\\])(og-image\.jpe?g|favicon\.svg|robots\.txt)$/i;
+const ROOT_STATIC =
+  /(?:^|[/\\])(og-image\.jpe?g|apple-touch-icon\.png|favicon-\d+x\d+\.png|icon-\d+\.png|site\.webmanifest|robots\.txt)$/i;
 
 /**
  * @param {string} filePath — absolute or relative path from @fastify/static

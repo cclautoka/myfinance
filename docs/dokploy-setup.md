@@ -143,6 +143,8 @@ After each deploy that changes preview copy or art:
 2. [LinkedIn Post Inspector](https://www.linkedin.com/post-inspector/)
 3. iMessage / WhatsApp: share once with a cache-bust query, e.g. `https://finance.solofi.cloud/?v=3`
 
+Regenerate art after icon changes: `npm run generate:og-image` (writes `public/og-image.jpg`), then bump the `?v=` on `og:image` URLs in `index.html` and redeploy.
+
 ---
 
 ## 10. Static caching (performance)

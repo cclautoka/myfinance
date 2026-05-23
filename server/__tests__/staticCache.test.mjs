@@ -27,6 +27,12 @@ test('cacheControlForStatic og-image gets one day', () => {
   assert.equal(cacheControlForStatic('/app/public/og-image.jpg'), 'public, max-age=86400');
 });
 
+test('cacheControlForStatic favicon and manifest get one day', () => {
+  assert.equal(cacheControlForStatic('/app/public/favicon-32x32.png'), 'public, max-age=86400');
+  assert.equal(cacheControlForStatic('public/apple-touch-icon.png'), 'public, max-age=86400');
+  assert.equal(cacheControlForStatic('/app/public/site.webmanifest'), 'public, max-age=86400');
+});
+
 test('fastify static serves hashed asset with immutable cache', async (t) => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'finance-static-'));
   const assetsDir = path.join(tmp, 'assets');

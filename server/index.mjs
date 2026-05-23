@@ -168,7 +168,10 @@ await fastify.register(cors, {
   allowedHeaders: ['Authorization', 'Content-Type'],
 });
 
-fastify.get('/health', async () => ({ ok: true }));
+fastify.get('/health', async () => ({
+  ok: true,
+  pushConfigured: isPushDeliveryConfigured(),
+}));
 
 function publicAppBase(request) {
   const fromEnv = (process.env.APP_PUBLIC_URL ?? process.env.SITE_URL ?? '').replace(/\/$/, '');
@@ -1880,6 +1883,11 @@ if (getDbEnabled()) {
 try {
   await fastify.listen({ port, host: '0.0.0.0' });
   fastify.log.info(`Listening on ${port}`);
+  fastify.log.info(
+    isPushDeliveryConfigured()
+      ? 'FCM push delivery: configured (FCM_SERVICE_ACCOUNT_*)'
+      : 'FCM push delivery: NOT configured — set FCM_SERVICE_ACCOUNT_JSON or FCM_SERVICE_ACCOUNT_PATH',
+  );
   startReminderCronScheduler(fastify.log);
 } catch (err) {
   fastify.log.error(err);
