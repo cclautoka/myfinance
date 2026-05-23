@@ -68,7 +68,8 @@ export function AppNotificationsPanel({
     void refresh();
   }, [refresh]);
 
-  const thisDeviceOn = Boolean(status?.deviceRegistered || localToken);
+  const thisDeviceOn = Boolean(status?.deviceRegistered);
+  const localTokenOnly = Boolean(localToken && status && !status.deviceRegistered);
 
   const setBillReminders = (on: boolean) => {
     onPatch({
@@ -114,9 +115,14 @@ export function AppNotificationsPanel({
     setBusy(true);
     try {
       const r = await sendTestPush();
+      const n = Number(r.sent ?? 0);
+      if (n < 1) {
+        pushToast({ type: 'error', message: 'Test alert was not delivered. Re-enable this device and try again.' });
+        return;
+      }
       pushToast({
         type: 'success',
-        message: r.sent ? `Test sent to ${r.sent} device(s).` : 'Test sent.',
+        message: `Test sent to ${n} device(s). Check your notification shade.`,
       });
     } catch (e) {
       pushToast({ type: 'error', message: String((e as Error)?.message ?? e) });
@@ -198,6 +204,12 @@ export function AppNotificationsPanel({
                 {thisDeviceOn ? 'Receiving alerts' : 'Not registered'}
               </strong>
             </p>
+            {localTokenOnly ? (
+              <p className="mt-2 text-xs leading-relaxed text-amber-900/90 dark:text-amber-200/90">
+                This device has a token locally but the server did not save it. Tap <strong>Enable on this device</strong>{' '}
+                again (check Wi‑Fi), then send a test alert.
+              </p>
+            ) : null}
             {!pushRegisterReady && Capacitor.getPlatform() === 'android' ? (
               <p className="mt-2 text-xs leading-relaxed text-amber-900/90 dark:text-amber-200/90">
                 This Android build is missing Firebase (<code className="text-[11px]">google-services.json</code>). Push

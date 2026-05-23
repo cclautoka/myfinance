@@ -1,6 +1,8 @@
+import { Capacitor } from '@capacitor/core';
 import { householdApiFetch } from './householdApiFetch';
 import { resolveHouseholdApiBase } from './householdApiBase';
 import { readHouseholdSession } from './householdSession';
+import { readStoredPushToken } from './pushTokenStorage';
 
 export type PushNotificationPrefsDto = {
   billReminders: boolean;
@@ -128,13 +130,24 @@ export async function unregisterPushToken(token?: string): Promise<void> {
   }
 }
 
+function nativePushPlatform(): 'ios' | 'android' | undefined {
+  if (!Capacitor.isNativePlatform()) return undefined;
+  return Capacitor.getPlatform() === 'android' ? 'android' : 'ios';
+}
+
 export async function sendTestPush(): Promise<{ sent?: number; failed?: number }> {
   const sess = readHouseholdSession();
   const base = apiBase();
   if (!sess?.householdId || !base) throw new Error('API not available.');
+  const platform = nativePushPlatform();
+  const body: { currentToken?: string; platform?: 'ios' | 'android' } = {};
+  const currentToken = readStoredPushToken();
+  if (currentToken) body.currentToken = currentToken;
+  if (platform) body.platform = platform;
   const res = await householdApiFetch(`/v1/household/push/test?id=${encodeURIComponent(sess.householdId)}`, {
     method: 'POST',
     headers: authHeaders(),
+    body: JSON.stringify(body),
   });
   const text = await res.text();
   let j: { error?: string; sent?: number; failed?: number } = {};

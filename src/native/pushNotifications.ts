@@ -1,25 +1,9 @@
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
 import { registerPushToken, unregisterPushToken } from '../utils/pushDeviceApi';
+import { readStoredPushToken, writeStoredPushToken } from '../utils/pushTokenStorage';
 
-const PUSH_TOKEN_STORAGE_KEY = 'finance-push-device-token';
-
-export function readStoredPushToken(): string {
-  try {
-    return (localStorage.getItem(PUSH_TOKEN_STORAGE_KEY) ?? '').trim();
-  } catch {
-    return '';
-  }
-}
-
-function writeStoredPushToken(token: string): void {
-  try {
-    if (token) localStorage.setItem(PUSH_TOKEN_STORAGE_KEY, token);
-    else localStorage.removeItem(PUSH_TOKEN_STORAGE_KEY);
-  } catch {
-    /* ignore */
-  }
-}
+export { readStoredPushToken } from '../utils/pushTokenStorage';
 
 export function isNativePushAvailable(): boolean {
   return Capacitor.isNativePlatform();

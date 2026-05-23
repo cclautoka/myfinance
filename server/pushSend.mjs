@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { listPushTokensForHousehold } from './db.mjs';
+import { listPushTokensForHousehold, upsertPushDeviceToken } from './db.mjs';
 
 function pushBillRemindersEnabled(stateData) {
   const prefs = stateData?.pushNotificationPrefs;
@@ -127,10 +127,37 @@ export async function sendBillReminderPush(householdId, { monthKey, counts }, lo
 }
 
 /** Test push to one member's devices only. */
-export async function sendTestPushToMember(householdId, memberId, log) {
-  const tokens = (await listPushTokensForHousehold(householdId)).filter((t) => t.member_id === memberId);
+export async function sendTestPushToMember(householdId, memberId, log, opts = {}) {
+  const currentToken = String(opts.currentToken ?? '').trim();
+  const platform = opts.platform === 'android' ? 'android' : opts.platform === 'ios' ? 'ios' : null;
+  const memberKey = String(memberId);
+
+  let tokens = (await listPushTokensForHousehold(householdId)).filter(
+    (t) => String(t.member_id) === memberKey,
+  );
+
+  if (!tokens.length && currentToken.length >= 8) {
+    const all = await listPushTokensForHousehold(householdId);
+    const match = all.find((t) => t.token === currentToken);
+    if (match) {
+      tokens = [match];
+    } else if (platform) {
+      await upsertPushDeviceToken({
+        householdId,
+        memberId,
+        platform,
+        token: currentToken,
+      });
+      tokens = [{ token: currentToken, platform }];
+    }
+  }
+
   if (!tokens.length) {
-    return { ok: false, error: 'No push tokens for this account on this device.', code: 'NO_TOKENS' };
+    return {
+      ok: false,
+      error: 'No push token on the server for this account. Tap “Enable on this device” again, then retry.',
+      code: 'NO_TOKENS',
+    };
   }
 
   const msg = await getMessaging(log);
@@ -147,9 +174,19 @@ export async function sendTestPushToMember(householdId, memberId, log) {
       },
       data: { type: 'test' },
     });
+    if (res.successCount < 1) {
+      const fcmErr = res.responses.find((r) => !r.success)?.error;
+      const detail = fcmErr?.message || fcmErr?.code || 'FCM rejected the token';
+      log?.warn?.({ detail, failed: res.failureCount }, 'test push had no successes');
+      return {
+        ok: false,
+        error: `${detail}. Tap “Enable on this device” again, then retry.`,
+        code: 'FCM_FAILED',
+      };
+    }
     return { ok: true, sent: res.successCount, failed: res.failureCount };
   } catch (e) {
     log?.error?.(e, 'test push failed');
-    return { ok: false, error: 'Failed to send test push' };
+    return { ok: false, error: e?.message || 'Failed to send test push' };
   }
 }

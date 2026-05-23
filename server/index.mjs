@@ -1724,10 +1724,17 @@ fastify.post('/v1/household/push/test', async (request, reply) => {
   const id = getHouseholdIdFromRequest(request);
   const member = await requireSessionMember(request, reply, id);
   if (!member) return;
-  const result = await sendTestPushToMember(id, member.id, request.log);
+  const body = request.body ?? {};
+  const currentToken = String(body.currentToken ?? '').trim();
+  const platform = String(body.platform ?? '').trim();
+  const result = await sendTestPushToMember(id, member.id, request.log, {
+    currentToken,
+    platform: platform === 'ios' || platform === 'android' ? platform : undefined,
+  });
   if (!result.ok) {
     if (result.code === 'NOT_CONFIGURED') return reply.code(503).send({ error: result.error, code: result.code });
     if (result.code === 'NO_TOKENS') return reply.code(400).send({ error: result.error, code: result.code });
+    if (result.code === 'FCM_FAILED') return reply.code(502).send({ error: result.error, code: result.code });
     return reply.code(502).send({ error: result.error });
   }
   return reply.send(result);
