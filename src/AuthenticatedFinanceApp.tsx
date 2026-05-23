@@ -1,4 +1,13 @@
-import { lazy, Suspense, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { TimelineColumnSpotlight } from './components/TimelineColumnSpotlight';
 import { BudgetSurplusPanel } from './components/BudgetSurplusPanel';
 import { BillsTimeline } from './components/BillsTimeline';
@@ -25,6 +34,7 @@ import { ConfirmDialog } from './components/ui/ConfirmDialog';
 import { UpcomingBillsStrip } from './components/UpcomingBillsStrip';
 import { WalletPanel } from './components/WalletPanel';
 import { useDashboardMoreMonthOpen } from './hooks/useDashboardMoreMonthOpen';
+import { bindPushNotificationHandlers, isNativePushAvailable } from './native/pushNotifications';
 import { ONBOARDING_STORAGE_KEY, ONBOARDING_STEPS, ONBOARDING_TOUR_LATER_KEY } from './onboarding/constants';
 import {
   HISTORY_EARLIEST_MONTH_KEY,
@@ -89,6 +99,26 @@ export function AuthenticatedFinanceApp() {
   });
   const dashboardMoreMonth = useDashboardMoreMonthOpen();
 
+  /** After tab panel swap (panels unmount/remount), scroll once layout is committed; rAF catches iOS WebView restore. */
+  const scrollAppToTop = useCallback(() => {
+    window.scrollTo({ top: 0, left: 0 });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, []);
+
+  useLayoutEffect(() => {
+    scrollAppToTop();
+    const id = requestAnimationFrame(scrollAppToTop);
+    return () => cancelAnimationFrame(id);
+  }, [appTab, scrollAppToTop]);
+
+  useEffect(() => {
+    if (!isNativePushAvailable()) return;
+    return bindPushNotificationHandlers(() => {
+      setAppTab('dashboard');
+    });
+  }, []);
+
   const scrollToBills = () => {
     setAppTab('dashboard');
     setTimelineColumnSpotlight(true);
@@ -96,6 +126,19 @@ export function AuthenticatedFinanceApp() {
       document.getElementById('bills-timeline')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   };
+
+  /** Bottom nav: each tab starts at the top; re-tap same tab scrolls without waiting for state change. */
+  const handleMobileAppTabChange = useCallback(
+    (tab: AppTab) => {
+      if (tab === appTab) {
+        scrollAppToTop();
+        requestAnimationFrame(scrollAppToTop);
+        return;
+      }
+      setAppTab(tab);
+    },
+    [appTab, scrollAppToTop],
+  );
 
   const {
     state,
@@ -325,7 +368,7 @@ export function AuthenticatedFinanceApp() {
   }
 
   return (
-    <div className="min-h-svh pb-[max(4rem,calc(4.5rem+env(safe-area-inset-bottom,0px)))] lg:pb-16">
+    <div className="cap-app-shell min-h-svh w-full max-w-full overflow-x-clip pb-[max(4rem,calc(4.5rem+env(safe-area-inset-bottom,0px)))] lg:pb-16">
       {!monthOpeningBlocked ? (
         <TimelineColumnSpotlight
           open={timelineColumnSpotlight}
@@ -371,8 +414,10 @@ export function AuthenticatedFinanceApp() {
         serverSyncing={isServerSyncing}
       />
       <AppPrimaryTabs value={appTab} onChange={setAppTab} />
-      {!monthOpeningBlocked ? <MobileBottomNav appTab={appTab} onAppTabChange={setAppTab} /> : null}
-      <main className="mx-auto max-w-7xl space-y-12 px-4 py-8 sm:px-6 sm:py-10 xl:max-w-[96rem]">
+      {!monthOpeningBlocked ? (
+        <MobileBottomNav appTab={appTab} onAppTabChange={handleMobileAppTabChange} />
+      ) : null}
+      <main className="cap-safe-x mx-auto w-full min-w-0 max-w-7xl space-y-12 overflow-x-clip py-8 sm:py-10 xl:max-w-[96rem]">
         {appTab === 'dashboard' ? (
           <div role="tabpanel" id="app-tabpanel-dashboard" aria-labelledby="app-tab-dashboard" className="space-y-12">
             <PageSection
@@ -567,6 +612,7 @@ export function AuthenticatedFinanceApp() {
           <div role="tabpanel" id="app-tabpanel-tools" aria-labelledby="app-tab-tools">
             <FinanceToolsPanel
               state={state}
+              onPatch={update}
               onReloadFromServer={reloadFromServer}
               onReplayTour={openTourReplay}
               onRequestReset={() => setResetDialogOpen(true)}

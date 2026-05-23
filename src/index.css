@@ -63,6 +63,39 @@
     scrollbar-width: thin;
     scrollbar-color: var(--app-scrollbar-thumb) var(--app-scrollbar-track);
   }
+
+  /* Capacitor iOS/Android: stable scrollbar gutter + 100vw tips can widen past the screen. */
+  html.cap-native {
+    scrollbar-gutter: auto;
+    overflow-x: clip;
+    width: 100%;
+    max-width: 100%;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  html.cap-native body {
+    overflow-x: clip;
+    max-width: 100%;
+    min-width: 0;
+  }
+  html.cap-native #root {
+    overflow-x: clip;
+    max-width: 100%;
+    min-width: 0;
+  }
+  html.cap-native .cap-app-shell {
+    overflow-x: clip;
+    max-width: 100%;
+    min-width: 0;
+    width: 100%;
+  }
+  html.cap-native .cap-safe-x {
+    padding-left: max(1rem, env(safe-area-inset-left, 0px));
+    padding-right: max(1rem, env(safe-area-inset-right, 0px));
+  }
+  html.cap-native .cap-safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
   html::-webkit-scrollbar {
     width: 11px;
     height: 11px;

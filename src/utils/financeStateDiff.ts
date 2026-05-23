@@ -259,6 +259,12 @@ export function computeFinanceStateDiff(from: FinanceState, to: FinanceState): {
     );
   }
 
+  const pushFrom = from.pushNotificationPrefs?.billReminders !== false;
+  const pushTo = to.pushNotificationPrefs?.billReminders !== false;
+  if (pushFrom !== pushTo) {
+    pushItem(items, 'App notifications', `Bill reminder pushes: ${pushFrom ? 'on' : 'off'} → ${pushTo ? 'on' : 'off'}`);
+  }
+
   if ((from.billOverdueGraceDays ?? 0) !== (to.billOverdueGraceDays ?? 0))
     pushItem(items, 'Bill prefs', `Overdue grace days: ${from.billOverdueGraceDays ?? 0} → ${to.billOverdueGraceDays ?? 0}`);
   if ((from.billUpcomingLeadBusinessDays ?? 0) !== (to.billUpcomingLeadBusinessDays ?? 0))

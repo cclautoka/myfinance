@@ -151,6 +151,12 @@ export interface MonthCashflowOpening {
   migrated?: boolean;
 }
 
+/** Native app alert preferences — email summaries stay in Tools → Email heads-up. */
+export interface PushNotificationPrefs {
+  /** Daily bill reminder pushes when devices are registered (default on). */
+  billReminders?: boolean;
+}
+
 export interface FinanceState {
   version: number;
   income: IncomeConfig;
@@ -210,6 +216,8 @@ export interface FinanceState {
    * through the due date (inclusive) show a softer “closing in” hint (default 3).
    */
   billUpcomingLeadBusinessDays?: number;
+  /** Household-wide app push preferences (synced with server state). */
+  pushNotificationPrefs?: PushNotificationPrefs;
 }
 
 export interface TimelineBill {

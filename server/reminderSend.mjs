@@ -11,6 +11,7 @@ import {
   renderEmailHtml,
   renderEmailText,
 } from './templates.mjs';
+import { sendBillReminderPush } from './pushSend.mjs';
 
 /** Reminder recipients: body.to → snapshot → DB member emails → NOTIFY_TO. */
 export async function pickReminderRecipientsAsync(householdId, body, stateData) {
@@ -74,12 +75,17 @@ export async function sendRemindersForHousehold(householdId, { log, body = {} } 
     footerHint,
   });
 
+  const push = await sendBillReminderPush(id, { monthKey: mk, counts }, log, stateData);
+
   const to = await pickReminderRecipientsAsync(id, body, stateData);
   if (!to.length) {
+    if (push.ok && !push.skipped && (push.sent ?? 0) > 0) {
+      return { ok: true, pushOnly: true, push, counts, householdId: id };
+    }
     return {
       ok: false,
       error:
-        'No recipient emails for reminders. Add notification emails in the app or set NOTIFY_TO (legacy).',
+        'No recipient emails and no push devices. Add emails in Tools or enable app notifications on a phone.',
       code: 'NO_RECIPIENTS',
       householdId: id,
     };
@@ -87,7 +93,7 @@ export async function sendRemindersForHousehold(householdId, { log, body = {} } 
 
   try {
     const result = await sendMail({ to, subject: template.subject.slice(0, 200), text, html });
-    return { ok: true, ...result, counts, to, householdId: id };
+    return { ok: true, ...result, counts, to, householdId: id, push };
   } catch (e) {
     log?.error?.(e, 'sendRemindersForHousehold failed');
     return { ok: false, error: 'Failed to send email', code: 'SEND_FAILED', householdId: id };

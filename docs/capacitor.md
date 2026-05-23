@@ -63,6 +63,42 @@ Uncomment and set `server.url` in `capacitor.config.ts` to your machine’s LAN 
 
 Replace default launcher icons and splash screens under `android/app/src/main/res/` and `ios/App/App/Assets.xcassets/` before shipping.
 
+## Push notifications (iOS & Android)
+
+The native app can receive **bill reminder** pushes (same daily cron as email when configured).
+
+### In the app
+
+1. Sign in on the phone.
+2. Open **Tools → App notifications** (management panel).
+3. Turn on **Bill reminders (push)** for the household (syncs with your workbook).
+4. Under **This device**, tap **Enable on this device** and allow the system prompt.
+5. Review **Household devices** to see registered phones or remove old ones.
+
+### Server (Firebase Cloud Messaging)
+
+Push delivery uses **FCM** for both platforms:
+
+1. Create a [Firebase](https://console.firebase.google.com/) project and add iOS (`cloud.solofi.finance`) and Android apps.
+2. Download **`google-services.json`** into `android/app/` (enables the Google Services Gradle plugin).
+3. Upload your **APNs key** in Firebase → Project settings → Cloud Messaging (iOS).
+4. Create a service account with **Firebase Cloud Messaging API** enabled; download JSON.
+5. On the notify server, set either:
+   - `FCM_SERVICE_ACCOUNT_JSON='{"type":"service_account",...}'` (single line), or
+   - `FCM_SERVICE_ACCOUNT_PATH=/path/to/service-account.json`
+
+Run `npm run db:migrate` (or restart the server so `push_device_token` is created).
+
+### iOS Xcode
+
+- **Push Notifications** capability should be on via `App/App.entitlements` (`aps-environment`).
+- For TestFlight/App Store builds, switch `aps-environment` to `production` or use separate entitlements per configuration.
+
+### Android
+
+- `POST_NOTIFICATIONS` is declared; Android 13+ shows a runtime permission (handled by the Capacitor plugin).
+- Without `google-services.json`, the app builds but **push registration on Android will fail**.
+
 ## Workflow reminder
 
 After any web change:

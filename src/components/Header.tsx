@@ -25,11 +25,11 @@ export function Header({
 
   return (
     <header
-      className="sticky top-0 border-b-2 border-slate-200/95 bg-white/95 shadow-sm backdrop-blur-md dark:border-moss-border dark:bg-moss-bg/95 dark:shadow-black/30"
+      className="cap-safe-top sticky top-0 border-b-2 border-slate-200/95 bg-white/95 shadow-sm backdrop-blur-md dark:border-moss-border dark:bg-moss-bg/95 dark:shadow-black/30"
       style={{ zIndex: zLayers.stickyHeader }}
     >
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3.5 sm:gap-4 sm:px-6 sm:py-4 xl:max-w-[96rem]">
-        <div className="min-w-0 flex-1">
+      <div className="cap-safe-x mx-auto flex w-full max-w-6xl min-w-0 flex-col gap-3 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:py-4 xl:max-w-[96rem]">
+        <div className="min-w-0 w-full flex-1">
           <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-teal-700 dark:text-teal-400 sm:text-[11px]">
             Household finances
           </p>
@@ -61,7 +61,7 @@ export function Header({
             Build {__BUILD_SHA__} · {new Date(__BUILD_TIME_ISO__).toLocaleString()}
           </p>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:gap-3">
+        <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:shrink-0 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:gap-3">
           {householdSignedIn ? (
             <button
               type="button"
@@ -82,7 +82,7 @@ export function Header({
               Sign in
             </button>
           ) : null}
-          <div className="w-full max-w-[11.5rem] shrink-0 sm:max-w-[13rem]">
+          <div className="w-full min-w-0 sm:max-w-[13rem]">
             <SegmentedButtonGroup
               aria-label="Color theme"
               value={theme}

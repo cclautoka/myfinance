@@ -160,4 +160,5 @@ export const defaultFinanceState = (): FinanceState => ({
   walletResetMonth: currentMonthKey(),
   billOverdueGraceDays: 0,
   billUpcomingLeadBusinessDays: 3,
+  pushNotificationPrefs: { billReminders: true },
 });

@@ -1,15 +1,18 @@
 import type { FinanceState } from '../../types/finance';
+import { AppNotificationsPanel } from '../AppNotificationsPanel';
 import { NotifyRelaySettings } from '../NotifyRelaySettings';
 
 type ReloadResult = { ok: true; updatedAt: string } | { ok: false; error: string };
 
 export function FinanceToolsPanel({
   state,
+  onPatch,
   onReloadFromServer,
   onReplayTour,
   onRequestReset,
 }: {
   state: FinanceState;
+  onPatch: (patch: Partial<FinanceState>) => void;
   onReloadFromServer: () => Promise<ReloadResult>;
   onReplayTour: () => void;
   onRequestReset: () => void;
@@ -21,11 +24,11 @@ export function FinanceToolsPanel({
           Household &amp; sync
         </h3>
         <p className="max-w-3xl text-sm font-medium leading-relaxed text-sage-700 dark:text-moss-subtle">
-          Data tools: export from the <strong className="text-sage-900 dark:text-moss-fg">Past months</strong> workspace tab.
-          Auto-scheduled <strong className="text-sage-900 dark:text-moss-fg">Paycheque</strong> logs are in{' '}
-          <strong className="text-sage-900 dark:text-moss-fg">Your numbers</strong>. Charts and the bill checklist live on the{' '}
-          <strong className="text-sage-900 dark:text-moss-fg">Dashboard</strong> tab.
+          Notifications, export, and server sync. Charts and the bill checklist live on the{' '}
+          <strong className="text-sage-900 dark:text-moss-fg">Dashboard</strong> tab; paycheque automation is under{' '}
+          <strong className="text-sage-900 dark:text-moss-fg">Your numbers</strong>.
         </p>
+        <AppNotificationsPanel state={state} onPatch={onPatch} />
         <NotifyRelaySettings state={state} onReloadFromServer={onReloadFromServer} />
       </section>
       <section

@@ -23,7 +23,7 @@ export function HouseholdAuthShell({
 
   return (
     <div
-      className="fixed inset-0 overflow-y-auto bg-gradient-to-br from-teal-50/95 via-white to-slate-50 dark:from-moss-bg dark:via-moss-elevated dark:to-moss-bg"
+      className="cap-safe-top fixed inset-0 overflow-y-auto bg-gradient-to-br from-teal-50/95 via-white to-slate-50 dark:from-moss-bg dark:via-moss-elevated dark:to-moss-bg"
       style={{ zIndex: zLayers.setupWizard }}
       role="dialog"
       aria-modal="true"

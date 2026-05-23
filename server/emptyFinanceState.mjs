@@ -56,5 +56,6 @@ export function buildEmptyFinanceState() {
     walletResetMonth,
     billOverdueGraceDays: 0,
     billUpcomingLeadBusinessDays: 3,
+    pushNotificationPrefs: { billReminders: true },
   };
 }

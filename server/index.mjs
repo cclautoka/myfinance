@@ -63,7 +63,16 @@ import {
   listActiveBearerHashesForHousehold,
   listBearerKeysForHousehold,
   revokeBearerKey,
+  upsertPushDeviceToken,
+  deletePushDeviceToken,
+  deletePushTokensForMember,
+  countPushTokensForMember,
+  listPushTokensForHousehold,
+  listPushDevicesForHousehold,
+  getPushDeviceById,
+  deletePushDeviceById,
 } from './db.mjs';
+import { isPushDeliveryConfigured, sendTestPushToMember } from './pushSend.mjs';
 import { hashPassword, verifyPassword } from './password.mjs';
 import { signFinanceSession, verifyFinanceSession } from './sessionToken.mjs';
 import { buildEmptyFinanceState } from './emptyFinanceState.mjs';
@@ -433,6 +442,31 @@ async function sendAuthLinkEmail({ to, hashKey, rawToken, kind, request }) {
  * Legacy global bearer, signed session (`fm_sess_…`), or per-household API key (`hk_…`),
  * scoped to `householdId` for session and household keys.
  */
+async function requireSessionMember(request, reply, householdId) {
+  const sess = sessionSecret();
+  const bearer = parseBearer(request.headers.authorization ?? '');
+  if (!bearer.startsWith('fm_sess_') || sess.length < 16) {
+    reply.code(401).send({ error: 'Session bearer required' });
+    return null;
+  }
+  const v = verifyFinanceSession(bearer, sess);
+  if (!v || v.householdId !== householdId) {
+    reply.code(401).send({ error: 'Unauthorized' });
+    return null;
+  }
+  await initDbIfNeeded(request.log);
+  const member = await getMemberById(v.memberId);
+  if (!member || member.household_id !== householdId) {
+    reply.code(401).send({ error: 'Unauthorized' });
+    return null;
+  }
+  if (emailVerificationRequired() && !member.email_verified_at) {
+    reply.code(403).send({ error: 'Email verification required', code: 'EMAIL_NOT_VERIFIED' });
+    return null;
+  }
+  return member;
+}
+
 async function assertAuthorized(request, reply, householdId) {
   const leg = legacySecret();
   const sess = sessionSecret();
@@ -1552,6 +1586,124 @@ fastify.post('/v1/notify', async (request, reply) => {
       detail: process.env.NODE_ENV === 'development' ? String(e?.message ?? e) : undefined,
     });
   }
+});
+
+function maskEmailForDeviceList(email) {
+  const e = String(email ?? '').trim().toLowerCase();
+  const at = e.indexOf('@');
+  if (at < 1) return 'Unknown';
+  const local = e.slice(0, at);
+  const domain = e.slice(at + 1);
+  const shown = local.length <= 2 ? `${local[0] ?? ''}*` : `${local.slice(0, 2)}***`;
+  return `${shown}@${domain}`;
+}
+
+fastify.get('/v1/household/push/status', async (request, reply) => {
+  const id = getHouseholdIdFromRequest(request);
+  const member = await requireSessionMember(request, reply, id);
+  if (!member) return;
+  await initDbIfNeeded(request.log);
+  const mine = await countPushTokensForMember(member.id);
+  const all = (await listPushTokensForHousehold(id)).length;
+  const stored = await readState(id).catch(() => null);
+  const prefs = stored?.state?.pushNotificationPrefs ?? { billReminders: true };
+  return reply.send({
+    ok: true,
+    deviceRegistered: mine > 0,
+    householdDeviceCount: all,
+    serverPushConfigured: isPushDeliveryConfigured(),
+    prefs: {
+      billReminders: prefs?.billReminders !== false,
+    },
+  });
+});
+
+fastify.get('/v1/household/push/devices', async (request, reply) => {
+  const id = getHouseholdIdFromRequest(request);
+  const member = await requireSessionMember(request, reply, id);
+  if (!member) return;
+  await initDbIfNeeded(request.log);
+  if (!getDbEnabled()) return reply.code(503).send({ error: 'DATABASE_URL is not set.' });
+  const currentToken = String(request.query?.currentToken ?? '').trim();
+  const rows = await listPushDevicesForHousehold(id);
+  return reply.send({
+    ok: true,
+    devices: rows.map((r) => ({
+      id: r.id,
+      platform: r.platform,
+      memberEmail: maskEmailForDeviceList(r.member_email),
+      memberRole: r.member_role,
+      isMine: r.member_id === member.id,
+      isThisDevice: Boolean(currentToken && r.token === currentToken),
+      updatedAt: r.updated_at,
+    })),
+  });
+});
+
+fastify.post('/v1/household/push/devices/revoke', async (request, reply) => {
+  const id = getHouseholdIdFromRequest(request);
+  const member = await requireSessionMember(request, reply, id);
+  if (!member) return;
+  const deviceId = String(request.body?.deviceId ?? '').trim();
+  if (!deviceId) return reply.code(400).send({ error: 'deviceId required.' });
+  await initDbIfNeeded(request.log);
+  if (!getDbEnabled()) return reply.code(503).send({ error: 'DATABASE_URL is not set.' });
+  const row = await getPushDeviceById(deviceId, id);
+  if (!row) return reply.code(404).send({ error: 'Device not found.' });
+  const isOwner = member.role === 'owner';
+  if (row.member_id !== member.id && !isOwner) {
+    return reply.code(403).send({ error: 'You can only remove your own devices unless you are the primary owner.' });
+  }
+  await deletePushDeviceById(deviceId, id);
+  return reply.send({ ok: true });
+});
+
+fastify.post('/v1/household/push/register', async (request, reply) => {
+  const id = getHouseholdIdFromRequest(request);
+  const member = await requireSessionMember(request, reply, id);
+  if (!member) return;
+  const body = request.body ?? {};
+  const token = String(body.token ?? '').trim();
+  const platform = String(body.platform ?? '').trim();
+  if (token.length < 8) return reply.code(400).send({ error: 'Invalid push token.' });
+  if (platform !== 'ios' && platform !== 'android') {
+    return reply.code(400).send({ error: 'platform must be ios or android.' });
+  }
+  await initDbIfNeeded(request.log);
+  if (!getDbEnabled()) return reply.code(503).send({ error: 'DATABASE_URL is not set.' });
+  await upsertPushDeviceToken({
+    householdId: id,
+    memberId: member.id,
+    platform,
+    token,
+  });
+  return reply.send({ ok: true });
+});
+
+fastify.post('/v1/household/push/unregister', async (request, reply) => {
+  const id = getHouseholdIdFromRequest(request);
+  const member = await requireSessionMember(request, reply, id);
+  if (!member) return;
+  const body = request.body ?? {};
+  const token = String(body.token ?? '').trim();
+  await initDbIfNeeded(request.log);
+  if (!getDbEnabled()) return reply.code(503).send({ error: 'DATABASE_URL is not set.' });
+  if (token) await deletePushDeviceToken(token);
+  else await deletePushTokensForMember(member.id);
+  return reply.send({ ok: true });
+});
+
+fastify.post('/v1/household/push/test', async (request, reply) => {
+  const id = getHouseholdIdFromRequest(request);
+  const member = await requireSessionMember(request, reply, id);
+  if (!member) return;
+  const result = await sendTestPushToMember(id, member.id, request.log);
+  if (!result.ok) {
+    if (result.code === 'NOT_CONFIGURED') return reply.code(503).send({ error: result.error, code: result.code });
+    if (result.code === 'NO_TOKENS') return reply.code(400).send({ error: result.error, code: result.code });
+    return reply.code(502).send({ error: result.error });
+  }
+  return reply.send(result);
 });
 
 fastify.post('/v1/snapshot', async (request, reply) => {

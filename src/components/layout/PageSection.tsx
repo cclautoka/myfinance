@@ -74,7 +74,7 @@ export function PageSection({
       {variant !== 'plain' && palette ? (
         <>
           <header
-            className={`-mx-5 -mt-8 mb-7 border-b-4 border-teal-400/90 px-6 py-7 sm:-mx-8 sm:-mt-8 sm:px-9 ${palette.headerGradient}`}
+            className={`-mx-5 -mt-8 mb-7 border-b-4 border-teal-400/90 px-5 py-7 sm:-mx-5 sm:px-6 lg:-mx-8 lg:px-9 ${palette.headerGradient}`}
             aria-live="polite"
           >
             {headerHero}

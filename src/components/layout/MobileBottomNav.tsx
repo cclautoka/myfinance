@@ -69,7 +69,7 @@ export function MobileBottomNav({
       id="finance-mobile-bottom-nav"
       data-tour="tour-nav-shortcuts"
       aria-label="Main areas"
-      className="pointer-events-none fixed inset-x-0 bottom-0 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 lg:hidden"
+      className="pointer-events-none fixed inset-x-0 bottom-0 px-[max(0.75rem,env(safe-area-inset-left,0px))] pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] pt-2 pr-[max(0.75rem,env(safe-area-inset-right,0px))] lg:hidden"
       style={{ zIndex: zLayers.dockNav }}
     >
       <div className="pointer-events-auto mx-auto max-w-lg rounded-lg border-2 border-slate-200/90 bg-slate-100/90 p-0.5 shadow-lg backdrop-blur-md dark:border-moss-border dark:bg-moss-bg dark:shadow-[0_-4px_36px_rgba(0,0,0,0.45)]">

@@ -1,0 +1,99 @@
+import { Capacitor } from '@capacitor/core';
+import { PushNotifications } from '@capacitor/push-notifications';
+import { registerPushToken, unregisterPushToken } from '../utils/pushDeviceApi';
+
+const PUSH_TOKEN_STORAGE_KEY = 'finance-push-device-token';
+
+export function readStoredPushToken(): string {
+  try {
+    return (localStorage.getItem(PUSH_TOKEN_STORAGE_KEY) ?? '').trim();
+  } catch {
+    return '';
+  }
+}
+
+function writeStoredPushToken(token: string): void {
+  try {
+    if (token) localStorage.setItem(PUSH_TOKEN_STORAGE_KEY, token);
+    else localStorage.removeItem(PUSH_TOKEN_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function isNativePushAvailable(): boolean {
+  return Capacitor.isNativePlatform();
+}
+
+function nativePlatform(): 'ios' | 'android' {
+  return Capacitor.getPlatform() === 'android' ? 'android' : 'ios';
+}
+
+/** Request permission, register with OS, and upsert token on the server. */
+export async function enableNativePush(): Promise<void> {
+  if (!isNativePushAvailable()) {
+    throw new Error('Push notifications are only available in the iOS and Android app.');
+  }
+
+  let perm = await PushNotifications.checkPermissions();
+  if (perm.receive === 'denied') {
+    throw new Error('Notifications are blocked. Enable them in system Settings for Our Finance.');
+  }
+  if (perm.receive === 'prompt') {
+    perm = await PushNotifications.requestPermissions();
+  }
+  if (perm.receive !== 'granted') {
+    throw new Error('Notification permission was not granted.');
+  }
+
+  const token = await new Promise<string>((resolve, reject) => {
+    const timeout = window.setTimeout(() => reject(new Error('Timed out waiting for push token.')), 25_000);
+    void (async () => {
+      const onReg = await PushNotifications.addListener('registration', (t) => {
+        window.clearTimeout(timeout);
+        void onReg.remove();
+        void onErr.remove();
+        if (t.value) resolve(t.value);
+        else reject(new Error('Empty push token from device.'));
+      });
+      const onErr = await PushNotifications.addListener('registrationError', (err) => {
+        window.clearTimeout(timeout);
+        void onReg.remove();
+        void onErr.remove();
+        reject(new Error(err.error || 'Push registration failed.'));
+      });
+      await PushNotifications.register();
+    })();
+  });
+
+  await registerPushToken(token, nativePlatform());
+  writeStoredPushToken(token);
+}
+
+/** Remove token from server and OS registration. */
+export async function disableNativePush(): Promise<void> {
+  const stored = readStoredPushToken();
+  try {
+    await unregisterPushToken(stored || undefined);
+  } finally {
+    writeStoredPushToken('');
+    if (isNativePushAvailable()) {
+      await PushNotifications.unregister();
+    }
+  }
+}
+
+/** Foreground notification tap — open dashboard when user taps a bill reminder. */
+export function bindPushNotificationHandlers(onOpenApp: () => void): () => void {
+  if (!isNativePushAvailable()) return () => {};
+
+  const handles: { remove: () => Promise<void> }[] = [];
+
+  void PushNotifications.addListener('pushNotificationActionPerformed', () => {
+    onOpenApp();
+  }).then((h) => handles.push(h));
+
+  return () => {
+    for (const h of handles) void h.remove();
+  };
+}

@@ -129,6 +129,23 @@ export async function initDbIfNeeded(log) {
       create index if not exists household_bearer_key_household_idx
         on household_bearer_key (household_id) where revoked_at is null;
     `);
+    await pool.query(`
+      create table if not exists push_device_token (
+        id uuid primary key default gen_random_uuid(),
+        household_id text not null,
+        member_id uuid not null references household_member(id) on delete cascade,
+        platform text not null check (platform in ('ios', 'android')),
+        token text not null,
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now()
+      );
+    `);
+    await pool.query(`
+      create unique index if not exists push_device_token_token_uq on push_device_token (token);
+    `);
+    await pool.query(`
+      create index if not exists push_device_token_household_idx on push_device_token (household_id);
+    `);
     await pool.query(`alter table household_invite add column if not exists partner_email text;`);
     await pool.query(`
       alter table household_invite add column if not exists partner_member_id uuid
@@ -494,7 +511,83 @@ const CORE_TABLES = [
   'household_email_token',
   'household_pairing',
   'household_bearer_key',
+  'push_device_token',
 ];
+
+export async function upsertPushDeviceToken({ householdId, memberId, platform, token }) {
+  if (!pool) throw new Error('DB not initialized');
+  const plat = platform === 'android' ? 'android' : 'ios';
+  const tok = String(token ?? '').trim().slice(0, 4096);
+  if (!tok) throw new Error('token required');
+  const r = await pool.query(
+    `insert into push_device_token (household_id, member_id, platform, token, updated_at)
+     values ($1, $2, $3, $4, now())
+     on conflict (token) do update set
+       household_id = excluded.household_id,
+       member_id = excluded.member_id,
+       platform = excluded.platform,
+       updated_at = now()
+     returning id`,
+    [householdId, memberId, plat, tok],
+  );
+  return r.rows[0];
+}
+
+export async function deletePushDeviceToken(token) {
+  if (!pool) throw new Error('DB not initialized');
+  const tok = String(token ?? '').trim();
+  if (!tok) return;
+  await pool.query(`delete from push_device_token where token = $1`, [tok]);
+}
+
+export async function deletePushTokensForMember(memberId) {
+  if (!pool) throw new Error('DB not initialized');
+  await pool.query(`delete from push_device_token where member_id = $1`, [memberId]);
+}
+
+export async function listPushTokensForHousehold(householdId) {
+  if (!pool) throw new Error('DB not initialized');
+  const r = await pool.query(
+    `select id, household_id, member_id, platform, token, updated_at
+     from push_device_token where household_id = $1`,
+    [householdId],
+  );
+  return r.rows;
+}
+
+export async function countPushTokensForMember(memberId) {
+  if (!pool) throw new Error('DB not initialized');
+  const r = await pool.query(`select count(*)::int as n from push_device_token where member_id = $1`, [memberId]);
+  return r.rows[0]?.n ?? 0;
+}
+
+export async function listPushDevicesForHousehold(householdId) {
+  if (!pool) throw new Error('DB not initialized');
+  const r = await pool.query(
+    `select t.id, t.household_id, t.member_id, t.platform, t.token, t.updated_at, m.email as member_email, m.role as member_role
+     from push_device_token t
+     join household_member m on m.id = t.member_id
+     where t.household_id = $1
+     order by t.updated_at desc`,
+    [householdId],
+  );
+  return r.rows;
+}
+
+export async function getPushDeviceById(deviceId, householdId) {
+  if (!pool) throw new Error('DB not initialized');
+  const r = await pool.query(
+    `select id, household_id, member_id, platform, token, updated_at
+     from push_device_token where id = $1 and household_id = $2`,
+    [deviceId, householdId],
+  );
+  return r.rows[0] ?? null;
+}
+
+export async function deletePushDeviceById(deviceId, householdId) {
+  if (!pool) throw new Error('DB not initialized');
+  await pool.query(`delete from push_device_token where id = $1 and household_id = $2`, [deviceId, householdId]);
+}
 
 /** Run `initDbIfNeeded` then invoke `fn` with the pg pool (for one-off scripts). */
 export async function withDb(fn) {
