@@ -73,6 +73,11 @@
     max-width: 100%;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
+    touch-action: manipulation;
+  }
+  html.cap-native .cap-100vw-safe {
+    width: 100%;
+    max-width: 100%;
   }
   html.cap-native body {
     overflow-x: clip;

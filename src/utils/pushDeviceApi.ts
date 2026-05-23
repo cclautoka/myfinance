@@ -1,5 +1,5 @@
 import { householdApiFetch } from './householdApiFetch';
-import { apiBaseFromNotifyUrl, readNotifyRelayConfig } from './notifyRelayConfig';
+import { resolveHouseholdApiBase } from './householdApiBase';
 import { readHouseholdSession } from './householdSession';
 
 export type PushNotificationPrefsDto = {
@@ -24,8 +24,7 @@ export type PushDeviceRow = {
 };
 
 function apiBase(): string {
-  const { url } = readNotifyRelayConfig();
-  return apiBaseFromNotifyUrl(url);
+  return resolveHouseholdApiBase();
 }
 
 function authHeaders(): HeadersInit {

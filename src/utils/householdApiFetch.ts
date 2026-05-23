@@ -1,8 +1,8 @@
 import { Capacitor } from '@capacitor/core';
-import { apiBaseFromNotifyUrl, readNotifyRelayConfig } from './notifyRelayConfig';
+import { resolveHouseholdApiBase } from './householdApiBase';
 
 function apiBase(): string {
-  return apiBaseFromNotifyUrl(readNotifyRelayConfig().url);
+  return resolveHouseholdApiBase();
 }
 
 /** User-facing message when fetch throws (network / CORS / server down). */

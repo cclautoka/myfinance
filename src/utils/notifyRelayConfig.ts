@@ -1,3 +1,8 @@
+import { formatHouseholdApiError, householdApiFetch } from './householdApiFetch';
+import { resolveHouseholdApiBase } from './householdApiBase';
+
+export { resolveHouseholdApiBase } from './householdApiBase';
+
 /** localStorage keys for optional Dokploy (or any) notify relay — never stores finance data, only URL + secret. */
 
 /** Same-origin notify endpoint (single Docker service serves UI + API). */
@@ -161,14 +166,18 @@ export async function postNotifyRelayPublicJson(
   path: string,
   body: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
-  const { url } = readNotifyRelayConfig();
-  const base = apiBaseFromNotifyUrl(url);
+  const base = resolveHouseholdApiBase();
   if (!base) throw new Error('API is not available on this host.');
-  const res = await fetch(`${base}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await householdApiFetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    throw new Error(formatHouseholdApiError(e, path));
+  }
   const text = await res.text();
   let j: Record<string, unknown> = {};
   try {
@@ -176,6 +185,12 @@ export async function postNotifyRelayPublicJson(
   } catch {
     /* ignore */
   }
-  if (!res.ok) throw new Error((j.error as string) || text || `HTTP ${res.status}`);
+  if (!res.ok) {
+    const snippet = text.trim().slice(0, 80);
+    if (snippet.startsWith('<!') || snippet.startsWith('<html')) {
+      throw new Error('Server returned a web page instead of JSON. Redeploy the API or check the app API URL.');
+    }
+    throw new Error((j.error as string) || text || `HTTP ${res.status}`);
+  }
   return j;
 }

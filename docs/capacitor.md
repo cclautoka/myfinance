@@ -44,9 +44,9 @@ The mobile app does **not** bundle the Node server. It talks to your deployed AP
 
 To point at another host, edit `.env.capacitor` and run `npm run cap:sync` again.
 
-Ensure the server allows HTTPS from the app (same CORS rules as the browser; empty `NOTIFY_CORS_ORIGINS` on a single-host deploy is fine). Capacitor builds use `server.hostname` matching your API host so the app and API share an origin; native WebView origins are also allowlisted on the server.
+Ensure the server allows HTTPS from the app. Native WebView origins (`https://localhost`, etc.) are allowlisted on the server; API calls use the absolute URL in `.env.capacitor` (`VITE_PUBLIC_NOTIFY_URL`), not the WebView host. Do **not** set `server.hostname` to your API domain — that breaks sign-in and layout.
 
-If push settings show **“Failed to fetch”**, redeploy the latest server (`pushSend.mjs` + push routes) and confirm `https://finance.solofi.cloud/health` responds from your phone’s browser.
+If API calls fail, confirm `https://finance.solofi.cloud/health` loads on the phone and redeploy the latest server.
 
 ## Live reload (optional)
 

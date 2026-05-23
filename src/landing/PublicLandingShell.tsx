@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { HouseholdAuthForm } from '../auth/HouseholdAuthForm';
 import { defaultFinanceState } from '../data/defaults';
@@ -21,6 +22,7 @@ function applyThemeClass(theme: ThemePreference) {
 }
 
 export function PublicLandingShell() {
+  const nativeApp = Capacitor.isNativePlatform();
   const [theme, setTheme] = useState<ThemePreference>(() => defaultFinanceState().theme);
 
   useEffect(() => {
@@ -49,6 +51,16 @@ export function PublicLandingShell() {
     obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     return () => obs.disconnect();
   }, []);
+
+  if (nativeApp) {
+    return (
+      <div className="cap-safe-top cap-safe-bottom cap-app-shell min-h-svh w-full max-w-full overflow-x-clip bg-gradient-to-br from-teal-50/90 via-[#f4f7fb] to-slate-100 dark:from-moss-bg dark:via-moss-elevated dark:to-moss-bg">
+        <div className="cap-safe-x mx-auto flex min-h-svh w-full max-w-lg flex-col justify-center px-4 py-8 sm:px-6">
+          <HouseholdAuthForm theme={theme} onTheme={setTheme} variant="embedded" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="cap-safe-top cap-safe-bottom cap-app-shell min-h-svh bg-gradient-to-br from-teal-50/90 via-[#f4f7fb] to-slate-100 dark:from-moss-bg dark:via-moss-elevated dark:to-moss-bg">
