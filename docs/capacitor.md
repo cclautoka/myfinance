@@ -90,8 +90,17 @@ Push delivery uses **FCM** for both platforms (one service account on the server
 
 1. [Firebase Console](https://console.firebase.google.com/) → project **Our Finance** (`our-finance-4271e`).
 2. **Android:** add app `cloud.solofi.finance` → download **`google-services.json`** → `android/app/google-services.json` (gitignored).
-3. **iOS:** add app with bundle ID `cloud.solofi.finance` (download `GoogleService-Info.plist` optional for Capacitor; required if you add native Firebase SDK later).
+3. **iOS:** add app with bundle ID `cloud.solofi.finance` → download **`GoogleService-Info.plist`** → copy to **`ios/App/App/GoogleService-Info.plist`** (gitignored; already wired in the Xcode project).
 4. **iOS APNs in Firebase:** Project settings → **Cloud Messaging** → Apple app configuration → upload **APNs Authentication Key** (.p8 from [Apple Developer](https://developer.apple.com/account/resources/authkeys/list) — requires paid membership).
+
+#### Firebase wizard steps 3–4 (iOS): skip for this Capacitor app
+
+Firebase Console will show **Add Firebase SDK** (Swift Package Manager) and **Add initialization code** (`FirebaseApp.configure()` in `AppDelegate`). **Do not add those** for Our Finance:
+
+- Push uses **`@capacitor/push-notifications`** → Apple **APNs** on the device; your **server** sends via **FCM** using the service account + APNs key in Firebase.
+- Adding `firebase-ios-sdk` and `import FirebaseCore` would duplicate that stack and is not required.
+
+In the wizard: complete step 2 (plist), upload APNs in Cloud Messaging, then **Continue to console**. Skip SPM and `AppDelegate` snippets.
 5. **Service account:** Project settings → Service accounts → Generate new private key → enable **Firebase Cloud Messaging API** in Google Cloud if prompted.
 6. On the notify server (`server/env.example`):
    - `FCM_SERVICE_ACCOUNT_PATH=/path/to/service-account.json`, or

@@ -21,6 +21,8 @@ server/data/
 # Firebase (never commit — download per environment)
 google-services.json
 **/google-services.json
+GoogleService-Info.plist
+**/GoogleService-Info.plist
 !**/google-services.json.example
 
 # Capacitor / native
