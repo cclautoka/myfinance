@@ -122,7 +122,7 @@ export function AppNotificationsPanel({
       }
       pushToast({
         type: 'success',
-        message: `Test sent to ${n} device(s). Check your notification shade.`,
+        message: `Test sent to ${n} device(s). If the app was open, check the in-app toast; otherwise pull down the notification shade.`,
       });
     } catch (e) {
       pushToast({ type: 'error', message: String((e as Error)?.message ?? e) });

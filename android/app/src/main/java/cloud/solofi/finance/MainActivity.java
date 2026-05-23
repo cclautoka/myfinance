@@ -25,7 +25,7 @@ public class MainActivity extends BridgeActivity {
         new NotificationChannel(
             CHANNEL_BILL_REMINDERS,
             "Bill reminders",
-            NotificationManager.IMPORTANCE_DEFAULT);
+            NotificationManager.IMPORTANCE_HIGH);
     channel.setDescription("Overdue and upcoming bill alerts from Our Finance");
     NotificationManager manager = getSystemService(NotificationManager.class);
     if (manager != null) {

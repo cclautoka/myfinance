@@ -173,6 +173,13 @@ export async function sendTestPushToMember(householdId, memberId, log, opts = {}
         body: 'Push notifications are working for this device.',
       },
       data: { type: 'test' },
+      android: {
+        priority: 'high',
+        notification: { channelId: 'bill_reminders', sound: 'default' },
+      },
+      apns: {
+        payload: { aps: { sound: 'default', badge: 1 } },
+      },
     });
     if (res.successCount < 1) {
       const fcmErr = res.responses.find((r) => !r.success)?.error;

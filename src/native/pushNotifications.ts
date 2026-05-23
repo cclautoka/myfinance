@@ -2,6 +2,9 @@ import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
 import { registerPushToken, unregisterPushToken } from '../utils/pushDeviceApi';
 import { readStoredPushToken, writeStoredPushToken } from '../utils/pushTokenStorage';
+import { pushToast } from '../ui/toast/toastBus';
+
+const ANDROID_CHANNEL_ID = 'bill_reminders';
 
 export { readStoredPushToken } from '../utils/pushTokenStorage';
 
@@ -18,6 +21,17 @@ export function isNativePushRegistrationReady(): boolean {
 
 function nativePlatform(): 'ios' | 'android' {
   return Capacitor.getPlatform() === 'android' ? 'android' : 'ios';
+}
+
+async function ensureAndroidPushChannel(): Promise<void> {
+  if (Capacitor.getPlatform() !== 'android') return;
+  await PushNotifications.createChannel({
+    id: ANDROID_CHANNEL_ID,
+    name: 'Bill reminders',
+    description: 'Overdue and upcoming bill alerts from Our Finance',
+    importance: 5,
+    vibration: true,
+  });
 }
 
 /** Request permission, register with OS, and upsert token on the server. */
@@ -41,6 +55,8 @@ export async function enableNativePush(): Promise<void> {
   if (perm.receive !== 'granted') {
     throw new Error('Notification permission was not granted.');
   }
+
+  await ensureAndroidPushChannel();
 
   const token = await new Promise<string>((resolve, reject) => {
     const timeout = window.setTimeout(() => reject(new Error('Timed out waiting for push token.')), 25_000);
@@ -79,11 +95,17 @@ export async function disableNativePush(): Promise<void> {
   }
 }
 
-/** Foreground notification tap — open dashboard when user taps a bill reminder. */
+/** Foreground receive + tap — Android often hides tray banners while the app is open. */
 export function bindPushNotificationHandlers(onOpenApp: () => void): () => void {
   if (!isNativePushAvailable()) return () => {};
 
   const handles: { remove: () => Promise<void> }[] = [];
+
+  void PushNotifications.addListener('pushNotificationReceived', (notification) => {
+    const title = notification.title?.trim() || 'Our Finance';
+    const body = notification.body?.trim() || 'You have a new alert.';
+    pushToast({ type: 'success', message: `${title}: ${body}` });
+  }).then((h) => handles.push(h));
 
   void PushNotifications.addListener('pushNotificationActionPerformed', () => {
     onOpenApp();
