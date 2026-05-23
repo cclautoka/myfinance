@@ -3,7 +3,6 @@ import {
   Suspense,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useState,
   useSyncExternalStore,
@@ -34,6 +33,7 @@ import { ConfirmDialog } from './components/ui/ConfirmDialog';
 import { UpcomingBillsStrip } from './components/UpcomingBillsStrip';
 import { WalletPanel } from './components/WalletPanel';
 import { useDashboardMoreMonthOpen } from './hooks/useDashboardMoreMonthOpen';
+import { scrollAppToTopAfterTabChange } from './utils/scrollAppToTop';
 import { bindPushNotificationHandlers, isNativePushAvailable } from './native/pushNotifications';
 import { ONBOARDING_STORAGE_KEY, ONBOARDING_STEPS, ONBOARDING_TOUR_LATER_KEY } from './onboarding/constants';
 import {
@@ -99,23 +99,15 @@ export function AuthenticatedFinanceApp() {
   });
   const dashboardMoreMonth = useDashboardMoreMonthOpen();
 
-  /** After tab panel swap (panels unmount/remount), scroll once layout is committed; rAF catches iOS WebView restore. */
-  const scrollAppToTop = useCallback(() => {
-    window.scrollTo({ top: 0, left: 0 });
-    document.documentElement.scrollTop = 0;
-    document.body.scrollTop = 0;
-  }, []);
-
-  useLayoutEffect(() => {
-    scrollAppToTop();
-    const id = requestAnimationFrame(scrollAppToTop);
-    return () => cancelAnimationFrame(id);
-  }, [appTab, scrollAppToTop]);
+  useEffect(() => {
+    scrollAppToTopAfterTabChange();
+  }, [appTab]);
 
   useEffect(() => {
     if (!isNativePushAvailable()) return;
     return bindPushNotificationHandlers(() => {
       setAppTab('dashboard');
+      scrollAppToTopAfterTabChange();
     });
   }, []);
 
@@ -131,13 +123,12 @@ export function AuthenticatedFinanceApp() {
   const handleMobileAppTabChange = useCallback(
     (tab: AppTab) => {
       if (tab === appTab) {
-        scrollAppToTop();
-        requestAnimationFrame(scrollAppToTop);
+        scrollAppToTopAfterTabChange();
         return;
       }
       setAppTab(tab);
     },
-    [appTab, scrollAppToTop],
+    [appTab],
   );
 
   const {
@@ -413,7 +404,7 @@ export function AuthenticatedFinanceApp() {
         householdSignedIn={householdSignedIn}
         serverSyncing={isServerSyncing}
       />
-      <AppPrimaryTabs value={appTab} onChange={setAppTab} />
+      <AppPrimaryTabs value={appTab} onChange={handleMobileAppTabChange} />
       {!monthOpeningBlocked ? (
         <MobileBottomNav appTab={appTab} onAppTabChange={handleMobileAppTabChange} />
       ) : null}

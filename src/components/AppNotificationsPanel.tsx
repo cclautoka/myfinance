@@ -5,6 +5,7 @@ import {
   disableNativePush,
   enableNativePush,
   isNativePushAvailable,
+  isNativePushRegistrationReady,
   readStoredPushToken,
 } from '../native/pushNotifications';
 import {
@@ -49,6 +50,7 @@ export function AppNotificationsPanel({
   const [busy, setBusy] = useState(false);
   const [localToken, setLocalToken] = useState(() => readStoredPushToken());
   const native = isNativePushAvailable();
+  const pushRegisterReady = isNativePushRegistrationReady();
   const isOwner = readHouseholdSession()?.role === 'owner';
 
   const refresh = useCallback(async () => {
@@ -192,9 +194,20 @@ export function AppNotificationsPanel({
                 {thisDeviceOn ? 'Receiving alerts' : 'Not registered'}
               </strong>
             </p>
+            {!pushRegisterReady && Capacitor.getPlatform() === 'android' ? (
+              <p className="mt-2 text-xs leading-relaxed text-amber-900/90 dark:text-amber-200/90">
+                This Android build is missing Firebase (<code className="text-[11px]">google-services.json</code>). Push
+                registration is disabled so the app won’t crash — add Firebase config and reinstall.
+              </p>
+            ) : null}
             <div className="mt-3 flex flex-wrap gap-2">
               {!thisDeviceOn ? (
-                <button type="button" className="btn-primary btn-primary-sm" disabled={busy} onClick={() => void onEnableDevice()}>
+                <button
+                  type="button"
+                  className="btn-primary btn-primary-sm"
+                  disabled={busy || !pushRegisterReady}
+                  onClick={() => void onEnableDevice()}
+                >
                   Enable on this device
                 </button>
               ) : (

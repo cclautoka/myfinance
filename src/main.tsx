@@ -5,6 +5,7 @@ import '@fontsource-variable/plus-jakarta-sans/wght.css';
 import '@fontsource-variable/syne/wght.css';
 import './index.css';
 import App from './App.tsx';
+import { configureNativeSafeArea } from './native/configureNativeSafeArea';
 
 /** Native WebView: clip horizontal overflow and tune layout (see index.css `.cap-native`). */
 if (Capacitor.isNativePlatform()) {
@@ -12,6 +13,7 @@ if (Capacitor.isNativePlatform()) {
   if ('scrollRestoration' in history) {
     history.scrollRestoration = 'manual';
   }
+  configureNativeSafeArea();
 }
 import { preloadWorkbookModule } from './SignedInWorkbook';
 import { readHouseholdSession } from './utils/householdSession';

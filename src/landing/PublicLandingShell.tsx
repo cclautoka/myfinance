@@ -51,7 +51,7 @@ export function PublicLandingShell() {
   }, []);
 
   return (
-    <div className="min-h-svh bg-gradient-to-br from-teal-50/90 via-[#f4f7fb] to-slate-100 dark:from-moss-bg dark:via-moss-elevated dark:to-moss-bg">
+    <div className="cap-safe-top cap-safe-bottom cap-app-shell min-h-svh bg-gradient-to-br from-teal-50/90 via-[#f4f7fb] to-slate-100 dark:from-moss-bg dark:via-moss-elevated dark:to-moss-bg">
       <div className="mx-auto flex min-h-svh w-full max-w-[96rem] flex-col lg:flex-row">
         <section className="min-h-[42vh] flex-1 border-b border-slate-200/80 p-4 sm:p-6 lg:min-h-svh lg:w-[60%] lg:border-b-0 lg:border-r lg:p-8 xl:p-10">
           <Suspense fallback={<LandingDemoSkeleton />}>

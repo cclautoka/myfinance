@@ -1,22 +1,12 @@
 import type { FinanceState } from '../types/finance';
 import { currentMonthKey } from '../data/defaults';
-import {
-  combinedMonthlyIncome,
-  extraIncomeMonthTotal,
-  totalDebtRemaining,
-} from './calculations';
+import { combinedMonthlyIncome, totalDebtRemaining } from './calculations';
 import { formatMoney } from './format';
 import { ensureNotifyRelayHouseholdId, readNotifyRelayConfig } from './notifyRelayConfig';
 import { serverAuthBearer } from './serverAuth';
-import {
-  monthActualExpenseTotal,
-  monthActualIncomeTotal,
-  monthSpendableCarry,
-  monthTotalSpendableIncome,
-} from './budgetSurplus';
+import { monthActualExpenseTotal } from './budgetSurplus';
 import { incomeLogMonthTotal } from './incomeLog';
 import { computeFinanceStateDiff, type DigestSection } from './financeStateDiff';
-import { buildBillsHeadsUpSections } from './reminderEmailPayloadClient';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -53,44 +43,31 @@ export function pocketLeftSoFar(state: FinanceState): number {
   return round2(incomeLogMonthTotal(state, mk) - monthActualExpenseTotal(state, mk));
 }
 
-export function buildSaveEmailDigest(from: FinanceState, to: FinanceState): SaveEmailDigestV1 {
+/** True when workbook fields changed in ways that warrant a save heads-up email (not browse-only noise). */
+export function hasFinanceStateNotifyChanges(from: FinanceState, to: FinanceState): boolean {
+  const { sections } = computeFinanceStateDiff(from, to);
+  const changed = sections.find((s) => s.heading === 'What changed')?.items ?? [];
+  return changed.length > 0;
+}
+
+/**
+ * Save heads-up digest: only real diffs (no cash snapshot / bill horizon — those are in the 7am cron email).
+ * Returns null when nothing meaningful changed — caller must not send email.
+ */
+export function buildSaveEmailDigest(from: FinanceState, to: FinanceState): SaveEmailDigestV1 | null {
+  if (!hasFinanceStateNotifyChanges(from, to)) return null;
+
   const mk = currentMonthKey();
-  const diffSections = computeFinanceStateDiff(from, to).sections;
+  const { sections } = computeFinanceStateDiff(from, to);
   const planned = combinedMonthlyIncome(to);
-  const logged = incomeLogMonthTotal(to, mk);
-  const extraIn = extraIncomeMonthTotal(to, mk);
-  const depositsPlusOther = monthActualIncomeTotal(to, mk);
-  const carry = monthSpendableCarry(to, mk);
-  const spendable = monthTotalSpendableIncome(to, mk);
-  const counted = monthActualExpenseTotal(to, mk);
   const pocket = pocketLeftSoFar(to);
-
-  const cashSection: DigestSection = {
-    heading: 'This month (cash snapshot)',
-    items: [
-      { title: 'Planned monthly income (combined)', body: formatMoney(planned) },
-      { title: 'Deposits logged (paycheques)', body: formatMoney(logged) },
-      { title: 'Other income this month', body: formatMoney(extraIn) },
-      { title: 'Deposits + other income', body: formatMoney(depositsPlusOther) },
-      { title: 'Typed carry-in this month', body: formatMoney(carry) },
-      { title: 'Spendable (deposits + other + carry)', body: formatMoney(spendable) },
-      { title: 'Counted spend (handled bills + surprises)', body: formatMoney(counted) },
-      {
-        title: 'Pocket left (deposits − counted spend)',
-        body: formatMoney(pocket),
-        meta: 'Same as dashboard “pocket left so far”.',
-      },
-    ],
-  };
-
-  const billSections = buildBillsHeadsUpSections(to);
 
   return {
     version: SAVE_EMAIL_DIGEST_VERSION,
     monthKey: mk,
     pocketLeft: pocket,
     plannedIncomeCombined: planned,
-    sections: [...diffSections, cashSection, ...billSections],
+    sections,
   };
 }
 

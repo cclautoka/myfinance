@@ -111,6 +111,11 @@ export function NotifyRelaySettings({
     const from = structuredClone(state);
     from.emergencyFund = state.emergencyFund + 0.01;
     const digest = buildSaveEmailDigest(from, state);
+    if (!digest) {
+      setBusy(false);
+      setMsg('Test could not build a change digest.');
+      return;
+    }
     const r = await postNotifyRelay('', {
       subject: 'Household finances · test',
       pocketLeft: pocketLeftSoFar(state),
@@ -203,7 +208,8 @@ export function NotifyRelaySettings({
               Email summaries
             </label>
             <p className="mt-1 text-xs leading-snug text-sage-600 dark:text-moss-muted">
-              Short heads-up after saves (~60s debounce). Uses your sign-in session and recipient emails below.
+              Email only after real workbook changes (~60s debounce): bills marked, amounts, income, etc. Not while
+              browsing. Daily 7am summary is separate.
             </p>
           </div>
           <div className="relative inline-flex h-8 w-[3.35rem] shrink-0 self-end sm:self-center">

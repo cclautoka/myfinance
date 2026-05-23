@@ -75,29 +75,47 @@ The native app can receive **bill reminder** pushes (same daily cron as email wh
 4. Under **This device**, tap **Enable on this device** and allow the system prompt.
 5. Review **Household devices** to see registered phones or remove old ones.
 
+### Costs: Firebase vs Apple
+
+| Service | Cost | Needed for |
+|--------|------|------------|
+| **Firebase (FCM)** | **Free** for normal notification volume | Sending pushes from your server to Android + iPhone |
+| **Apple Developer Program** | **$99 USD / year** | **iPhone lock-screen push** (APNs). Not a Firebase fee. |
+
+You can use **Android push + email** without paying Apple. **iPhone push requires the paid Apple account** — there is no workaround for real APNs on a personal/free signing team.
+
 ### Server (Firebase Cloud Messaging)
 
-Push delivery uses **FCM** for both platforms:
+Push delivery uses **FCM** for both platforms (one service account on the server):
 
-1. Create a [Firebase](https://console.firebase.google.com/) project and add iOS (`cloud.solofi.finance`) and Android apps.
-2. Download **`google-services.json`** into `android/app/` (enables the Google Services Gradle plugin).
-3. Upload your **APNs key** in Firebase → Project settings → Cloud Messaging (iOS).
-4. Create a service account with **Firebase Cloud Messaging API** enabled; download JSON.
-5. On the notify server, set either:
-   - `FCM_SERVICE_ACCOUNT_JSON='{"type":"service_account",...}'` (single line), or
-   - `FCM_SERVICE_ACCOUNT_PATH=/path/to/service-account.json`
+1. [Firebase Console](https://console.firebase.google.com/) → project **Our Finance** (`our-finance-4271e`).
+2. **Android:** add app `cloud.solofi.finance` → download **`google-services.json`** → `android/app/google-services.json` (gitignored).
+3. **iOS:** add app with bundle ID `cloud.solofi.finance` (download `GoogleService-Info.plist` optional for Capacitor; required if you add native Firebase SDK later).
+4. **iOS APNs in Firebase:** Project settings → **Cloud Messaging** → Apple app configuration → upload **APNs Authentication Key** (.p8 from [Apple Developer](https://developer.apple.com/account/resources/authkeys/list) — requires paid membership).
+5. **Service account:** Project settings → Service accounts → Generate new private key → enable **Firebase Cloud Messaging API** in Google Cloud if prompted.
+6. On the notify server (`server/env.example`):
+   - `FCM_SERVICE_ACCOUNT_PATH=/path/to/service-account.json`, or
+   - `FCM_SERVICE_ACCOUNT_JSON='{"type":"service_account",...}'`
 
-Run `npm run db:migrate` (or restart the server so `push_device_token` is created).
+Run `npm run db:migrate` (or restart the server so `push_device_token` exists).
 
-### iOS Xcode
+Save-summary emails are **debounced** and only sent when workbook fields actually change; the **7am** cron (`REMINDER_CRON_*`) is unchanged.
 
-- **Push Notifications** capability should be on via `App/App.entitlements` (`aps-environment`).
-- For TestFlight/App Store builds, switch `aps-environment` to `production` or use separate entitlements per configuration.
+### iOS Xcode (push capability)
+
+- For **paid** Apple Developer: set `App/App.entitlements` to `aps-environment` = `development` (USB debug) or `production` (TestFlight/App Store).
+- Add `remote-notification` under **UIBackgroundModes** in `Info.plist` if missing.
+- **Free personal team:** Xcode cannot enable push; the app installs without `aps-environment` and **Enable on this device** on iPhone will not deliver real pushes until you use a paid team.
 
 ### Android
 
 - `POST_NOTIFICATIONS` is declared; Android 13+ shows a runtime permission (handled by the Capacitor plugin).
 - Without `google-services.json`, the app builds but **push registration on Android will fail**.
+- **`google-services.json` is gitignored** — keep your copy in `android/app/` only (not the repo root).
+
+### Samsung duplicate app icon
+
+If two **Our Finance** icons appear (one with a dual-app badge), our install script removes clones on secondary Android users. Long-press the extra icon → **Remove**, or uninstall via Settings. Dual Messenger does not list Our Finance; the duplicate is usually a **clone user** or **home-screen shortcut**, not a second Firebase app.
 
 ## Workflow reminder
 

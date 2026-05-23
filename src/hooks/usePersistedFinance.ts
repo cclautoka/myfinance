@@ -474,17 +474,19 @@ export function usePersistedFinance() {
       notifyWindowFromRef.current = null;
 
       const digest = buildSaveEmailDigest(from, latest);
-      const mk = currentMonthKey();
-      const pocket = pocketLeftSoFar(latest);
-      void postNotifyRelay('', { digest, monthKey: mk, pocketLeft: pocket }).then((r) => {
-        if (!r.ok) {
-          if (typeof console !== 'undefined') console.warn('[notify relay]', r.error);
-          pushToast({
-            type: 'error',
-            message: `Change summary email failed: ${r.error}`.slice(0, 240),
-          });
-        }
-      });
+      if (digest) {
+        const mk = currentMonthKey();
+        const pocket = pocketLeftSoFar(latest);
+        void postNotifyRelay('', { digest, monthKey: mk, pocketLeft: pocket }).then((r) => {
+          if (!r.ok) {
+            if (typeof console !== 'undefined') console.warn('[notify relay]', r.error);
+            pushToast({
+              type: 'error',
+              message: `Change summary email failed: ${r.error}`.slice(0, 240),
+            });
+          }
+        });
+      }
       void postSnapshotRelay(buildSnapshotForReminders(latest)).then((r) => {
         if (!r.ok) {
           if (typeof console !== 'undefined') console.warn('[notify relay snapshot]', r.error);

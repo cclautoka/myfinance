@@ -25,6 +25,13 @@ export function isNativePushAvailable(): boolean {
   return Capacitor.isNativePlatform();
 }
 
+/** Android needs android/app/google-services.json or Firebase crashes on register(). */
+export function isNativePushRegistrationReady(): boolean {
+  if (!isNativePushAvailable()) return false;
+  if (Capacitor.getPlatform() === 'android' && !__ANDROID_PUSH_READY__) return false;
+  return true;
+}
+
 function nativePlatform(): 'ios' | 'android' {
   return Capacitor.getPlatform() === 'android' ? 'android' : 'ios';
 }
@@ -33,6 +40,11 @@ function nativePlatform(): 'ios' | 'android' {
 export async function enableNativePush(): Promise<void> {
   if (!isNativePushAvailable()) {
     throw new Error('Push notifications are only available in the iOS and Android app.');
+  }
+  if (!isNativePushRegistrationReady()) {
+    throw new Error(
+      'Android push is not set up in this build (missing google-services.json). Add Firebase config under android/app/ and rebuild — see docs/capacitor.md.',
+    );
   }
 
   let perm = await PushNotifications.checkPermissions();

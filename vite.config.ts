@@ -1,5 +1,6 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import { existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { defineConfig } from 'vite';
 
@@ -42,5 +43,8 @@ export default defineConfig({
         })(),
     ),
     __BUILD_TIME_ISO__: JSON.stringify(new Date().toISOString()),
+    __ANDROID_PUSH_READY__: JSON.stringify(
+      existsSync('android/app/google-services.json'),
+    ),
   },
 });

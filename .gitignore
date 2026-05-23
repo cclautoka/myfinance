@@ -18,6 +18,11 @@ dist-ssr
 server/public
 server/data/
 
+# Firebase (never commit — download per environment)
+google-services.json
+**/google-services.json
+!**/google-services.json.example
+
 # Capacitor / native
 android/.gradle/
 android/.idea/

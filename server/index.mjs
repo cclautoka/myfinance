@@ -1539,6 +1539,19 @@ fastify.post('/v1/notify', async (request, reply) => {
       .send({ error: 'Body must include a valid "digest" (version: 1) or a non-empty "summary" string.' });
   }
 
+  const digestHasChanges =
+    digest &&
+    digest.sections?.some(
+      (sec) =>
+        (sec.items?.length ?? 0) > 0 &&
+        sec.heading !== 'This month (cash snapshot)' &&
+        !String(sec.heading ?? '').includes('horizon'),
+    );
+  const isTestSubject = typeof body?.subject === 'string' && body.subject.toLowerCase().includes('test');
+  if (digest && !digestHasChanges && !summary && !isTestSubject) {
+    return reply.send({ ok: true, skipped: true, reason: 'no_workbook_changes' });
+  }
+
   const monthKey =
     digest?.monthKey ??
     (typeof body?.monthKey === 'string' && body.monthKey.trim() ? body.monthKey.trim().slice(0, 16) : 'this month');
