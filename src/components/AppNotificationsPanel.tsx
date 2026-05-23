@@ -54,10 +54,14 @@ export function AppNotificationsPanel({
   const isOwner = readHouseholdSession()?.role === 'owner';
 
   const refresh = useCallback(async () => {
-    const [s, d] = await Promise.all([fetchPushStatus(), fetchPushDevices()]);
-    setStatus(s);
-    setDevices(d);
-    setLocalToken(readStoredPushToken());
+    try {
+      const [s, d] = await Promise.all([fetchPushStatus(), fetchPushDevices()]);
+      setStatus(s);
+      setDevices(d);
+      setLocalToken(readStoredPushToken());
+    } catch (e) {
+      pushToast({ type: 'error', message: String((e as Error)?.message ?? e) });
+    }
   }, []);
 
   useEffect(() => {

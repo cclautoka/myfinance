@@ -146,10 +146,21 @@ const origins = (process.env.NOTIFY_CORS_ORIGINS ?? '')
   .map((s) => s.trim())
   .filter(Boolean);
 
+/** Capacitor WebView origins (when hostname is not set to the API host). */
+const NATIVE_APP_ORIGINS = new Set([
+  'https://localhost',
+  'http://localhost',
+  'capacitor://localhost',
+  'ionic://localhost',
+  'https://finance.solofi.cloud',
+  'http://finance.solofi.cloud',
+]);
+
 await fastify.register(cors, {
   origin: (origin, cb) => {
-    if (origins.length === 0) return cb(null, true);
     if (!origin) return cb(null, true);
+    if (NATIVE_APP_ORIGINS.has(origin)) return cb(null, true);
+    if (origins.length === 0) return cb(null, true);
     if (origins.includes(origin)) return cb(null, true);
     return cb(null, false);
   },

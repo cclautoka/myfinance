@@ -24,6 +24,7 @@ COPY server/reminders.mjs ./reminders.mjs
 COPY server/mail.mjs ./mail.mjs
 COPY server/notifyEmails.mjs ./notifyEmails.mjs
 COPY server/reminderSend.mjs ./reminderSend.mjs
+COPY server/pushSend.mjs ./pushSend.mjs
 COPY server/reminderCron.mjs ./reminderCron.mjs
 COPY server/scripts/db-migrate.mjs ./scripts/db-migrate.mjs
 COPY --from=frontend-build /web/dist ./public

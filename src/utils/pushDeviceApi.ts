@@ -1,3 +1,4 @@
+import { householdApiFetch } from './householdApiFetch';
 import { apiBaseFromNotifyUrl, readNotifyRelayConfig } from './notifyRelayConfig';
 import { readHouseholdSession } from './householdSession';
 
@@ -37,9 +38,10 @@ export async function fetchPushStatus(): Promise<PushStatus | null> {
   const sess = readHouseholdSession();
   const base = apiBase();
   if (!sess?.token || !sess.householdId || !base) return null;
-  const res = await fetch(`${base}/v1/household/push/status?id=${encodeURIComponent(sess.householdId)}`, {
-    headers: authHeaders(),
-  });
+  const res = await householdApiFetch(
+    `/v1/household/push/status?id=${encodeURIComponent(sess.householdId)}`,
+    { headers: authHeaders() },
+  );
   if (!res.ok) return null;
   const j = (await res.json()) as PushStatus & { ok?: boolean };
   return {
@@ -65,7 +67,7 @@ export async function fetchPushDevices(): Promise<PushDeviceRow[]> {
   })();
   const q = new URLSearchParams({ id: sess.householdId });
   if (storedToken) q.set('currentToken', storedToken);
-  const res = await fetch(`${base}/v1/household/push/devices?${q}`, { headers: authHeaders() });
+  const res = await householdApiFetch(`/v1/household/push/devices?${q}`, { headers: authHeaders() });
   if (!res.ok) return [];
   const j = (await res.json()) as { devices?: PushDeviceRow[] };
   return j.devices ?? [];
@@ -75,11 +77,14 @@ export async function revokePushDevice(deviceId: string): Promise<void> {
   const sess = readHouseholdSession();
   const base = apiBase();
   if (!sess?.householdId || !base) throw new Error('API not available.');
-  const res = await fetch(`${base}/v1/household/push/devices/revoke?id=${encodeURIComponent(sess.householdId)}`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify({ deviceId }),
-  });
+  const res = await householdApiFetch(
+    `/v1/household/push/devices/revoke?id=${encodeURIComponent(sess.householdId)}`,
+    {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ deviceId }),
+    },
+  );
   const text = await res.text();
   let j: { error?: string } = {};
   try {
@@ -94,7 +99,7 @@ export async function registerPushToken(token: string, platform: 'ios' | 'androi
   const sess = readHouseholdSession();
   const base = apiBase();
   if (!sess?.householdId || !base) throw new Error('API not available.');
-  const res = await fetch(`${base}/v1/household/push/register?id=${encodeURIComponent(sess.householdId)}`, {
+  const res = await householdApiFetch(`/v1/household/push/register?id=${encodeURIComponent(sess.householdId)}`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({ token, platform }),
@@ -113,7 +118,7 @@ export async function unregisterPushToken(token?: string): Promise<void> {
   const sess = readHouseholdSession();
   const base = apiBase();
   if (!sess?.householdId || !base) return;
-  const res = await fetch(`${base}/v1/household/push/unregister?id=${encodeURIComponent(sess.householdId)}`, {
+  const res = await householdApiFetch(`/v1/household/push/unregister?id=${encodeURIComponent(sess.householdId)}`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(token ? { token } : {}),
@@ -128,7 +133,7 @@ export async function sendTestPush(): Promise<{ sent?: number; failed?: number }
   const sess = readHouseholdSession();
   const base = apiBase();
   if (!sess?.householdId || !base) throw new Error('API not available.');
-  const res = await fetch(`${base}/v1/household/push/test?id=${encodeURIComponent(sess.householdId)}`, {
+  const res = await householdApiFetch(`/v1/household/push/test?id=${encodeURIComponent(sess.householdId)}`, {
     method: 'POST',
     headers: authHeaders(),
   });
