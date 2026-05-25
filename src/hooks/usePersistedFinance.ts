@@ -89,6 +89,8 @@ export function usePersistedFinance() {
   const lastSyncedStateHashRef = useRef<string>(hashFinanceState(loadFinanceState()));
   const pollInFlightRef = useRef(false);
   const serverSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Block debounced PUT until first server hydration finishes (avoids stale local overwriting server). */
+  const serverHydratedRef = useRef(false);
 
   useEffect(() => {
     stateRef.current = state;
@@ -100,10 +102,8 @@ export function usePersistedFinance() {
     setSyncConflict(false);
   }, []);
 
-  const isClientDirty = useCallback(() => {
-    if (serverSaveRef.current !== null) return true;
-    return hashFinanceState(stateRef.current) !== lastSyncedStateHashRef.current;
-  }, []);
+  /** Only block auto-pull when a user edit is waiting to upload — not auto paycheque log churn. */
+  const isClientDirty = useCallback(() => serverSaveRef.current !== null, []);
 
   const applyRemoteState = useCallback(
     (remoteState: FinanceState, updatedAt: string, opts?: { toast?: boolean }) => {
@@ -131,12 +131,17 @@ export function usePersistedFinance() {
     if (!cfg.enabled) return;
 
     let cancelled = false;
+    serverHydratedRef.current = false;
     setIsServerSyncing(true);
     (async () => {
       try {
         const remote = await fetchServerFinanceState();
         if (cancelled) return;
         if (remote.ok) {
+          if (serverSaveRef.current !== null) {
+            clearTimeout(serverSaveRef.current);
+            serverSaveRef.current = null;
+          }
           applyRemoteState(remote.state, remote.updatedAt);
           const relayCfg = readNotifyRelayConfig();
           if (relayCfg.enabled && relayCfg.url && serverAuthBearer()) {
@@ -150,6 +155,7 @@ export function usePersistedFinance() {
       } catch {
         /* offline / ignore */
       } finally {
+        serverHydratedRef.current = true;
         if (!cancelled) setIsServerSyncing(false);
       }
     })();
@@ -230,7 +236,7 @@ export function usePersistedFinance() {
     document.addEventListener('visibilitychange', onVis);
     const interval = window.setInterval(() => {
       if (document.visibilityState === 'visible') run();
-    }, 25_000);
+    }, 12_000);
 
     return () => {
       window.removeEventListener('focus', onFocus);
@@ -269,6 +275,7 @@ export function usePersistedFinance() {
     if (!readHouseholdSession()?.token) return;
     const cfg = getServerStorageConfig();
     if (!cfg.enabled) return;
+    if (!serverHydratedRef.current) return;
     if (skipNextServerSaveRef.current) {
       skipNextServerSaveRef.current = false;
       return;
@@ -283,32 +290,40 @@ export function usePersistedFinance() {
     };
   }, [state, flushServerSave]);
 
-  /** Push pending server save when leaving the tab (faster cross-device sync). */
+  /** Flush only a pending user save when leaving the tab — never push stale cache on blur. */
   useEffect(() => {
     const onVis = () => {
-      if (document.visibilityState === 'hidden') void flushServerSave();
+      if (document.visibilityState === 'hidden' && serverSaveRef.current !== null) {
+        void flushServerSave();
+      }
     };
     document.addEventListener('visibilitychange', onVis);
     return () => document.removeEventListener('visibilitychange', onVis);
   }, [flushServerSave]);
 
-  /** Re-check wife biweekly auto-log when the tab regains focus so a Thursday-afternoon hit appears without full reload. */
+  /** Re-check wife biweekly auto-log when the tab regains focus (after server poll). */
   useEffect(() => {
-    const run = () =>
+    const runAutoLog = () =>
       setState((s) => {
         const next = applyAutoScheduledPayLogs(s, new Date());
         return next.incomeLog === s.incomeLog ? s : next;
       });
-    run();
-    const onFocus = () => run();
-    const onVis = () => document.visibilityState === 'visible' && run();
+    runAutoLog();
+    const onFocus = () => {
+      void checkRemoteAndMaybeApply().finally(() => runAutoLog());
+    };
+    const onVis = () => {
+      if (document.visibilityState === 'visible') {
+        void checkRemoteAndMaybeApply().finally(() => runAutoLog());
+      }
+    };
     window.addEventListener('focus', onFocus);
     document.addEventListener('visibilitychange', onVis);
     return () => {
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVis);
     };
-  }, []);
+  }, [checkRemoteAndMaybeApply]);
 
   const update = useCallback((patch: Partial<FinanceState>) => {
     setState((s) => ({ ...s, ...patch }));

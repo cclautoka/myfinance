@@ -284,8 +284,11 @@ export const getServerStorageConfig = (
   const secretOk = Boolean((cfg.secret ?? '').trim());
   const canAuth = secretOk || sessionOk;
   const ready = Boolean(url) && Boolean(householdId) && canAuth;
+  // Signed-in households always sync to server; notify toggle only gates email relay.
+  const syncOn =
+    opts?.force === true || Boolean(cfg.enabled) || sessionOk;
   return {
-    enabled: (opts?.force ? true : Boolean(cfg.enabled)) && ready,
+    enabled: ready && syncOn,
     baseUrl,
     secret: cfg.secret,
     householdId,
