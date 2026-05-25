@@ -107,7 +107,7 @@ export function renderEmailHtml({
                 <div style="font-weight: 900;">Tip</div>
                 <div style="margin-top: 6px; color:#334155; line-height: 1.55;">${escapeHtml(
                   footerHint ??
-                    'This email is a heads-up. The full workbook still lives in your browser. Open the app to see details.',
+                    'This email is a heads-up. Your workbook syncs to the household server — open the app on any device for details.',
                 )}</div>
               </div>
               <div style="margin-top: 14px; font-size: 12px; color: #6B7280;">

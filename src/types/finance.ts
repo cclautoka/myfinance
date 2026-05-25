@@ -1,5 +1,12 @@
 export type ThemePreference = 'light' | 'dark' | 'system';
 
+export type BillPaymentAttribution = {
+  role: 'owner' | 'partner';
+  memberEmail?: string;
+  platform: 'web' | 'ios' | 'android';
+  at: string;
+};
+
 /** Matches how usual pay relates to Household “monthly” — used only for cheque / OT hints. */
 export type PaySchedule = 'weekly' | 'biweekly' | 'monthly';
 
@@ -180,6 +187,8 @@ export interface FinanceState {
   billsPaid: Record<string, string[]>;
   /** billId -> payment-key (aligned with checklist toggles, see billPaymentKey) -> amount actually paid */
   billPaidAmounts: Record<string, Record<string, number>>;
+  /** Who marked each bill occurrence handled (synced with server state). */
+  billPaymentAttribution?: Record<string, Record<string, BillPaymentAttribution>>;
   /**
    * For auto-deduction bills: months the household tapped “Undo handled” so we do not keep
    * re-applying the automatic checkmark on every visit.

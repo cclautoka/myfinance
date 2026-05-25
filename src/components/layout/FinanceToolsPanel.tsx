@@ -18,7 +18,7 @@ export function FinanceToolsPanel({
   onRequestReset: () => void;
 }) {
   return (
-    <div id="finance-manage" data-tour="tour-manage" className="space-y-8">
+    <div className="space-y-8">
       <section aria-labelledby="tools-household-heading" className="space-y-3">
         <h3 id="tools-household-heading" className="font-display text-base font-bold text-sage-900 dark:text-moss-fg">
           Household &amp; sync

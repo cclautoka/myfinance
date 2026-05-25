@@ -20,6 +20,9 @@ import { LifeThisMonth } from './components/LifeThisMonth';
 import { HistoryMonthBanner } from './components/HistoryMonthBanner';
 import { AppPrimaryTabs, type AppTab } from './components/layout/AppPrimaryTabs';
 import { FinanceToolsPanel } from './components/layout/FinanceToolsPanel';
+import { FinanceToolsShell, type ToolsTabSelection } from './components/layout/FinanceToolsShell';
+import { AuditLogPanel } from './components/AuditLogPanel';
+import { SyncConflictBanner } from './components/SyncConflictBanner';
 import { MobileBottomNav } from './components/layout/MobileBottomNav';
 import { FinanceWorkspaceShell, type WorkspaceTabSelection } from './components/layout/FinanceWorkspaceShell';
 import { PageSection } from './components/layout/PageSection';
@@ -62,6 +65,9 @@ import { apiBaseFromNotifyUrl, readNotifyRelayConfig } from './utils/notifyRelay
 const PaymentsLifetimePanel = lazy(() =>
   import('./components/PaymentsLifetimePanel').then((m) => ({ default: m.PaymentsLifetimePanel })),
 );
+const HouseholdContributionPanel = lazy(() =>
+  import('./components/HouseholdContributionPanel').then((m) => ({ default: m.HouseholdContributionPanel })),
+);
 const DebtSnowball = lazy(() => import('./components/DebtSnowball').then((m) => ({ default: m.DebtSnowball })));
 const AllocationPanel = lazy(() =>
   import('./components/AllocationPanel').then((m) => ({ default: m.AllocationPanel })),
@@ -93,6 +99,7 @@ export function AuthenticatedFinanceApp() {
   const [timelineColumnSpotlight, setTimelineColumnSpotlight] = useState(false);
   const [appTab, setAppTab] = useState<AppTab>('dashboard');
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTabSelection>(null);
+  const [toolsTab, setToolsTab] = useState<ToolsTabSelection>('sync');
   const [focusedMonthKey, setFocusedMonthKey] = useState(() => {
     const keys = historySelectableMonthKeys();
     return keys[0] ?? HISTORY_EARLIEST_MONTH_KEY;
@@ -134,6 +141,8 @@ export function AuthenticatedFinanceApp() {
   const {
     state,
     isServerSyncing,
+    syncConflict,
+    dismissSyncConflict,
     update,
     setTheme,
     setWallets,
@@ -405,6 +414,12 @@ export function AuthenticatedFinanceApp() {
         serverSyncing={isServerSyncing}
       />
       <AppPrimaryTabs value={appTab} onChange={handleMobileAppTabChange} />
+      {syncConflict ? (
+        <SyncConflictBanner
+          onReloadFromServer={() => void reloadFromServer()}
+          onKeepLocal={dismissSyncConflict}
+        />
+      ) : null}
       {!monthOpeningBlocked ? (
         <MobileBottomNav appTab={appTab} onAppTabChange={handleMobileAppTabChange} />
       ) : null}
@@ -424,6 +439,9 @@ export function AuthenticatedFinanceApp() {
                 <div className="order-3 flex min-w-0 flex-col gap-8 lg:order-none lg:ml-[calc((100%-4rem)*3/12+2rem)] lg:mr-[calc((100%-4rem)*3/12+2rem)] lg:w-[calc((100%-4rem)*6/12)]">
                   <div data-tour="tour-dashboard-snapshot" className="min-w-0 space-y-8">
                     <DashboardOverview state={state} />
+                    <Suspense fallback={<ChartPanelSkeleton />}>
+                      <HouseholdContributionPanel state={state} />
+                    </Suspense>
                     <Suspense fallback={<ChartPanelSkeleton />}>
                       <PaymentsLifetimePanel state={state} />
                     </Suspense>
@@ -601,12 +619,21 @@ export function AuthenticatedFinanceApp() {
 
         {appTab === 'tools' ? (
           <div role="tabpanel" id="app-tabpanel-tools" aria-labelledby="app-tab-tools">
-            <FinanceToolsPanel
-              state={state}
-              onPatch={update}
-              onReloadFromServer={reloadFromServer}
-              onReplayTour={openTourReplay}
-              onRequestReset={() => setResetDialogOpen(true)}
+            <FinanceToolsShell
+              tab={toolsTab}
+              onTabChange={setToolsTab}
+              panels={{
+                sync: (
+                  <FinanceToolsPanel
+                    state={state}
+                    onPatch={update}
+                    onReloadFromServer={reloadFromServer}
+                    onReplayTour={openTourReplay}
+                    onRequestReset={() => setResetDialogOpen(true)}
+                  />
+                ),
+                audit: <AuditLogPanel />,
+              }}
             />
           </div>
         ) : null}

@@ -21,6 +21,7 @@ import {
   ensureNotifyRelayHouseholdId,
   readNotifyRelayConfig,
 } from '../utils/notifyRelayConfig';
+import { getClientPlatform } from '../utils/clientPlatform';
 import { clearHouseholdSession, readHouseholdSession } from '../utils/householdSession';
 import { serverAuthBearer } from '../utils/serverAuth';
 
@@ -165,6 +166,15 @@ const deepMerge = (base: FinanceState, partial: Partial<FinanceState>): FinanceS
   plannedPersonalMonthly:
     partial.plannedPersonalMonthly !== undefined ? partial.plannedPersonalMonthly : base.plannedPersonalMonthly,
   savingsGoals: partial.savingsGoals !== undefined ? partial.savingsGoals : base.savingsGoals,
+  billPaymentAttribution: (() => {
+    const b = { ...(base.billPaymentAttribution ?? {}) };
+    if (partial.billPaymentAttribution === undefined) return b;
+    const out: NonNullable<FinanceState['billPaymentAttribution']> = { ...b };
+    for (const [id, m] of Object.entries(partial.billPaymentAttribution)) {
+      out[id] = { ...(b[id] ?? {}), ...m };
+    }
+    return out;
+  })(),
 });
 
 /**
@@ -240,6 +250,13 @@ const normalizeLoadedState = (base: FinanceState, parsed?: Partial<FinanceState>
 
 export const SERVER_CACHE_KEY = 'finance-server-cache-v1';
 
+function serverRequestHeaders(): Record<string, string> {
+  return {
+    Authorization: `Bearer ${serverAuthBearer()}`,
+    'X-Client-Platform': getClientPlatform(),
+  };
+}
+
 export const getServerStorageConfig = (
   opts?: { force?: boolean },
 ): {
@@ -288,7 +305,7 @@ export const fetchServerFinanceState = async (
   const url = `${c.baseUrl}/v1/state?id=${encodeURIComponent(c.householdId)}`;
   const res = await fetch(url, {
     method: 'GET',
-    headers: { Authorization: `Bearer ${serverAuthBearer()}` },
+    headers: serverRequestHeaders(),
   });
   if (!res.ok) {
     const t = await res.text().catch(() => '');
@@ -302,6 +319,29 @@ export const fetchServerFinanceState = async (
   return { ok: true, state: normalized, updatedAt: String(j.updatedAt ?? '') };
 };
 
+export const fetchServerStateMeta = async (
+  opts?: { force?: boolean },
+): Promise<
+  | { ok: true; updatedAt: string | null; exists: boolean }
+  | { ok: false; status: number; error: string }
+> => {
+  const c = getServerStorageConfig(opts);
+  if (!c.enabled) return { ok: false, status: 0, error: 'Server storage not configured' };
+
+  const url = `${c.baseUrl}/v1/state/meta?id=${encodeURIComponent(c.householdId)}`;
+  const res = await fetch(url, { method: 'GET', headers: serverRequestHeaders() });
+  if (!res.ok) {
+    const t = await res.text().catch(() => '');
+    if (res.status === 401) clearHouseholdSession();
+    return { ok: false, status: res.status, error: t || res.statusText };
+  }
+  const j = (await res.json()) as { updatedAt?: string | null; exists?: boolean };
+  const raw = j.updatedAt;
+  const updatedAt =
+    raw === null || raw === undefined ? null : typeof raw === 'string' ? raw : String(raw);
+  return { ok: true, updatedAt, exists: Boolean(j.exists) };
+};
+
 export const putServerFinanceState = async (
   state: FinanceState,
   opts?: { force?: boolean },
@@ -311,7 +351,7 @@ export const putServerFinanceState = async (
   const url = `${c.baseUrl}/v1/state?id=${encodeURIComponent(c.householdId)}`;
   const res = await fetch(url, {
     method: 'PUT',
-    headers: { Authorization: `Bearer ${serverAuthBearer()}`, 'Content-Type': 'application/json' },
+    headers: { ...serverRequestHeaders(), 'Content-Type': 'application/json' },
     body: JSON.stringify({ state }),
   });
   if (!res.ok) {

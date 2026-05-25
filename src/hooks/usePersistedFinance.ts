@@ -2,11 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { defaultFinanceState } from '../data/defaults';
 import {
   fetchServerFinanceState,
+  fetchServerStateMeta,
   getServerStorageConfig,
   loadFinanceState,
   putServerFinanceState,
   saveFinanceState,
 } from '../data/storage';
+import { getClientPlatform } from '../utils/clientPlatform';
+import type { BillPaymentAttribution } from '../types/finance';
 import type {
   AllocationPercents,
   DebtAccount,
@@ -61,17 +64,60 @@ function notifyRelayCanSend(cfg: ReturnType<typeof readNotifyRelayConfig>): bool
   return Boolean(readHouseholdSession()?.token);
 }
 
+function serverTimeMs(iso: string | null | undefined): number {
+  if (!iso) return 0;
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? t : 0;
+}
+
+function isRemoteNewer(remoteAt: string | null, localAt: string | null): boolean {
+  if (!remoteAt) return false;
+  if (!localAt) return true;
+  return serverTimeMs(remoteAt) > serverTimeMs(localAt);
+}
+
 export function usePersistedFinance() {
   const [state, setState] = useState<FinanceState>(() => loadFinanceState());
   const [isServerSyncing, setIsServerSyncing] = useState(false);
+  const [syncConflict, setSyncConflict] = useState(false);
   const stateRef = useRef(state);
   /** Skip one debounced PUT right after hydrating from server (avoids redundant write-back on load). */
   const skipNextServerSaveRef = useRef(false);
   /** Skip arming notify debounce right after hydrate (avoids spurious email timer on login). */
   const skipNextNotifyRef = useRef(false);
+  const lastKnownServerUpdatedAtRef = useRef<string | null>(null);
+  const lastSyncedStateHashRef = useRef<string>(hashFinanceState(loadFinanceState()));
+  const pollInFlightRef = useRef(false);
+  const serverSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
+
+  const markServerSynced = useCallback((updatedAt: string, syncedState: FinanceState) => {
+    if (updatedAt) lastKnownServerUpdatedAtRef.current = updatedAt;
+    lastSyncedStateHashRef.current = hashFinanceState(syncedState);
+    setSyncConflict(false);
+  }, []);
+
+  const isClientDirty = useCallback(() => {
+    if (serverSaveRef.current !== null) return true;
+    return hashFinanceState(stateRef.current) !== lastSyncedStateHashRef.current;
+  }, []);
+
+  const applyRemoteState = useCallback(
+    (remoteState: FinanceState, updatedAt: string, opts?: { toast?: boolean }) => {
+      skipNextServerSaveRef.current = true;
+      skipNextNotifyRef.current = true;
+      setState(remoteState);
+      maybeMigrateLegacyHouseholdSetup(remoteState, readNotifyRelayConfig());
+      markServerSynced(updatedAt, remoteState);
+      if (opts?.toast) {
+        pushToast({ type: 'success', message: 'Synced with household.' });
+      }
+    },
+    [markServerSynced],
+  );
 
   useEffect(() => {
     if (!readHouseholdSession()?.token) return;
@@ -91,10 +137,7 @@ export function usePersistedFinance() {
         const remote = await fetchServerFinanceState();
         if (cancelled) return;
         if (remote.ok) {
-          skipNextServerSaveRef.current = true;
-          skipNextNotifyRef.current = true;
-          setState(remote.state);
-          maybeMigrateLegacyHouseholdSetup(remote.state, readNotifyRelayConfig());
+          applyRemoteState(remote.state, remote.updatedAt);
           const relayCfg = readNotifyRelayConfig();
           if (relayCfg.enabled && relayCfg.url && serverAuthBearer()) {
             void postSnapshotRelay(buildSnapshotForReminders(remote.state)).then((r) => {
@@ -115,7 +158,7 @@ export function usePersistedFinance() {
       cancelled = true;
       setIsServerSyncing(false);
     };
-  }, []);
+  }, [applyRemoteState]);
 
   const reloadFromServer = useCallback(async () => {
     const cfg = getServerStorageConfig({ force: true });
@@ -133,17 +176,95 @@ export function usePersistedFinance() {
       pushToast({ type: 'error', message: error });
       return { ok: false as const, error };
     }
-    skipNextServerSaveRef.current = true;
-    skipNextNotifyRef.current = true;
-    setState(remote.state);
-    maybeMigrateLegacyHouseholdSetup(remote.state, readNotifyRelayConfig());
+    applyRemoteState(remote.state, remote.updatedAt);
     pushToast({ type: 'success', message: 'Synced from server.' });
     return { ok: true as const, updatedAt: remote.updatedAt };
+  }, [applyRemoteState]);
+
+  const dismissSyncConflict = useCallback(() => {
+    setSyncConflict(false);
   }, []);
 
+  const checkRemoteAndMaybeApply = useCallback(async () => {
+    if (!readHouseholdSession()?.token) return;
+    const cfg = getServerStorageConfig();
+    if (!cfg.enabled || pollInFlightRef.current) return;
+
+    pollInFlightRef.current = true;
+    try {
+      const meta = await fetchServerStateMeta();
+      if (!meta.ok) return;
+      const remoteAt = meta.updatedAt;
+      const localAt = lastKnownServerUpdatedAtRef.current;
+      if (!isRemoteNewer(remoteAt, localAt)) return;
+
+      if (isClientDirty()) {
+        setSyncConflict(true);
+        return;
+      }
+
+      const remote = await fetchServerFinanceState();
+      if (!remote.ok) return;
+      if (!isRemoteNewer(remote.updatedAt, localAt)) return;
+      applyRemoteState(remote.state, remote.updatedAt, { toast: true });
+    } catch {
+      /* offline */
+    } finally {
+      pollInFlightRef.current = false;
+    }
+  }, [applyRemoteState, isClientDirty]);
+
+  /** Poll server version while tab is visible; apply when another device saved. */
+  useEffect(() => {
+    if (!readHouseholdSession()?.token) return;
+    const cfg = getServerStorageConfig();
+    if (!cfg.enabled) return;
+
+    const run = () => void checkRemoteAndMaybeApply();
+    run();
+    const onFocus = () => run();
+    const onVis = () => {
+      if (document.visibilityState === 'visible') run();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVis);
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') run();
+    }, 25_000);
+
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVis);
+      window.clearInterval(interval);
+    };
+  }, [checkRemoteAndMaybeApply]);
+
   /** Server persistence (debounced) — local cache is written in saveFinanceState above. */
-  const serverSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSaveErrorToastRef = useRef<{ message: string; at: number } | null>(null);
+
+  const flushServerSave = useCallback(async () => {
+    if (!readHouseholdSession()?.token) return;
+    const cfg = getServerStorageConfig();
+    if (!cfg.enabled) return;
+    if (serverSaveRef.current !== null) {
+      clearTimeout(serverSaveRef.current);
+      serverSaveRef.current = null;
+    }
+    const result = await putServerFinanceState(stateRef.current);
+    if (result.ok) {
+      lastSaveErrorToastRef.current = null;
+      markServerSynced(result.updatedAt, stateRef.current);
+      return;
+    }
+    const message = 'Could not save to server. Changes are stored on this device.';
+    const now = Date.now();
+    const prev = lastSaveErrorToastRef.current;
+    if (!prev || prev.message !== message || now - prev.at >= 10_000) {
+      lastSaveErrorToastRef.current = { message, at: now };
+      pushToast({ type: 'error', message });
+    }
+  }, [markServerSynced]);
+
   useEffect(() => {
     if (!readHouseholdSession()?.token) return;
     const cfg = getServerStorageConfig();
@@ -155,24 +276,21 @@ export function usePersistedFinance() {
     if (serverSaveRef.current !== null) clearTimeout(serverSaveRef.current);
     serverSaveRef.current = setTimeout(() => {
       serverSaveRef.current = null;
-      void (async () => {
-        const result = await putServerFinanceState(stateRef.current);
-        if (result.ok) {
-          lastSaveErrorToastRef.current = null;
-          return;
-        }
-        const message = 'Could not save to server. Changes are stored on this device.';
-        const now = Date.now();
-        const prev = lastSaveErrorToastRef.current;
-        if (prev && prev.message === message && now - prev.at < 10_000) return;
-        lastSaveErrorToastRef.current = { message, at: now };
-        pushToast({ type: 'error', message });
-      })();
-    }, 1500);
+      void flushServerSave();
+    }, 800);
     return () => {
       if (serverSaveRef.current !== null) clearTimeout(serverSaveRef.current);
     };
-  }, [state]);
+  }, [state, flushServerSave]);
+
+  /** Push pending server save when leaving the tab (faster cross-device sync). */
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === 'hidden') void flushServerSave();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [flushServerSave]);
 
   /** Re-check wife biweekly auto-log when the tab regains focus so a Thursday-afternoon hit appears without full reload. */
   useEffect(() => {
@@ -261,11 +379,30 @@ export function usePersistedFinance() {
       }
       billPaidAmounts[billId] = inner;
 
+      const billPaymentAttribution = { ...(s.billPaymentAttribution ?? {}) };
+      const attrInner = { ...(billPaymentAttribution[billId] ?? {}) };
+      if (wasPaid) {
+        delete attrInner[payKey];
+      } else {
+        const sess = readHouseholdSession();
+        const role = sess?.role === 'partner' ? 'partner' : 'owner';
+        const entry: BillPaymentAttribution = {
+          role,
+          memberEmail: sess?.email,
+          platform: getClientPlatform(),
+          at: new Date().toISOString(),
+        };
+        attrInner[payKey] = entry;
+      }
+      if (Object.keys(attrInner).length) billPaymentAttribution[billId] = attrInner;
+      else delete billPaymentAttribution[billId];
+
       return {
         ...s,
         billsPaid: { ...s.billsPaid, [billId]: [...cur] },
         billsAutoUnmarked,
         billPaidAmounts,
+        billPaymentAttribution,
       };
     });
     pushToast({
@@ -508,6 +645,9 @@ export function usePersistedFinance() {
   return {
     state,
     isServerSyncing,
+    syncConflict,
+    dismissSyncConflict,
+    reloadFromServer,
     update,
     setIncome,
     setEssentials,
@@ -531,6 +671,5 @@ export function usePersistedFinance() {
     setMonthSpendableCarry,
     completeMonthCashflowOpening,
     resetAll,
-    reloadFromServer,
   };
 }

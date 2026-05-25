@@ -153,6 +153,23 @@ export async function initDbIfNeeded(log) {
     `);
     await pool.query(`alter table household_pairing add column if not exists code_plain text;`);
     await pool.query(`alter table household_invite add column if not exists token_plain text;`);
+    await pool.query(`
+      create table if not exists household_audit_log (
+        id uuid primary key default gen_random_uuid(),
+        household_id text not null,
+        member_id uuid references household_member(id) on delete set null,
+        member_role text not null,
+        member_email text not null default '',
+        client_platform text not null default 'web',
+        summary text not null default '',
+        changes jsonb not null default '[]'::jsonb,
+        created_at timestamptz not null default now()
+      );
+    `);
+    await pool.query(`
+      create index if not exists household_audit_log_household_created_idx
+        on household_audit_log (household_id, created_at desc);
+    `);
     log?.info?.('Postgres ready (finance_state + household platform)');
   })();
   return initPromise;
@@ -200,6 +217,84 @@ export async function writeState(householdId, state) {
     [householdId],
   );
   return { updatedAt: r.rows[0].updated_at };
+}
+
+const MAX_AUDIT_CHANGES_BYTES = 48_000;
+
+export async function insertAuditLogEntry({
+  householdId,
+  memberId,
+  memberRole,
+  memberEmail,
+  clientPlatform,
+  summary,
+  changes,
+}) {
+  if (!pool) throw new Error('DB not initialized');
+  let changesJson = changes;
+  try {
+    const raw = JSON.stringify(changes);
+    if (raw.length > MAX_AUDIT_CHANGES_BYTES) {
+      changesJson = {
+        sections: [
+          {
+            heading: 'What changed',
+            body: 'Change detail too large to store; open the app for the full workbook.',
+          },
+        ],
+        truncated: true,
+      };
+    }
+  } catch {
+    changesJson = { sections: [], truncated: true };
+  }
+  const r = await pool.query(
+    `insert into household_audit_log
+       (household_id, member_id, member_role, member_email, client_platform, summary, changes)
+     values ($1, $2, $3, $4, $5, $6, $7::jsonb)
+     returning id, created_at`,
+    [
+      householdId,
+      memberId ?? null,
+      memberRole,
+      memberEmail ?? '',
+      clientPlatform,
+      summary ?? '',
+      JSON.stringify(changesJson),
+    ],
+  );
+  return { id: r.rows[0].id, createdAt: r.rows[0].created_at };
+}
+
+export async function listAuditLogForHousehold(householdId, { limit = 50, before = null } = {}) {
+  if (!pool) throw new Error('DB not initialized');
+  const lim = Math.min(Math.max(1, Number(limit) || 50), 100);
+  const params = [householdId];
+  let cursorSql = '';
+  if (before) {
+    params.push(before);
+    cursorSql = `and created_at < $${params.length}::timestamptz`;
+  }
+  params.push(lim);
+  const r = await pool.query(
+    `select id, household_id, member_id, member_role, member_email, client_platform, summary, changes, created_at
+     from household_audit_log
+     where household_id = $1 ${cursorSql}
+     order by created_at desc
+     limit $${params.length}`,
+    params,
+  );
+  return r.rows.map((row) => ({
+    id: row.id,
+    householdId: row.household_id,
+    memberId: row.member_id,
+    memberRole: row.member_role,
+    memberEmail: row.member_email,
+    clientPlatform: row.client_platform,
+    summary: row.summary,
+    changes: row.changes,
+    createdAt: row.created_at,
+  }));
 }
 
 /** --- Household auth (additive; no changes to finance_state shape) --- */

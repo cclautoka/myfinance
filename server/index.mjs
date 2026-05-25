@@ -71,7 +71,10 @@ import {
   listPushDevicesForHousehold,
   getPushDeviceById,
   deletePushDeviceById,
+  insertAuditLogEntry,
+  listAuditLogForHousehold,
 } from './db.mjs';
+import { auditSummaryFromDiff, computeFinanceStateDiff } from './financeStateDiff.mjs';
 import { isPushDeliveryConfigured, sendTestPushToMember } from './pushSend.mjs';
 import { hashPassword, verifyPassword } from './password.mjs';
 import { signFinanceSession, verifyFinanceSession } from './sessionToken.mjs';
@@ -566,6 +569,26 @@ function issueSessionToken(memberRow) {
   );
 }
 
+function parseClientPlatform(header) {
+  const raw = typeof header === 'string' ? header.trim().toLowerCase() : '';
+  if (raw === 'ios' || raw === 'android' || raw === 'web') return raw;
+  return 'web';
+}
+
+/** Session member for audit rows (null for legacy secret / hk_ bearer). */
+async function resolveSessionMemberForAudit(request, householdId) {
+  const sess = sessionSecret();
+  const bearer = parseBearer(request.headers.authorization ?? '');
+  if (!bearer.startsWith('fm_sess_') || sess.length < 16) return null;
+  const v = verifyFinanceSession(bearer, sess);
+  if (!v || v.householdId !== householdId) return null;
+  await initDbIfNeeded(request.log);
+  const member = await getMemberById(v.memberId);
+  if (!member || member.household_id !== householdId) return null;
+  if (emailVerificationRequired() && !member.email_verified_at) return null;
+  return member;
+}
+
 fastify.get('/v1/state/meta', async (request, reply) => {
   const id = getHouseholdIdFromRequest(request);
   if (!(await assertAuthorized(request, reply, id))) return;
@@ -598,8 +621,45 @@ fastify.put('/v1/state', async (request, reply) => {
   const body = request.body;
   const state = body?.state;
   if (!state || typeof state !== 'object') return reply.code(400).send({ error: 'Body must include "state" object.' });
+  const previous = await readState(id);
+  const platform = parseClientPlatform(request.headers['x-client-platform']);
   const r = await writeState(id, state);
+  const member = await resolveSessionMemberForAudit(request, id);
+  if (member) {
+    const from = previous?.state ?? buildEmptyFinanceState();
+    const diff = computeFinanceStateDiff(from, state);
+    const hasChange =
+      diff.sections?.some((s) => (s.items?.length ?? 0) > 0 || Boolean(s.body)) ||
+      JSON.stringify(from) !== JSON.stringify(state);
+    if (hasChange) {
+      try {
+        await insertAuditLogEntry({
+          householdId: id,
+          memberId: member.id,
+          memberRole: member.role,
+          memberEmail: member.email,
+          clientPlatform: platform,
+          summary: auditSummaryFromDiff(diff),
+          changes: diff,
+        });
+      } catch (err) {
+        request.log.warn({ err }, 'audit log insert failed');
+      }
+    }
+  }
   return reply.send({ ok: true, id, updatedAt: r.updatedAt });
+});
+
+fastify.get('/v1/audit', async (request, reply) => {
+  const id = getHouseholdIdFromRequest(request);
+  if (!(await assertAuthorized(request, reply, id))) return;
+  await initDbIfNeeded(request.log);
+  if (!getDbEnabled()) return reply.code(503).send({ error: 'DATABASE_URL is not set.' });
+  const q = request.query ?? {};
+  const limit = typeof q.limit === 'string' ? Number(q.limit) : 50;
+  const before = typeof q.before === 'string' && q.before.trim() ? q.before.trim() : null;
+  const entries = await listAuditLogForHousehold(id, { limit, before });
+  return reply.send({ ok: true, id, entries });
 });
 
 /** Public: register first owner for a household (no auth). */
