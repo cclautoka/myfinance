@@ -143,7 +143,7 @@ export function AuthenticatedFinanceApp() {
     state,
     isServerSyncing,
     syncConflict,
-    dismissSyncConflict,
+    forcePushLocalToServer,
     update,
     setTheme,
     setWallets,
@@ -436,7 +436,7 @@ export function AuthenticatedFinanceApp() {
       {syncConflict ? (
         <SyncConflictBanner
           onReloadFromServer={() => void reloadFromServer()}
-          onKeepLocal={dismissSyncConflict}
+          onSaveThisDevice={() => void forcePushLocalToServer()}
         />
       ) : null}
       {!monthOpeningBlocked ? (

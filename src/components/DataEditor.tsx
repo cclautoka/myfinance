@@ -27,6 +27,7 @@ import { HoverTip } from './ui/HoverTip';
 import { ListboxSelect } from './ui/ListboxSelect';
 import { SegmentedChoice } from './ui/SegmentedChoice';
 import { ScheduledPayAutomationFields } from './ScheduledPayAutomationFields';
+import { BlurCommittedInput } from './ui/BlurCommittedInput';
 import { pushToast } from '../ui/toast/toastBus';
 
 const PAY_SCHEDULE_SEGMENT: { id: PaySchedule; label: string }[] = [
@@ -311,10 +312,10 @@ export function DataEditor({
                 {state.essentials.map((ex) => (
                   <tr key={ex.id} className="border-t border-sage-200/80 dark:border-moss-border">
                     <td className="py-2 pr-2">
-                      <input
+                      <BlurCommittedInput
                         className="w-full min-w-[8rem] rounded border border-sage-300 bg-white px-2 py-1 dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
                         value={ex.name}
-                        onChange={(e) => patchEssential(ex.id, { name: e.target.value })}
+                        onCommit={(name) => patchEssential(ex.id, { name })}
                       />
                     </td>
                     <td className="py-2 pr-2">
@@ -471,10 +472,10 @@ export function DataEditor({
                       />
                     </td>
                     <td className="py-2 pr-2">
-                      <input
+                      <BlurCommittedInput
                         className="w-44 rounded border border-sage-300 bg-white px-2 py-1 dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
                         value={d.name}
-                        onChange={(e) => patchDebt(d.id, { name: e.target.value })}
+                        onCommit={(name) => patchDebt(d.id, { name })}
                       />
                     </td>
                     <td className="py-2 pr-2">

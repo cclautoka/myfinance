@@ -95,9 +95,13 @@
     min-width: 0;
     width: 100%;
   }
+  .cap-safe-x {
+    padding-left: max(15px, env(safe-area-inset-left, 0px));
+    padding-right: max(15px, env(safe-area-inset-right, 0px));
+  }
   html.cap-native .cap-safe-x {
-    padding-left: max(1rem, env(safe-area-inset-left, 0px));
-    padding-right: max(1rem, env(safe-area-inset-right, 0px));
+    padding-left: max(15px, env(safe-area-inset-left, 0px));
+    padding-right: max(15px, env(safe-area-inset-right, 0px));
   }
   html.cap-native .cap-safe-top {
     padding-top: max(env(safe-area-inset-top, 0px), var(--cap-safe-top, 0px));

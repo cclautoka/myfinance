@@ -603,6 +603,48 @@ fastify.get('/v1/state/meta', async (request, reply) => {
   });
 });
 
+function stateUpdatedAtMs(updatedAt) {
+  if (updatedAt == null) return 0;
+  const t = Date.parse(updatedAt instanceof Date ? updatedAt.toISOString() : String(updatedAt));
+  return Number.isFinite(t) ? t : 0;
+}
+
+/** Long-poll: returns when another client saves (updatedAt advances past `since`). */
+fastify.get('/v1/state/watch', async (request, reply) => {
+  const id = getHouseholdIdFromRequest(request);
+  if (!(await assertAuthorized(request, reply, id))) return;
+  await initDbIfNeeded(request.log);
+  if (!getDbEnabled()) return reply.code(503).send({ error: 'DATABASE_URL is not set.' });
+
+  const q = request.query ?? {};
+  const sinceRaw = typeof q.since === 'string' ? q.since.trim() : '';
+  const sinceMs = sinceRaw ? stateUpdatedAtMs(sinceRaw) : 0;
+  const waitSec = Math.min(60, Math.max(5, Number(q.wait) || 25));
+  const deadline = Date.now() + waitSec * 1000;
+  const pollMs = 400;
+
+  while (Date.now() < deadline) {
+    const existing = await readState(id);
+    if (!existing) {
+      return reply.send({ ok: true, id, exists: false, changed: false, updatedAt: null });
+    }
+    const at = existing.updatedAt;
+    if (stateUpdatedAtMs(at) > sinceMs) {
+      return reply.send({ ok: true, id, exists: true, changed: true, updatedAt: at });
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
+
+  const existing = await readState(id);
+  return reply.send({
+    ok: true,
+    id,
+    exists: Boolean(existing),
+    changed: false,
+    updatedAt: existing?.updatedAt ?? null,
+  });
+});
+
 fastify.get('/v1/state', async (request, reply) => {
   const id = getHouseholdIdFromRequest(request);
   if (!(await assertAuthorized(request, reply, id))) return;
@@ -622,6 +664,25 @@ fastify.put('/v1/state', async (request, reply) => {
   const state = body?.state;
   if (!state || typeof state !== 'object') return reply.code(400).send({ error: 'Body must include "state" object.' });
   const previous = await readState(id);
+  const baseUpdatedAt =
+    typeof body?.baseUpdatedAt === 'string' && body.baseUpdatedAt.trim()
+      ? body.baseUpdatedAt.trim()
+      : null;
+  const force = body?.force === true;
+  if (
+    !force &&
+    previous?.updatedAt &&
+    baseUpdatedAt &&
+    stateUpdatedAtMs(previous.updatedAt) > stateUpdatedAtMs(baseUpdatedAt)
+  ) {
+    return reply.code(409).send({
+      ok: false,
+      error: 'conflict',
+      id,
+      updatedAt: previous.updatedAt,
+      state: previous.state,
+    });
+  }
   const platform = parseClientPlatform(request.headers['x-client-platform']);
   const r = await writeState(id, state);
   const member = await resolveSessionMemberForAudit(request, id);

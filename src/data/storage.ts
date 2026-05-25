@@ -340,22 +340,77 @@ export const fetchServerStateMeta = async (
   return { ok: true, updatedAt, exists: Boolean(j.exists) };
 };
 
+const WATCH_WAIT_SEC = 25;
+
+/** Long-poll until server workbook version changes (for live cross-device sync). */
+export const watchServerStateChanges = async (
+  since: string | null,
+  opts?: { force?: boolean; signal?: AbortSignal },
+): Promise<
+  | { ok: true; changed: boolean; updatedAt: string | null; exists: boolean }
+  | { ok: false; status: number; error: string }
+> => {
+  const c = getServerStorageConfig(opts);
+  if (!c.enabled) return { ok: false, status: 0, error: 'Server storage not configured' };
+
+  const params = new URLSearchParams({
+    id: c.householdId,
+    wait: String(WATCH_WAIT_SEC),
+  });
+  if (since) params.set('since', since);
+
+  const path = `/v1/state/watch?${params}`;
+  const res = await householdApiFetch(path, {
+    method: 'GET',
+    headers: serverRequestHeaders(),
+    signal: opts?.signal,
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => '');
+    if (res.status === 401) clearHouseholdSession();
+    return { ok: false, status: res.status, error: t || res.statusText };
+  }
+  const j = (await res.json()) as {
+    changed?: boolean;
+    updatedAt?: string | null;
+    exists?: boolean;
+  };
+  const raw = j.updatedAt;
+  const updatedAt =
+    raw === null || raw === undefined ? null : typeof raw === 'string' ? raw : String(raw);
+  return {
+    ok: true,
+    changed: Boolean(j.changed),
+    updatedAt,
+    exists: Boolean(j.exists),
+  };
+};
+
 export const putServerFinanceState = async (
   state: FinanceState,
-  opts?: { force?: boolean },
-): Promise<{ ok: true; updatedAt: string } | { ok: false; status: number; error: string }> => {
+  opts?: { force?: boolean; baseUpdatedAt?: string | null },
+): Promise<
+  | { ok: true; updatedAt: string }
+  | { ok: false; status: number; error: string; conflict?: boolean }
+> => {
   const c = getServerStorageConfig(opts);
   if (!c.enabled) return { ok: false, status: 0, error: 'Server storage not configured' };
   const path = `/v1/state?id=${encodeURIComponent(c.householdId)}`;
+  const body: { state: FinanceState; baseUpdatedAt?: string; force?: boolean } = { state };
+  if (opts?.baseUpdatedAt) body.baseUpdatedAt = opts.baseUpdatedAt;
+  if (opts?.force) body.force = true;
   const res = await householdApiFetch(path, {
     method: 'PUT',
     headers: { ...serverRequestHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ state }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const t = await res.text().catch(() => '');
     if (res.status === 401) {
       clearHouseholdSession();
+    }
+    if (res.status === 409) {
+      return { ok: false, status: 409, error: 'Another device saved newer changes.', conflict: true };
     }
     return { ok: false, status: res.status, error: t || res.statusText };
   }
