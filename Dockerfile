@@ -19,6 +19,7 @@ COPY server/staticCache.mjs ./
 COPY server/templates.mjs ./templates.mjs
 COPY server/snapshots.mjs ./snapshots.mjs
 COPY server/db.mjs ./db.mjs
+COPY server/financeStateDiff.mjs ./financeStateDiff.mjs
 COPY server/emptyFinanceState.mjs ./emptyFinanceState.mjs
 COPY server/reminders.mjs ./reminders.mjs
 COPY server/mail.mjs ./mail.mjs
