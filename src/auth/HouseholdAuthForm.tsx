@@ -7,9 +7,11 @@ import {
   readNotifyRelayConfig,
   writeNotifyRelayConfig,
 } from '../utils/notifyRelayConfig';
-import { writeHouseholdSession } from '../utils/householdSession';
+import { readHouseholdSession, writeHouseholdSession } from '../utils/householdSession';
 import { HOUSEHOLD_MODE_KEY, type HouseholdMode } from '../utils/householdMode';
 import { clearLocalFinanceCache } from '../utils/clearLocalFinanceCache';
+import { bootstrapPublicApiConfig } from '../utils/publicApiBootstrap';
+import { clearHouseholdSetupCompletion } from '../setup/setupCompletion';
 import { generateHouseholdId } from '../utils/generateHouseholdId';
 import type { ThemePreference } from '../types/finance';
 import { FieldError } from '../components/ui/FieldError';
@@ -30,8 +32,16 @@ function finishAuth(
   onAuthed?: () => void | Promise<void>,
   opts?: { emailVerified?: boolean },
 ) {
+  const prevHid = readHouseholdSession()?.householdId?.trim();
   clearLocalFinanceCache();
-  if (member.householdId) setNotifyRelayHouseholdId(member.householdId);
+  bootstrapPublicApiConfig();
+  if (member.householdId) {
+    const nextHid = member.householdId.trim();
+    if (prevHid && prevHid !== nextHid) clearHouseholdSetupCompletion(prevHid);
+    setNotifyRelayHouseholdId(nextHid);
+    const cfg = readNotifyRelayConfig();
+    writeNotifyRelayConfig({ ...cfg, enabled: true, householdId: nextHid });
+  }
   writeHouseholdSession({
     token,
     householdId: member.householdId!,

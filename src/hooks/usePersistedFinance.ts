@@ -36,7 +36,7 @@ import {
 import { readHouseholdSession } from '../utils/householdSession';
 import { readNotifyRelayConfig } from '../utils/notifyRelayConfig';
 import { serverAuthBearer } from '../utils/serverAuth';
-import { maybeMigrateLegacyHouseholdSetup } from '../setup/setupCompletion';
+import { maybeMigrateLegacyHouseholdSetup, tryCompleteSetupFromServerState } from '../setup/setupCompletion';
 import { pushToast } from '../ui/toast/toastBus';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -78,7 +78,7 @@ function isRemoteNewer(remoteAt: string | null, localAt: string | null): boolean
 
 export function usePersistedFinance() {
   const [state, setState] = useState<FinanceState>(() => loadFinanceState());
-  const [isServerSyncing, setIsServerSyncing] = useState(false);
+  const [isServerSyncing, setIsServerSyncing] = useState(() => Boolean(readHouseholdSession()?.token));
   const [syncConflict, setSyncConflict] = useState(false);
   const stateRef = useRef(state);
   /** Skip one debounced PUT right after hydrating from server (avoids redundant write-back on load). */
@@ -110,7 +110,9 @@ export function usePersistedFinance() {
       skipNextServerSaveRef.current = true;
       skipNextNotifyRef.current = true;
       setState(remoteState);
-      maybeMigrateLegacyHouseholdSetup(remoteState, readNotifyRelayConfig());
+      const relayCfg = readNotifyRelayConfig();
+      maybeMigrateLegacyHouseholdSetup(remoteState, relayCfg);
+      tryCompleteSetupFromServerState(remoteState, relayCfg);
       markServerSynced(updatedAt, remoteState);
       if (opts?.toast) {
         pushToast({ type: 'success', message: 'Synced with household.' });
@@ -128,7 +130,11 @@ export function usePersistedFinance() {
   useEffect(() => {
     if (!readHouseholdSession()?.token) return;
     const cfg = getServerStorageConfig();
-    if (!cfg.enabled) return;
+    if (!cfg.enabled) {
+      serverHydratedRef.current = true;
+      setIsServerSyncing(false);
+      return;
+    }
 
     let cancelled = false;
     serverHydratedRef.current = false;

@@ -70,24 +70,34 @@ describe('setupCompletion', () => {
 
   it('migrates legacy workbook once mirrors pass', () => {
     const s = filledState();
-    expect(localStorage.getItem(HOUSEHOLD_SETUP_STORAGE_KEY)).toBeNull();
+    const key = `${HOUSEHOLD_SETUP_STORAGE_KEY}-${baseNotify.householdId}`;
+    expect(localStorage.getItem(key)).toBeNull();
     maybeMigrateLegacyHouseholdSetup(s, baseNotify);
-    expect(localStorage.getItem(HOUSEHOLD_SETUP_STORAGE_KEY)).not.toBeNull();
+    expect(localStorage.getItem(key)).not.toBeNull();
     expect(isHouseholdSetupComplete(s, baseNotify)).toBe(true);
   });
 
   it('completes with empty debts array', () => {
     const s = filledState();
-    markHouseholdSetupFinished();
+    markHouseholdSetupFinished(baseNotify.householdId);
     expect(isHouseholdSetupComplete(s, baseNotify)).toBe(true);
   });
 
   it('skips wizard when server already has couple income but no essentials', () => {
     const s = defaultFinanceState();
     s.income = { ...s.income, husbandMonthly: 1600, wifeMonthly: 1800 };
-    expect(localStorage.getItem(HOUSEHOLD_SETUP_STORAGE_KEY)).toBeNull();
+    const key = `${HOUSEHOLD_SETUP_STORAGE_KEY}-${baseNotify.householdId}`;
+    expect(localStorage.getItem(key)).toBeNull();
     expect(isHouseholdSetupComplete(s, baseNotify)).toBe(true);
-    expect(localStorage.getItem(HOUSEHOLD_SETUP_STORAGE_KEY)).not.toBeNull();
+    expect(localStorage.getItem(key)).not.toBeNull();
+  });
+
+  it('skips wizard for single-earner server state after localStorage was cleared', () => {
+    localStorage.removeItem(HOUSEHOLD_MODE_KEY);
+    const s = defaultFinanceState();
+    s.income = { ...s.income, husbandMonthly: 3200, wifeMonthly: 0 };
+    s.essentials = [{ id: 'e1', name: 'Rent', amount: 1200, cadence: 'month' as const, dueDay: 1 }];
+    expect(isHouseholdSetupComplete(s, baseNotify)).toBe(true);
   });
 });
 

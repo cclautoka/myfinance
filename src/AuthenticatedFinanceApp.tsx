@@ -50,8 +50,9 @@ import { HouseholdSetupWizard } from './setup/HouseholdSetupWizard';
 import {
   isHouseholdSetupComplete,
   readHouseholdSetupCompletion,
-  syncHouseholdSetupFromServerState,
+  tryCompleteSetupFromServerState,
 } from './setup/setupCompletion';
+import { WorkbookLoadScreen } from './components/WorkbookLoadScreen';
 import { zLayers } from './ui/zLayers';
 import { requiresMonthCashflowOpening } from './utils/monthOpening';
 import {
@@ -189,7 +190,7 @@ export function AuthenticatedFinanceApp() {
   useEffect(() => {
     const cfg = readNotifyRelayConfig();
     const hadCompletion = Boolean(readHouseholdSetupCompletion());
-    if (syncHouseholdSetupFromServerState(state, cfg) && !hadCompletion) {
+    if (tryCompleteSetupFromServerState(state, cfg) && !hadCompletion) {
       setSetupTick((n) => n + 1);
     }
   }, [state]);
@@ -349,6 +350,12 @@ export function AuthenticatedFinanceApp() {
         onTheme={setTheme}
         email={readHouseholdSession()?.email}
       />
+    );
+  }
+
+  if (!setupDone && isServerSyncing) {
+    return (
+      <WorkbookLoadScreen />
     );
   }
 

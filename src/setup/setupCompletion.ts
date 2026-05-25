@@ -1,7 +1,21 @@
 import type { FinanceState } from '../types/finance';
 import type { NotifyRelayConfig } from '../utils/notifyRelayConfig';
+import { readHouseholdSession } from '../utils/householdSession';
 import { HOUSEHOLD_MODE_KEY, type HouseholdMode } from '../utils/householdMode';
 import { HOUSEHOLD_SETUP_STORAGE_KEY, HOUSEHOLD_SETUP_VERSION } from './constants';
+
+function resolveHouseholdId(householdId?: string): string {
+  return (
+    householdId?.trim() ||
+    readHouseholdSession()?.householdId?.trim() ||
+    ''
+  );
+}
+
+function setupStorageKey(householdId?: string): string {
+  const hid = resolveHouseholdId(householdId);
+  return hid ? `${HOUSEHOLD_SETUP_STORAGE_KEY}-${hid}` : HOUSEHOLD_SETUP_STORAGE_KEY;
+}
 
 export type HouseholdSetupCompletion = {
   version: typeof HOUSEHOLD_SETUP_VERSION;
@@ -17,9 +31,23 @@ export function readHouseholdMode(): HouseholdMode {
   }
 }
 
-export function readHouseholdSetupCompletion(): HouseholdSetupCompletion | null {
+/** Prefer stored mode; infer from income when localStorage was cleared (e.g. fresh app install). */
+export function effectiveHouseholdMode(state: FinanceState): HouseholdMode {
   try {
-    const raw = localStorage.getItem(HOUSEHOLD_SETUP_STORAGE_KEY);
+    const v = localStorage.getItem(HOUSEHOLD_MODE_KEY);
+    if (v === 'single' || v === 'couple') return v;
+  } catch {
+    /* ignore */
+  }
+  const h = Number(state.income.husbandMonthly) || 0;
+  const w = Number(state.income.wifeMonthly) || 0;
+  if (h > 0 && w > 0) return 'couple';
+  return 'single';
+}
+
+export function readHouseholdSetupCompletion(householdId?: string): HouseholdSetupCompletion | null {
+  try {
+    const raw = localStorage.getItem(setupStorageKey(householdId));
     if (!raw) return null;
     const j = JSON.parse(raw) as Partial<HouseholdSetupCompletion & { noDebtsClaim?: boolean }>;
     if (j?.version !== HOUSEHOLD_SETUP_VERSION || typeof j.completedAt !== 'string') return null;
@@ -32,20 +60,24 @@ export function readHouseholdSetupCompletion(): HouseholdSetupCompletion | null 
   }
 }
 
-export function markHouseholdSetupFinished(): void {
+export function markHouseholdSetupFinished(householdId?: string): void {
   try {
     const next: HouseholdSetupCompletion = {
       version: HOUSEHOLD_SETUP_VERSION,
       completedAt: new Date().toISOString(),
     };
-    localStorage.setItem(HOUSEHOLD_SETUP_STORAGE_KEY, JSON.stringify(next));
+    localStorage.setItem(setupStorageKey(householdId), JSON.stringify(next));
+    // Legacy global key — remove so a different household is not treated as done.
+    localStorage.removeItem(HOUSEHOLD_SETUP_STORAGE_KEY);
   } catch {
     /* ignore */
   }
 }
 
-export function clearHouseholdSetupCompletion(): void {
+export function clearHouseholdSetupCompletion(householdId?: string): void {
   try {
+    const hid = resolveHouseholdId(householdId);
+    if (hid) localStorage.removeItem(setupStorageKey(hid));
     localStorage.removeItem(HOUSEHOLD_SETUP_STORAGE_KEY);
   } catch {
     /* ignore */
@@ -72,7 +104,7 @@ function incomeOk(mode: HouseholdMode, income: FinanceState['income']): boolean 
 
 /** Pre-wizard households: enough real data to skip the gate once (income + essentials only). */
 function legacyHouseholdLooksComplete(state: FinanceState, _cfg: NotifyRelayConfig): boolean {
-  const mode = readHouseholdMode();
+  const mode = effectiveHouseholdMode(state);
   if (!incomeOk(mode, state.income)) return false;
   if (essentialsBaselineTotal(state) <= 0) return false;
   return true;
@@ -82,9 +114,9 @@ function legacyHouseholdLooksComplete(state: FinanceState, _cfg: NotifyRelayConf
  * One-time: if user already had a filled workbook before the wizard existed, record completion.
  */
 export function maybeMigrateLegacyHouseholdSetup(state: FinanceState, cfg: NotifyRelayConfig): void {
-  if (readHouseholdSetupCompletion()) return;
+  if (readHouseholdSetupCompletion(cfg.householdId)) return;
   if (!legacyHouseholdLooksComplete(state, cfg)) return;
-  markHouseholdSetupFinished();
+  markHouseholdSetupFinished(cfg.householdId);
 }
 
 function notifyOk(cfg: NotifyRelayConfig): boolean {
@@ -104,9 +136,9 @@ function notifyOk(cfg: NotifyRelayConfig): boolean {
 export function householdSetupMirrorsComplete(
   state: FinanceState,
   cfg: NotifyRelayConfig,
-  _completion: HouseholdSetupCompletion | null = readHouseholdSetupCompletion(),
+  _completion: HouseholdSetupCompletion | null = readHouseholdSetupCompletion(cfg.householdId),
 ): boolean {
-  const mode = readHouseholdMode();
+  const mode = effectiveHouseholdMode(state);
   if (!incomeOk(mode, state.income)) return false;
   if (essentialsBaselineTotal(state) <= 0) return false;
   if (!notifyOk(cfg)) return false;
@@ -116,30 +148,30 @@ export function householdSetupMirrorsComplete(
 export function syncHouseholdSetupFromServerState(state: FinanceState, cfg: NotifyRelayConfig): boolean {
   maybeMigrateLegacyHouseholdSetup(state, cfg);
 
-  const completion = readHouseholdSetupCompletion();
+  const completion = readHouseholdSetupCompletion(cfg.householdId);
   if (completion) {
     return householdSetupMirrorsComplete(state, cfg, completion);
   }
 
-  const mode = readHouseholdMode();
+  const mode = effectiveHouseholdMode(state);
   if (!incomeOk(mode, state.income)) return false;
 
   const hasEssentials = essentialsBaselineTotal(state) > 0;
   const hasDebts = state.debts.length > 0;
   if (hasEssentials || hasDebts) {
-    markHouseholdSetupFinished();
-    const after = readHouseholdSetupCompletion();
+    markHouseholdSetupFinished(cfg.householdId);
+    const after = readHouseholdSetupCompletion(cfg.householdId);
     return Boolean(after && householdSetupMirrorsComplete(state, cfg, after));
   }
 
   if (mode === 'couple' && state.income.husbandMonthly > 0 && state.income.wifeMonthly > 0) {
-    markHouseholdSetupFinished();
+    markHouseholdSetupFinished(cfg.householdId);
     return true;
   }
   if (mode === 'single') {
     const top = Math.max(state.income.husbandMonthly, state.income.wifeMonthly);
     if (top > 0) {
-      markHouseholdSetupFinished();
+      markHouseholdSetupFinished(cfg.householdId);
       return true;
     }
   }
@@ -149,4 +181,11 @@ export function syncHouseholdSetupFromServerState(state: FinanceState, cfg: Noti
 
 export function isHouseholdSetupComplete(state: FinanceState, cfg: NotifyRelayConfig): boolean {
   return syncHouseholdSetupFromServerState(state, cfg);
+}
+
+/** After server hydration — record wizard done when workbook already exists on server. */
+export function tryCompleteSetupFromServerState(state: FinanceState, cfg: NotifyRelayConfig): boolean {
+  const ok = syncHouseholdSetupFromServerState(state, cfg);
+  if (ok) markHouseholdSetupFinished(cfg.householdId);
+  return ok;
 }
