@@ -168,7 +168,7 @@ await fastify.register(cors, {
     return cb(null, false);
   },
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Authorization', 'Content-Type'],
+  allowedHeaders: ['Authorization', 'Content-Type', 'X-Client-Platform'],
 });
 
 fastify.get('/health', async () => ({

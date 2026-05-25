@@ -22,7 +22,10 @@ import {
   readNotifyRelayConfig,
 } from '../utils/notifyRelayConfig';
 import { getClientPlatform } from '../utils/clientPlatform';
+import { householdApiFetch } from '../utils/householdApiFetch';
+import { resolveHouseholdApiBase } from '../utils/householdApiBase';
 import { clearHouseholdSession, readHouseholdSession } from '../utils/householdSession';
+import { resolveNotifyRelayUrl } from '../utils/notifyRelayConfig';
 import { serverAuthBearer } from '../utils/serverAuth';
 
 /** Older builds stored weekly essentials with YYYY-MM so one toggle checked every week in the month — remove those stubs. */
@@ -266,24 +269,16 @@ export const getServerStorageConfig = (
   householdId: string;
 } => {
   const cfg = readNotifyRelayConfig();
-  // We reuse the existing “notify relay” URL/secret as the shared secret for state endpoints.
-  // If url points at /v1/notify, compute base.
-  const url = (cfg.url ?? '').trim();
-  // Same-origin URLs like `/v1/notify` should yield an empty baseUrl so we can call `/v1/state` relatively.
-  const baseUrl = !url
-    ? ''
-    : url.startsWith('/')
-      ? ''
-      : url.endsWith('/v1/notify')
-        ? url.replace(/\/v1\/notify$/, '')
-        : url.replace(/\/$/, '');
+  const url = (cfg.url ?? '').trim() || resolveNotifyRelayUrl();
+  // Native builds must use absolute API host (Capacitor WebView origin is localhost).
+  const baseUrl = resolveHouseholdApiBase();
 
   const sess = readHouseholdSession();
   const householdId = (sess?.householdId?.trim() || ensureNotifyRelayHouseholdId());
   const sessionOk = Boolean(sess?.token && sess.householdId);
   const secretOk = Boolean((cfg.secret ?? '').trim());
   const canAuth = secretOk || sessionOk;
-  const ready = Boolean(url) && Boolean(householdId) && canAuth;
+  const ready = Boolean(baseUrl || url) && Boolean(householdId) && canAuth;
   // Signed-in households always sync to server; notify toggle only gates email relay.
   const syncOn =
     opts?.force === true || Boolean(cfg.enabled) || sessionOk;
@@ -305,8 +300,8 @@ export const fetchServerFinanceState = async (
   const c = getServerStorageConfig(opts);
   if (!c.enabled) return { ok: false, status: 0, error: 'Server storage not configured' };
 
-  const url = `${c.baseUrl}/v1/state?id=${encodeURIComponent(c.householdId)}`;
-  const res = await fetch(url, {
+  const path = `/v1/state?id=${encodeURIComponent(c.householdId)}`;
+  const res = await householdApiFetch(path, {
     method: 'GET',
     headers: serverRequestHeaders(),
   });
@@ -331,8 +326,8 @@ export const fetchServerStateMeta = async (
   const c = getServerStorageConfig(opts);
   if (!c.enabled) return { ok: false, status: 0, error: 'Server storage not configured' };
 
-  const url = `${c.baseUrl}/v1/state/meta?id=${encodeURIComponent(c.householdId)}`;
-  const res = await fetch(url, { method: 'GET', headers: serverRequestHeaders() });
+  const path = `/v1/state/meta?id=${encodeURIComponent(c.householdId)}`;
+  const res = await householdApiFetch(path, { method: 'GET', headers: serverRequestHeaders() });
   if (!res.ok) {
     const t = await res.text().catch(() => '');
     if (res.status === 401) clearHouseholdSession();
@@ -351,8 +346,8 @@ export const putServerFinanceState = async (
 ): Promise<{ ok: true; updatedAt: string } | { ok: false; status: number; error: string }> => {
   const c = getServerStorageConfig(opts);
   if (!c.enabled) return { ok: false, status: 0, error: 'Server storage not configured' };
-  const url = `${c.baseUrl}/v1/state?id=${encodeURIComponent(c.householdId)}`;
-  const res = await fetch(url, {
+  const path = `/v1/state?id=${encodeURIComponent(c.householdId)}`;
+  const res = await householdApiFetch(path, {
     method: 'PUT',
     headers: { ...serverRequestHeaders(), 'Content-Type': 'application/json' },
     body: JSON.stringify({ state }),

@@ -167,6 +167,8 @@ export function AuthenticatedFinanceApp() {
     setDebts,
     resetAll,
     reloadFromServer,
+    serverWorkbookExists,
+    serverHydrationError,
   } = usePersistedFinance();
 
   const monthOpeningBlocked = requiresMonthCashflowOpening(state);
@@ -282,10 +284,13 @@ export function AuthenticatedFinanceApp() {
 
   const notifyCfg = readNotifyRelayConfig();
   const setupDone = useMemo(
-    () => isHouseholdSetupComplete(state, readNotifyRelayConfig()),
+    () =>
+      isHouseholdSetupComplete(state, readNotifyRelayConfig(), {
+        serverWorkbookExists,
+      }),
     // setupTick: wizard completion writes localStorage; force re-check without a full state bump.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional
-    [state, setupTick],
+    [state, setupTick, serverWorkbookExists],
   );
   const needsVerifyGate = Boolean(apiBaseFromNotifyUrl(notifyCfg.url)) && !emailVerified;
 
@@ -354,8 +359,15 @@ export function AuthenticatedFinanceApp() {
   }
 
   if (!setupDone && isServerSyncing) {
+    return <WorkbookLoadScreen />;
+  }
+
+  if (!setupDone && serverHydrationError && !serverWorkbookExists) {
     return (
-      <WorkbookLoadScreen />
+      <WorkbookLoadScreen
+        error={serverHydrationError}
+        onRetry={() => void reloadFromServer().then(() => setSetupTick((n) => n + 1))}
+      />
     );
   }
 

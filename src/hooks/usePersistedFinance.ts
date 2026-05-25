@@ -36,7 +36,11 @@ import {
 import { readHouseholdSession } from '../utils/householdSession';
 import { readNotifyRelayConfig } from '../utils/notifyRelayConfig';
 import { serverAuthBearer } from '../utils/serverAuth';
-import { maybeMigrateLegacyHouseholdSetup, tryCompleteSetupFromServerState } from '../setup/setupCompletion';
+import {
+  markHouseholdSetupFinished,
+  maybeMigrateLegacyHouseholdSetup,
+  tryCompleteSetupFromServerState,
+} from '../setup/setupCompletion';
 import { pushToast } from '../ui/toast/toastBus';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -79,6 +83,8 @@ function isRemoteNewer(remoteAt: string | null, localAt: string | null): boolean
 export function usePersistedFinance() {
   const [state, setState] = useState<FinanceState>(() => loadFinanceState());
   const [isServerSyncing, setIsServerSyncing] = useState(() => Boolean(readHouseholdSession()?.token));
+  const [serverWorkbookExists, setServerWorkbookExists] = useState(false);
+  const [serverHydrationError, setServerHydrationError] = useState<string | null>(null);
   const [syncConflict, setSyncConflict] = useState(false);
   const stateRef = useRef(state);
   /** Skip one debounced PUT right after hydrating from server (avoids redundant write-back on load). */
@@ -139,11 +145,23 @@ export function usePersistedFinance() {
     let cancelled = false;
     serverHydratedRef.current = false;
     setIsServerSyncing(true);
+    setServerHydrationError(null);
+    setServerWorkbookExists(false);
     (async () => {
       try {
+        const meta = await fetchServerStateMeta();
+        if (cancelled) return;
+        if (meta.ok && meta.exists) {
+          setServerWorkbookExists(true);
+          const relayCfg = readNotifyRelayConfig();
+          markHouseholdSetupFinished(relayCfg.householdId);
+        }
+
         const remote = await fetchServerFinanceState();
         if (cancelled) return;
         if (remote.ok) {
+          setServerHydrationError(null);
+          setServerWorkbookExists(true);
           if (serverSaveRef.current !== null) {
             clearTimeout(serverSaveRef.current);
             serverSaveRef.current = null;
@@ -157,9 +175,27 @@ export function usePersistedFinance() {
               }
             });
           }
+        } else if (!remote.ok) {
+          const hasServerRow = meta.ok && meta.exists;
+          if (!hasServerRow) {
+            const err =
+              remote.status === 404
+                ? 'No saved workbook on the server for this household yet.'
+                : remote.error || 'Could not load your household from the server.';
+            setServerHydrationError(err);
+            if (typeof console !== 'undefined') console.warn('[server hydrate]', err);
+          } else {
+            pushToast({
+              type: 'error',
+              message:
+                'Workbook is on the server but could not load details. Pull to refresh or use Tools → Reload from server.',
+            });
+          }
         }
-      } catch {
-        /* offline / ignore */
+      } catch (e) {
+        const err = e instanceof Error ? e.message : String(e);
+        setServerHydrationError(err);
+        if (typeof console !== 'undefined') console.warn('[server hydrate]', err);
       } finally {
         serverHydratedRef.current = true;
         if (!cancelled) setIsServerSyncing(false);
@@ -669,6 +705,8 @@ export function usePersistedFinance() {
     syncConflict,
     dismissSyncConflict,
     reloadFromServer,
+    serverWorkbookExists,
+    serverHydrationError,
     update,
     setIncome,
     setEssentials,

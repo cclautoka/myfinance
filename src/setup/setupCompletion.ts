@@ -179,7 +179,12 @@ export function syncHouseholdSetupFromServerState(state: FinanceState, cfg: Noti
   return false;
 }
 
-export function isHouseholdSetupComplete(state: FinanceState, cfg: NotifyRelayConfig): boolean {
+export function isHouseholdSetupComplete(
+  state: FinanceState,
+  cfg: NotifyRelayConfig,
+  options?: { serverWorkbookExists?: boolean },
+): boolean {
+  if (options?.serverWorkbookExists) return true;
   return syncHouseholdSetupFromServerState(state, cfg);
 }
 
