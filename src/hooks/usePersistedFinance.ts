@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { defaultFinanceState } from '../data/defaults';
 import {
@@ -286,8 +287,11 @@ export function usePersistedFinance() {
     let stopped = false;
     let watchAbort = new AbortController();
 
+    const isActive = () =>
+      document.visibilityState === 'visible' || Capacitor.isNativePlatform();
+
     const pullIfVisible = () => {
-      if (stopped || document.visibilityState !== 'visible') return;
+      if (stopped || !isActive()) return;
       void checkRemoteAndMaybeApply();
     };
 
@@ -296,7 +300,7 @@ export function usePersistedFinance() {
       watchAbort = new AbortController();
       const signal = watchAbort.signal;
       void (async () => {
-        while (!stopped && document.visibilityState === 'visible' && !signal.aborted) {
+        while (!stopped && isActive() && !signal.aborted) {
           try {
             const w = await watchServerStateChanges(lastKnownServerUpdatedAtRef.current, { signal });
             if (stopped || signal.aborted) return;
@@ -321,15 +325,18 @@ export function usePersistedFinance() {
 
     const onFocus = () => pullIfVisible();
     const onVis = () => {
-      if (document.visibilityState === 'visible') {
+      if (isActive()) {
         pullIfVisible();
         startWatchLoop();
-      } else {
+      } else if (!Capacitor.isNativePlatform()) {
         stopWatchLoop();
       }
     };
     window.addEventListener('focus', onFocus);
     document.addEventListener('visibilitychange', onVis);
+    if (Capacitor.isNativePlatform()) {
+      window.addEventListener('pageshow', onFocus);
+    }
     const fastPoll = window.setInterval(pullIfVisible, 3000);
 
     return () => {
@@ -337,6 +344,9 @@ export function usePersistedFinance() {
       stopWatchLoop();
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVis);
+      if (Capacitor.isNativePlatform()) {
+        window.removeEventListener('pageshow', onFocus);
+      }
       window.clearInterval(fastPoll);
     };
   }, [checkRemoteAndMaybeApply]);
@@ -381,7 +391,9 @@ export function usePersistedFinance() {
           pushToast({ type: 'error', message: conflictMsg });
           return;
         }
-        const message = 'Could not save to server. Changes are stored on this device.';
+        const message = Capacitor.isNativePlatform()
+          ? 'Could not save to server (check Wi‑Fi and redeploy API with PUT allowed in CORS). Changes stay on this device.'
+          : 'Could not save to server. Changes are stored on this device.';
         const now = Date.now();
         const prev = lastSaveErrorToastRef.current;
         if (!prev || prev.message !== message || now - prev.at >= 10_000) {

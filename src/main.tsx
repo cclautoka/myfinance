@@ -6,6 +6,7 @@ import '@fontsource-variable/syne/wght.css';
 import './index.css';
 import App from './App.tsx';
 import { configureNativeSafeArea } from './native/configureNativeSafeArea';
+import { bootstrapPublicApiConfig } from './utils/publicApiBootstrap';
 
 /** Native WebView: clip horizontal overflow and tune layout (see index.css `.cap-native`). */
 if (Capacitor.isNativePlatform()) {
@@ -14,6 +15,7 @@ if (Capacitor.isNativePlatform()) {
     history.scrollRestoration = 'manual';
   }
   configureNativeSafeArea();
+  bootstrapPublicApiConfig();
 }
 import { preloadWorkbookModule } from './SignedInWorkbook';
 import { readHouseholdSession } from './utils/householdSession';

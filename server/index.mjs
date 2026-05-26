@@ -167,7 +167,7 @@ await fastify.register(cors, {
     if (origins.includes(origin)) return cb(null, true);
     return cb(null, false);
   },
-  methods: ['GET', 'POST', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'OPTIONS'],
   allowedHeaders: ['Authorization', 'Content-Type', 'X-Client-Platform'],
 });
 
