@@ -107,7 +107,7 @@ export function renderEmailHtml({
                 <div style="font-weight: 900;">Tip</div>
                 <div style="margin-top: 6px; color:#334155; line-height: 1.55;">${escapeHtml(
                   footerHint ??
-                    'This email is a heads-up. Your workbook syncs to the household server — open the app on any device for details.',
+                    'This is a quick summary only. Your full workbook syncs to the household server — open the app on web or your phone for details. Color theme stays on each device.',
                 )}</div>
               </div>
               <div style="margin-top: 14px; font-size: 12px; color: #6B7280;">
@@ -173,11 +173,11 @@ export function buildSaveEmailTemplate(digest) {
     typeof digest?.monthKey === 'string' && digest.monthKey.trim() ? digest.monthKey.trim().slice(0, 16) : 'this month';
   const pocketLeft = Number.isFinite(Number(digest?.pocketLeft)) ? Number(digest.pocketLeft) : 0;
   const planned = Number.isFinite(Number(digest?.plannedIncomeCombined)) ? Number(digest.plannedIncomeCombined) : 0;
-  const title = 'Update saved';
-  const preheader = `Saved ${monthKey}. Planned income ${fmtMoney(planned)} · Pocket left ${fmtMoney(pocketLeft)}.`;
+  const title = 'Your workbook was updated';
+  const preheader = `Changes saved for ${monthKey}. Planned income ${fmtMoney(planned)} · Pocket left ${fmtMoney(pocketLeft)}.`;
   const sections = Array.isArray(digest?.sections)
     ? digest.sections.map((s) => ({
-        heading: String(s.heading ?? 'Details').slice(0, 120),
+        heading: String(s.heading ?? 'Changes').replace(/^What changed$/i, 'Changes in your workbook').slice(0, 120),
         body: typeof s.body === 'string' ? s.body.slice(0, 8000) : undefined,
         items: Array.isArray(s.items)
           ? s.items.slice(0, 40).map((it) => ({

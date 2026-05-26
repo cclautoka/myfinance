@@ -121,13 +121,42 @@ function diffIdRows<T extends { id: string }>(
   }
 }
 
+function billLabel(state: FinanceState, billId: string): string {
+  const e = state.essentials.find((x) => x.id === billId);
+  if (e?.name) return e.name;
+  const d = state.debts.find((x) => x.id === billId);
+  if (d?.name) return d.name;
+  return billId;
+}
+
+function formatPeriodKey(key: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(key)) {
+    const [y, m, d] = key.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  }
+  if (/^\d{4}-\d{2}$/.test(key)) {
+    const [y, m] = key.split('-').map(Number);
+    return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  }
+  return key;
+}
+
 function diffBillsPaid(from: FinanceState, to: FinanceState, items: DigestListItem[]): void {
   const ids = new Set([...Object.keys(from.billsPaid ?? {}), ...Object.keys(to.billsPaid ?? {})]);
   for (const id of ids) {
-    const a = [...(from.billsPaid?.[id] ?? [])].sort().join(',');
-    const b = [...(to.billsPaid?.[id] ?? [])].sort().join(',');
-    if (a === b) continue;
-    pushItem(items, 'Bill checkmarks', `${id}: paid keys changed`, `${a || '—'} → ${b || '—'}`);
+    const aSet = new Set(from.billsPaid?.[id] ?? []);
+    const bSet = new Set(to.billsPaid?.[id] ?? []);
+    const name = billLabel(to, id);
+    for (const k of bSet) {
+      if (!aSet.has(k)) pushItem(items, 'Marked as handled', `${name} (${formatPeriodKey(k)})`);
+    }
+    for (const k of aSet) {
+      if (!bSet.has(k)) pushItem(items, 'Unmarked as handled', `${name} (${formatPeriodKey(k)})`);
+    }
   }
 }
 
@@ -146,7 +175,7 @@ function diffBillPaidAmounts(from: FinanceState, to: FinanceState, items: Digest
       pushItem(
         items,
         'Actual paid amount',
-        `${bid} · ${k}`,
+        `${billLabel(to, bid)} (${formatPeriodKey(k)})`,
         `${av === undefined ? '—' : money(av)} → ${bv === undefined ? '—' : money(bv)}`,
       );
     }
@@ -222,33 +251,35 @@ export function computeFinanceStateDiff(from: FinanceState, to: FinanceState): {
   sections: DigestSection[];
   truncated: boolean;
 } {
+  /** Theme is per-device; never diff or email-notify on appearance alone. */
+  const fromNorm = { ...from, theme: to.theme };
   const items: DigestListItem[] = [];
 
-  diffIncome(from.income, to.income, items);
+  diffIncome(fromNorm.income, to.income, items);
 
-  if (cmpNum(from.plannedSavingsMonthly, to.plannedSavingsMonthly))
-    pushItem(items, 'Plan dollars', `Planned savings / mo: ${money(from.plannedSavingsMonthly)} → ${money(to.plannedSavingsMonthly)}`);
-  if (cmpNum(from.plannedPersonalMonthly, to.plannedPersonalMonthly))
-    pushItem(items, 'Plan dollars', `Planned personal / mo: ${money(from.plannedPersonalMonthly)} → ${money(to.plannedPersonalMonthly)}`);
+  if (cmpNum(fromNorm.plannedSavingsMonthly, to.plannedSavingsMonthly))
+    pushItem(items, 'Plan dollars', `Planned savings / mo: ${money(fromNorm.plannedSavingsMonthly)} → ${money(to.plannedSavingsMonthly)}`);
+  if (cmpNum(fromNorm.plannedPersonalMonthly, to.plannedPersonalMonthly))
+    pushItem(items, 'Plan dollars', `Planned personal / mo: ${money(fromNorm.plannedPersonalMonthly)} → ${money(to.plannedPersonalMonthly)}`);
 
-  diffAllocation(from.allocation, to.allocation, items);
+  diffAllocation(fromNorm.allocation, to.allocation, items);
 
-  if (cmpNum(from.wallets.husbandBudget, to.wallets.husbandBudget))
-    pushItem(items, 'Wallets', `Husband budget: ${money(from.wallets.husbandBudget)} → ${money(to.wallets.husbandBudget)}`);
-  if (cmpNum(from.wallets.wifeBudget, to.wallets.wifeBudget))
-    pushItem(items, 'Wallets', `Wife budget: ${money(from.wallets.wifeBudget)} → ${money(to.wallets.wifeBudget)}`);
-  if (cmpNum(from.wallets.husbandSpent, to.wallets.husbandSpent))
-    pushItem(items, 'Wallets', `Husband spent: ${money(from.wallets.husbandSpent)} → ${money(to.wallets.husbandSpent)}`);
-  if (cmpNum(from.wallets.wifeSpent, to.wallets.wifeSpent))
-    pushItem(items, 'Wallets', `Wife spent: ${money(from.wallets.wifeSpent)} → ${money(to.wallets.wifeSpent)}`);
+  if (cmpNum(fromNorm.wallets.husbandBudget, to.wallets.husbandBudget))
+    pushItem(items, 'Wallets', `Husband budget: ${money(fromNorm.wallets.husbandBudget)} → ${money(to.wallets.husbandBudget)}`);
+  if (cmpNum(fromNorm.wallets.wifeBudget, to.wallets.wifeBudget))
+    pushItem(items, 'Wallets', `Wife budget: ${money(fromNorm.wallets.wifeBudget)} → ${money(to.wallets.wifeBudget)}`);
+  if (cmpNum(fromNorm.wallets.husbandSpent, to.wallets.husbandSpent))
+    pushItem(items, 'Wallets', `Husband spent: ${money(fromNorm.wallets.husbandSpent)} → ${money(to.wallets.husbandSpent)}`);
+  if (cmpNum(fromNorm.wallets.wifeSpent, to.wallets.wifeSpent))
+    pushItem(items, 'Wallets', `Wife spent: ${money(fromNorm.wallets.wifeSpent)} → ${money(to.wallets.wifeSpent)}`);
 
-  if (cmpNum(from.emergencyFund, to.emergencyFund))
-    pushItem(items, 'Emergency fund', `${money(from.emergencyFund)} → ${money(to.emergencyFund)}`);
-  if (cmpNum(from.threeMonthFundTarget, to.threeMonthFundTarget))
-    pushItem(items, '3‑month target', `${money(from.threeMonthFundTarget)} → ${money(to.threeMonthFundTarget)}`);
+  if (cmpNum(fromNorm.emergencyFund, to.emergencyFund))
+    pushItem(items, 'Emergency fund', `${money(fromNorm.emergencyFund)} → ${money(to.emergencyFund)}`);
+  if (cmpNum(fromNorm.threeMonthFundTarget, to.threeMonthFundTarget))
+    pushItem(items, '3‑month target', `${money(fromNorm.threeMonthFundTarget)} → ${money(to.threeMonthFundTarget)}`);
 
   const mk = currentMonthKey();
-  const carryFrom = from.monthSpendableCarryByMonth?.[mk];
+  const carryFrom = fromNorm.monthSpendableCarryByMonth?.[mk];
   const carryTo = to.monthSpendableCarryByMonth?.[mk];
   if (carryFrom !== carryTo) {
     pushItem(
@@ -259,54 +290,54 @@ export function computeFinanceStateDiff(from: FinanceState, to: FinanceState): {
     );
   }
 
-  const pushFrom = from.pushNotificationPrefs?.billReminders !== false;
+  const pushFrom = fromNorm.pushNotificationPrefs?.billReminders !== false;
   const pushTo = to.pushNotificationPrefs?.billReminders !== false;
   if (pushFrom !== pushTo) {
     pushItem(items, 'App notifications', `Bill reminder pushes: ${pushFrom ? 'on' : 'off'} → ${pushTo ? 'on' : 'off'}`);
   }
 
-  if ((from.billOverdueGraceDays ?? 0) !== (to.billOverdueGraceDays ?? 0))
-    pushItem(items, 'Bill prefs', `Overdue grace days: ${from.billOverdueGraceDays ?? 0} → ${to.billOverdueGraceDays ?? 0}`);
-  if ((from.billUpcomingLeadBusinessDays ?? 0) !== (to.billUpcomingLeadBusinessDays ?? 0))
-    pushItem(items, 'Bill prefs', `Upcoming lead (business days): ${from.billUpcomingLeadBusinessDays ?? 0} → ${to.billUpcomingLeadBusinessDays ?? 0}`);
+  if ((fromNorm.billOverdueGraceDays ?? 0) !== (to.billOverdueGraceDays ?? 0))
+    pushItem(items, 'Bill prefs', `Overdue grace days: ${fromNorm.billOverdueGraceDays ?? 0} → ${to.billOverdueGraceDays ?? 0}`);
+  if ((fromNorm.billUpcomingLeadBusinessDays ?? 0) !== (to.billUpcomingLeadBusinessDays ?? 0))
+    pushItem(items, 'Bill prefs', `Upcoming lead (business days): ${fromNorm.billUpcomingLeadBusinessDays ?? 0} → ${to.billUpcomingLeadBusinessDays ?? 0}`);
 
-  diffIdRows('Essential', from.essentials, to.essentials, diffEssentialRow, items);
-  diffIdRows('Debt', from.debts, to.debts, diffDebtRow, items);
+  diffIdRows('Essential', fromNorm.essentials, to.essentials, diffEssentialRow, items);
+  diffIdRows('Debt', fromNorm.debts, to.debts, diffDebtRow, items);
 
-  diffBillsPaid(from, to, items);
-  diffBillPaidAmounts(from, to, items);
-  diffStringRecord('Auto-unmark overrides', from.billsAutoUnmarked, to.billsAutoUnmarked, items);
+  diffBillsPaid(fromNorm, to, items);
+  diffBillPaidAmounts(fromNorm, to, items);
+  diffStringRecord('Auto-unmark overrides', fromNorm.billsAutoUnmarked, to.billsAutoUnmarked, items);
 
   diffLogArray(
     'Paycheque log',
-    from.incomeLog,
+    fromNorm.incomeLog,
     to.incomeLog,
     (e) => `${e.date} · ${e.earner} · ${money(e.amount)} · ${e.label}`,
     items,
   );
   diffLogArray(
     'Extra income',
-    from.extraIncome,
+    fromNorm.extraIncome,
     to.extraIncome,
     (e) => `${e.date} · ${money(e.amount)} · ${e.label}`,
     items,
   );
   diffLogArray(
     'Unexpected expenses',
-    from.surpriseExpenses,
+    fromNorm.surpriseExpenses,
     to.surpriseExpenses,
     (e) => `${e.date} · ${money(e.amount)} · ${e.label}`,
     items,
   );
   diffLogArray(
     'Surplus sweeps',
-    from.budgetSurplusSweeps,
+    fromNorm.budgetSurplusSweeps,
     to.budgetSurplusSweeps,
     (e) => `${e.monthKey} · ${money(e.amount)} · ${e.date}`,
     items,
   );
 
-  diffMonthOpening(mk, from, to, items);
+  diffMonthOpening(mk, fromNorm, to, items);
 
   const truncated = items.length >= MAX_ITEMS;
   const sections: DigestSection[] = [];
@@ -318,7 +349,7 @@ export function computeFinanceStateDiff(from: FinanceState, to: FinanceState): {
   } else {
     sections.push({
       heading: 'What changed',
-      body: 'No field-level differences detected in this window (or only non-tracked fields like theme/version).',
+      body: 'Other workbook settings changed (theme, version, or fields not listed in the audit).',
     });
   }
 

@@ -6,6 +6,7 @@ import { ensureNotifyRelayHouseholdId, readNotifyRelayConfig } from './notifyRel
 import { serverAuthBearer } from './serverAuth';
 import { monthActualExpenseTotal } from './budgetSurplus';
 import { incomeLogMonthTotal } from './incomeLog';
+import { digestSectionsForEmail } from './auditDisplay';
 import { computeFinanceStateDiff, type DigestSection } from './financeStateDiff';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -67,25 +68,26 @@ export function buildSaveEmailDigest(from: FinanceState, to: FinanceState): Save
     monthKey: mk,
     pocketLeft: pocket,
     plannedIncomeCombined: planned,
-    sections,
+    sections: digestSectionsForEmail(sections),
   };
 }
 
 /** Plain-text fallback for legacy clients and server validation when digest is present. */
 export function digestPlainTextSummary(digest: SaveEmailDigestV1): string {
   const lines: string[] = [
-    `Household finances · saved ${new Date().toISOString()}`,
-    `Calendar month: ${digest.monthKey}`,
+    `Household finances · update saved`,
+    `Month: ${digest.monthKey}`,
     `Planned income (combined): ${formatMoney(digest.plannedIncomeCombined)}`,
-    `Pocket left: ${formatMoney(digest.pocketLeft)}`,
+    `Pocket left after recorded spend: ${formatMoney(digest.pocketLeft)}`,
     '',
   ];
   for (const sec of digest.sections) {
-    lines.push(`== ${sec.heading} ==`);
+    lines.push(sec.heading);
     if (sec.body) lines.push(sec.body);
     if (sec.items?.length) {
       for (const it of sec.items) {
-        lines.push(`- ${it.title}${it.body ? ` — ${it.body}` : ''}${it.meta ? ` (${it.meta})` : ''}`);
+        const line = [it.title, it.body].filter(Boolean).join(' — ');
+        lines.push(line ? `• ${line}` : `• ${it.title}`);
       }
     }
     lines.push('');

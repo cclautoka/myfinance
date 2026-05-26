@@ -62,6 +62,7 @@ import {
   writeHouseholdSession,
 } from './utils/householdSession';
 import { apiBaseFromNotifyUrl, readNotifyRelayConfig } from './utils/notifyRelayConfig';
+import { applyThemeClass } from './utils/themePreference';
 
 const PaymentsLifetimePanel = lazy(() =>
   import('./components/PaymentsLifetimePanel').then((m) => ({ default: m.PaymentsLifetimePanel })),
@@ -76,17 +77,6 @@ const AllocationPanel = lazy(() =>
 
 function ChartPanelSkeleton() {
   return <div className="h-48 animate-pulse rounded-xl bg-slate-100/90 dark:bg-moss-bg/60" aria-hidden />;
-}
-
-function applyThemeClass(theme: 'light' | 'dark' | 'system') {
-  const root = document.documentElement;
-  const setDark = (on: boolean) => {
-    if (on) root.classList.add('dark');
-    else root.classList.remove('dark');
-  };
-  if (theme === 'dark') setDark(true);
-  else if (theme === 'light') setDark(false);
-  else setDark(window.matchMedia('(prefers-color-scheme: dark)').matches);
 }
 
 const DASHBOARD_BILLS_COLUMN_ID = 'dashboard-bills-column';

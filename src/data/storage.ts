@@ -22,6 +22,7 @@ import {
   readNotifyRelayConfig,
 } from '../utils/notifyRelayConfig';
 import { getClientPlatform } from '../utils/clientPlatform';
+import { loadThemePreference } from '../utils/themePreference';
 import { householdApiFetch } from '../utils/householdApiFetch';
 import { resolveHouseholdApiBase } from '../utils/householdApiBase';
 import { clearHouseholdSession, readHouseholdSession } from '../utils/householdSession';
@@ -248,8 +249,14 @@ const normalizeLoadedState = (base: FinanceState, parsed?: Partial<FinanceState>
   const withMonth = resetWalletsIfNewMonth(pruned);
   const legacyOpening = silentlyBackfillMonthCashflowOpeningForLegacySave(withMonth, parsed);
   const withGoals = normalizeSavingsGoals(legacyOpening);
-  return applyAutoScheduledPayLogs(applyAutoMarkHandled(withGoals));
+  const withAuto = applyAutoScheduledPayLogs(applyAutoMarkHandled(withGoals));
+  return { ...withAuto, theme: loadThemePreference() };
 };
+
+/** Theme is per-device only — do not sync appearance across web / Android / iOS. */
+export function stateForServerSync(state: FinanceState): FinanceState {
+  return { ...state, theme: 'system' };
+}
 
 export const SERVER_CACHE_KEY = 'finance-server-cache-v1';
 
@@ -396,7 +403,9 @@ export const putServerFinanceState = async (
   const c = getServerStorageConfig(opts);
   if (!c.enabled) return { ok: false, status: 0, error: 'Server storage not configured' };
   const path = `/v1/state?id=${encodeURIComponent(c.householdId)}`;
-  const body: { state: FinanceState; baseUpdatedAt?: string; force?: boolean } = { state };
+  const body: { state: FinanceState; baseUpdatedAt?: string; force?: boolean } = {
+    state: stateForServerSync(state),
+  };
   if (opts?.baseUpdatedAt) body.baseUpdatedAt = opts.baseUpdatedAt;
   if (opts?.force) body.force = true;
   const res = await householdApiFetch(path, {

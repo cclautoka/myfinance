@@ -44,6 +44,7 @@ import {
   tryCompleteSetupFromServerState,
 } from '../setup/setupCompletion';
 import { pushToast } from '../ui/toast/toastBus';
+import { loadThemePreference, saveThemePreference } from '../utils/themePreference';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -83,7 +84,10 @@ function isRemoteNewer(remoteAt: string | null, localAt: string | null): boolean
 }
 
 export function usePersistedFinance() {
-  const [state, setState] = useState<FinanceState>(() => loadFinanceState());
+  const [state, setState] = useState<FinanceState>(() => {
+    const loaded = loadFinanceState();
+    return { ...loaded, theme: loadThemePreference() };
+  });
   const [isServerSyncing, setIsServerSyncing] = useState(() => Boolean(readHouseholdSession()?.token));
   const [serverWorkbookExists, setServerWorkbookExists] = useState(false);
   const [serverHydrationError, setServerHydrationError] = useState<string | null>(null);
@@ -124,8 +128,9 @@ export function usePersistedFinance() {
     (remoteState: FinanceState, updatedAt: string, opts?: { toast?: boolean; toastMessage?: string }) => {
       skipNextServerSaveRef.current = true;
       skipNextNotifyRef.current = true;
-      setState(remoteState);
-      stateRef.current = remoteState;
+      const merged = { ...remoteState, theme: loadThemePreference() };
+      setState(merged);
+      stateRef.current = merged;
       const relayCfg = readNotifyRelayConfig();
       maybeMigrateLegacyHouseholdSetup(remoteState, relayCfg);
       tryCompleteSetupFromServerState(remoteState, relayCfg);
@@ -503,7 +508,12 @@ export function usePersistedFinance() {
   }, []);
 
   const setTheme = useCallback((theme: ThemePreference) => {
-    setState((s) => ({ ...s, theme }));
+    saveThemePreference(theme);
+    setState((s) => {
+      const next = { ...s, theme };
+      stateRef.current = next;
+      return next;
+    });
   }, []);
 
   /** One timeline row at a time — weekly essentials use one key per due day; debts use YYYY-MM. */
