@@ -102,7 +102,7 @@ function IncomeSpendBarRow({
 
   return (
     <div
-      className={`grid grid-cols-[4.25rem_minmax(0,1fr)_5.5rem] items-center gap-2 sm:grid-cols-[5.5rem_minmax(0,1fr)_7.25rem] sm:gap-3 ${
+      className={`grid grid-cols-[4.25rem_minmax(0,1fr)_6.75rem] items-center gap-2 sm:grid-cols-[5.5rem_minmax(0,1fr)_7.5rem] sm:gap-3 ${
         isActive ? 'rounded-lg ring-2 ring-teal-500/40 dark:ring-teal-400/30' : ''
       }`}
       onMouseEnter={(e) => onHover(row, e.currentTarget)}
@@ -158,18 +158,18 @@ function IncomeSpendBarRow({
       </div>
 
       <div className="shrink-0 text-right leading-tight tabular-nums">
-        <p className="font-display text-[13px] font-extrabold tracking-tight text-sage-950 dark:text-moss-fg sm:text-sm">
+        <p className="font-display text-[15px] font-extrabold tracking-tight text-sage-950 dark:text-moss-fg sm:text-sm">
           {formatMoney(row.incomeLogged)}
         </p>
-        <p className="text-[10px] font-medium text-sage-600 dark:text-moss-muted">logged pay</p>
+        <p className="text-[11px] font-semibold text-sage-600 dark:text-moss-muted">logged pay</p>
         {row.remaining > 0 ? (
-          <p className="mt-0.5 text-[10px] font-semibold text-teal-800 dark:text-teal-300">
-            {formatMoney(row.remaining)} left
+          <p className="mt-1 text-[12px] font-extrabold leading-none text-teal-800 dark:text-teal-300">
+            {formatMoney(row.remaining)} <span className="font-semibold">left</span>
           </p>
         ) : null}
         {row.overspend > 0 ? (
-          <p className="mt-0.5 text-[10px] font-semibold text-red-700 dark:text-red-300">
-            +{formatMoney(row.overspend)} over
+          <p className="mt-1 text-[12px] font-extrabold leading-none text-red-700 dark:text-red-300">
+            +{formatMoney(row.overspend)} <span className="font-semibold">over</span>
           </p>
         ) : null}
       </div>
