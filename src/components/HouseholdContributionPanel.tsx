@@ -102,7 +102,7 @@ function IncomeSpendBarRow({
 
   return (
     <div
-      className={`grid grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-2 sm:grid-cols-[5.5rem_minmax(0,1fr)_auto] sm:gap-3 ${
+      className={`grid grid-cols-[4.25rem_minmax(0,1fr)_5.5rem] items-center gap-2 sm:grid-cols-[5.5rem_minmax(0,1fr)_7.25rem] sm:gap-3 ${
         isActive ? 'rounded-lg ring-2 ring-teal-500/40 dark:ring-teal-400/30' : ''
       }`}
       onMouseEnter={(e) => onHover(row, e.currentTarget)}
@@ -115,7 +115,7 @@ function IncomeSpendBarRow({
     >
       <span className="text-xs font-semibold text-sage-800 dark:text-moss-subtle">{row.label}</span>
 
-      <div className="relative h-9 min-w-0 rounded-lg bg-slate-200/50 dark:bg-moss-bg/80">
+      <div className="relative h-9 min-w-0 overflow-visible rounded-lg bg-slate-200/50 dark:bg-moss-bg/80">
         {/* Full-income band (light) */}
         {row.incomeLogged > 0 ? (
           <div
@@ -146,10 +146,10 @@ function IncomeSpendBarRow({
             title={`Over pay ${formatMoney(row.overspend)}`}
           />
         ) : null}
-        {/* Left-from-pay hint inside bar (only when room) */}
+        {/* Left-from-pay hint inside bar (desktop only, avoids mobile overlap) */}
         {row.remaining > 0 && incomePct > 28 ? (
           <span
-            className="pointer-events-none absolute inset-y-0 flex items-center pl-2 text-[10px] font-semibold text-teal-950/70 dark:text-teal-100/80"
+            className="pointer-events-none absolute inset-y-0 hidden items-center pl-2 text-[10px] font-semibold text-teal-950/70 dark:text-teal-100/80 sm:flex"
             style={{ left: `${spentPct}%`, maxWidth: `${Math.max(0, incomePct - spentPct)}%` }}
           >
             {formatMoney(row.remaining)} left
@@ -157,12 +157,12 @@ function IncomeSpendBarRow({
         ) : null}
       </div>
 
-      <div className="shrink-0 text-right leading-tight">
-        <p className="font-display text-sm font-bold tabular-nums tracking-tight text-sage-950 dark:text-moss-fg">
+      <div className="shrink-0 text-right leading-tight tabular-nums">
+        <p className="font-display text-[13px] font-extrabold tracking-tight text-sage-950 dark:text-moss-fg sm:text-sm">
           {formatMoney(row.incomeLogged)}
         </p>
         <p className="text-[10px] font-medium text-sage-600 dark:text-moss-muted">logged pay</p>
-        {row.remaining > 0 && incomePct <= 28 ? (
+        {row.remaining > 0 ? (
           <p className="mt-0.5 text-[10px] font-semibold text-teal-800 dark:text-teal-300">
             {formatMoney(row.remaining)} left
           </p>
