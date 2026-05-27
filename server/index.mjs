@@ -67,6 +67,7 @@ import {
   deletePushDeviceToken,
   deletePushTokensForMember,
   countPushTokensForMember,
+  memberHasPushToken,
   listPushTokensForHousehold,
   listPushDevicesForHousehold,
   getPushDeviceById,
@@ -1751,13 +1752,17 @@ fastify.get('/v1/household/push/status', async (request, reply) => {
   const member = await requireSessionMember(request, reply, id);
   if (!member) return;
   await initDbIfNeeded(request.log);
+  const currentToken = String(request.query?.currentToken ?? '').trim();
   const mine = await countPushTokensForMember(member.id);
   const all = (await listPushTokensForHousehold(id)).length;
   const stored = await readState(id).catch(() => null);
   const prefs = stored?.state?.pushNotificationPrefs ?? { billReminders: true };
+  const deviceRegistered = currentToken
+    ? await memberHasPushToken(member.id, currentToken)
+    : mine > 0;
   return reply.send({
     ok: true,
-    deviceRegistered: mine > 0,
+    deviceRegistered,
     householdDeviceCount: all,
     serverPushConfigured: isPushDeliveryConfigured(),
     prefs: {

@@ -656,6 +656,18 @@ export async function countPushTokensForMember(memberId) {
   return r.rows[0]?.n ?? 0;
 }
 
+/** True when this exact FCM/APNs token is saved for the signed-in member. */
+export async function memberHasPushToken(memberId, token) {
+  if (!pool) throw new Error('DB not initialized');
+  const tok = String(token ?? '').trim();
+  if (!tok) return false;
+  const r = await pool.query(
+    `select 1 from push_device_token where member_id = $1 and token = $2 limit 1`,
+    [memberId, tok],
+  );
+  return r.rowCount > 0;
+}
+
 export async function listPushDevicesForHousehold(householdId) {
   if (!pool) throw new Error('DB not initialized');
   const r = await pool.query(

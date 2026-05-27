@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
+import type { PluginListenerHandle } from '@capacitor/core';
 import { registerPushToken, unregisterPushToken } from '../utils/pushDeviceApi';
 import { readStoredPushToken, writeStoredPushToken } from '../utils/pushTokenStorage';
 import { pushToast } from '../ui/toast/toastBus';
@@ -34,6 +35,41 @@ async function ensureAndroidPushChannel(): Promise<void> {
   });
 }
 
+async function obtainNativePushToken(): Promise<string> {
+  let onReg: PluginListenerHandle | undefined;
+  let onErr: PluginListenerHandle | undefined;
+
+  try {
+    return await new Promise<string>((resolve, reject) => {
+      const timeout = window.setTimeout(
+        () => reject(new Error('Timed out waiting for a push token from Google Play services.')),
+        30_000,
+      );
+
+      void (async () => {
+        onReg = await PushNotifications.addListener('registration', (t) => {
+          window.clearTimeout(timeout);
+          if (t.value?.trim()) resolve(t.value.trim());
+          else reject(new Error('Empty push token from device.'));
+        });
+        onErr = await PushNotifications.addListener('registrationError', (err) => {
+          window.clearTimeout(timeout);
+          reject(new Error(err.error || 'Push registration failed on this device.'));
+        });
+        try {
+          await PushNotifications.register();
+        } catch (e) {
+          window.clearTimeout(timeout);
+          reject(e instanceof Error ? e : new Error(String(e)));
+        }
+      })();
+    });
+  } finally {
+    await onReg?.remove();
+    await onErr?.remove();
+  }
+}
+
 /** Request permission, register with OS, and upsert token on the server. */
 export async function enableNativePush(): Promise<void> {
   if (!isNativePushAvailable()) {
@@ -47,7 +83,7 @@ export async function enableNativePush(): Promise<void> {
 
   let perm = await PushNotifications.checkPermissions();
   if (perm.receive === 'denied') {
-    throw new Error('Notifications are blocked. Enable them in system Settings for Our Finance.');
+    throw new Error('Notifications are blocked. Open Settings → Apps → Our Finance → Notifications and allow alerts.');
   }
   if (perm.receive === 'prompt') {
     perm = await PushNotifications.requestPermissions();
@@ -58,28 +94,20 @@ export async function enableNativePush(): Promise<void> {
 
   await ensureAndroidPushChannel();
 
-  const token = await new Promise<string>((resolve, reject) => {
-    const timeout = window.setTimeout(() => reject(new Error('Timed out waiting for push token.')), 25_000);
-    void (async () => {
-      const onReg = await PushNotifications.addListener('registration', (t) => {
-        window.clearTimeout(timeout);
-        void onReg.remove();
-        void onErr.remove();
-        if (t.value) resolve(t.value);
-        else reject(new Error('Empty push token from device.'));
-      });
-      const onErr = await PushNotifications.addListener('registrationError', (err) => {
-        window.clearTimeout(timeout);
-        void onReg.remove();
-        void onErr.remove();
-        reject(new Error(err.error || 'Push registration failed.'));
-      });
-      await PushNotifications.register();
-    })();
-  });
+  const token = await obtainNativePushToken();
 
-  await registerPushToken(token, nativePlatform());
-  writeStoredPushToken(token);
+  try {
+    await registerPushToken(token, nativePlatform());
+    writeStoredPushToken(token);
+  } catch (e) {
+    writeStoredPushToken('');
+    try {
+      await PushNotifications.unregister();
+    } catch {
+      /* ignore */
+    }
+    throw e;
+  }
 }
 
 /** Remove token from server and OS registration. */
@@ -90,7 +118,11 @@ export async function disableNativePush(): Promise<void> {
   } finally {
     writeStoredPushToken('');
     if (isNativePushAvailable()) {
-      await PushNotifications.unregister();
+      try {
+        await PushNotifications.unregister();
+      } catch {
+        /* ignore */
+      }
     }
   }
 }
@@ -99,7 +131,7 @@ export async function disableNativePush(): Promise<void> {
 export function bindPushNotificationHandlers(onOpenApp: () => void): () => void {
   if (!isNativePushAvailable()) return () => {};
 
-  const handles: { remove: () => Promise<void> }[] = [];
+  const handles: PluginListenerHandle[] = [];
 
   void PushNotifications.addListener('pushNotificationReceived', (notification) => {
     const title = notification.title?.trim() || 'Our Finance';
