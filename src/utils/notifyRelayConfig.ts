@@ -1,5 +1,6 @@
 import { formatHouseholdApiError, householdApiFetch } from './householdApiFetch';
 import { resolveHouseholdApiBase } from './householdApiBase';
+import { readHouseholdSession } from './householdSession';
 
 export { resolveHouseholdApiBase } from './householdApiBase';
 
@@ -74,6 +75,16 @@ export function setNotifyRelayHouseholdId(householdId: string): void {
   }
 }
 
+/** Align stored household id with the signed-in session (fixes stale random ids on native). */
+export function syncHouseholdIdFromSession(): string {
+  const fromSession = readHouseholdSession()?.householdId?.trim();
+  if (fromSession) {
+    setNotifyRelayHouseholdId(fromSession);
+    return fromSession;
+  }
+  return ensureNotifyRelayHouseholdId();
+}
+
 export function ensureNotifyRelayHouseholdId(): string {
   try {
     const existing = (localStorage.getItem(NOTIFY_RELAY_HOUSEHOLD_ID_KEY) ?? '').trim();
@@ -139,8 +150,10 @@ export function parseResetTokenFromHash(): string | null {
   return t;
 }
 
-/** Same-origin API root derived from notify relay URL (saved in Tools). */
+/** API root for household routes — never use Capacitor WebView localhost when env provides production URL. */
 export function apiBaseFromNotifyUrl(notifyUrl: string): string {
+  const resolved = resolveHouseholdApiBase();
+  if (resolved) return resolved;
   const u = notifyUrl.trim();
   if (!u) return '';
   if (u.startsWith('/')) {

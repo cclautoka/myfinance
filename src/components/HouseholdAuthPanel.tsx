@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  apiBaseFromNotifyUrl,
-  ensureNotifyRelayHouseholdId,
   parseResetTokenFromHash,
   readNotifyRelayConfig,
+  syncHouseholdIdFromSession,
 } from '../utils/notifyRelayConfig';
+import { postHouseholdApiJson } from '../utils/householdApiJson';
+import { resolveHouseholdApiBase } from '../utils/householdApiBase';
 import { clearHouseholdSession, readHouseholdSession, writeHouseholdSession } from '../utils/householdSession';
 import { HOUSEHOLD_MODE_KEY, type HouseholdMode } from '../utils/householdMode';
 import { FieldError } from './ui/FieldError';
@@ -35,7 +36,11 @@ function hasPairingCode(p: ActivePairing | null): p is ActivePairing {
 }
 
 export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void }) {
-  const hid = useMemo(() => (typeof window !== 'undefined' ? ensureNotifyRelayHouseholdId() : ''), []);
+  const session = typeof window !== 'undefined' ? readHouseholdSession() : null;
+  const hid = useMemo(
+    () => (typeof window !== 'undefined' ? syncHouseholdIdFromSession() : ''),
+    [session?.householdId],
+  );
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -62,7 +67,6 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
     }
   });
 
-  const session = typeof window !== 'undefined' ? readHouseholdSession() : null;
   const isOwner = session?.role === 'owner';
   const isPartner = session?.role === 'partner';
   const signedIn = Boolean(session?.token);
@@ -97,35 +101,8 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
     }
   };
 
-  const baseUrl = useMemo(() => {
-    const { url } = readNotifyRelayConfig();
-    return apiBaseFromNotifyUrl(url);
-  }, []);
-
   const postJson = useCallback(async (path: string, body: Record<string, unknown>, withInviteAuth?: boolean) => {
-    const { url, secret } = readNotifyRelayConfig();
-    const base = apiBaseFromNotifyUrl(url);
-    if (!base) throw new Error('Set notify API URL first');
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (withInviteAuth) {
-      const sess = readHouseholdSession();
-      if (sess?.token) headers.Authorization = `Bearer ${sess.token}`;
-      else if (secret.trim()) headers.Authorization = `Bearer ${secret.trim()}`;
-    }
-    const res = await fetch(`${base}${path}`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-    });
-    const text = await res.text();
-    let j: Record<string, unknown> = {};
-    try {
-      j = JSON.parse(text) as Record<string, unknown>;
-    } catch {
-      /* ignore */
-    }
-    if (!res.ok) throw new Error((j.error as string) || text || `HTTP ${res.status}`);
-    return j;
+    return postHouseholdApiJson(path, body, withInviteAuth ? { auth: 'session-or-secret' } : undefined);
   }, []);
 
   useEffect(() => {
@@ -471,7 +448,7 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
         <p className="mt-1 break-all font-mono text-sm font-semibold text-sage-900 dark:text-moss-fg">{hid || '…'}</p>
         <p className="mt-1 text-xs text-sage-600 dark:text-moss-muted">
           Same id for everyone in this household. API:{' '}
-          <code className="font-semibold">{baseUrl || 'set notify URL'}</code>
+          <code className="font-semibold">{resolveHouseholdApiBase() || 'set notify URL'}</code>
         </p>
         <button type="button" className="btn-secondary btn-secondary-sm mt-2 font-bold" disabled={!hid} onClick={() => void copyHouseholdId()}>
           Copy household id

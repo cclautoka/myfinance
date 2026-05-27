@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { apiBaseFromNotifyUrl, readNotifyRelayConfig } from '../utils/notifyRelayConfig';
+import { postHouseholdApiJson } from '../utils/householdApiJson';
+import { resolveHouseholdApiBase } from '../utils/householdApiBase';
 import { readHouseholdSession } from '../utils/householdSession';
 import type { ThemePreference } from '../types/finance';
 import { zLayers } from '../ui/zLayers';
@@ -20,28 +21,15 @@ export function VerifyEmailGate({
   const [busy, setBusy] = useState(false);
 
   const resend = async () => {
-    const base = apiBaseFromNotifyUrl(readNotifyRelayConfig().url);
     const sess = readHouseholdSession();
-    if (!base || !sess?.token) {
+    if (!resolveHouseholdApiBase() || !sess?.token) {
       setMsg('Cannot resend — sign in again, then use Resend.');
       return;
     }
     setBusy(true);
     setMsg(null);
     try {
-      const res = await fetch(`${base}/v1/household/auth/request-verify-email`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${sess.token}`, 'Content-Type': 'application/json' },
-        body: '{}',
-      });
-      const text = await res.text();
-      let j: Record<string, unknown> = {};
-      try {
-        j = JSON.parse(text) as Record<string, unknown>;
-      } catch {
-        /* ignore */
-      }
-      if (!res.ok) throw new Error((j.error as string) || text || `HTTP ${res.status}`);
+      await postHouseholdApiJson('/v1/household/auth/request-verify-email', {}, { auth: 'session' });
       setMsg('Verification email sent — check your inbox (and spam).');
     } catch (e) {
       setMsg(String((e as Error)?.message ?? e));

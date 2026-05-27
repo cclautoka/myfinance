@@ -2,6 +2,8 @@ import { Capacitor } from '@capacitor/core';
 
 const NOTIFY_RELAY_URL_KEY = 'finance-notify-relay-url';
 const DEFAULT_NOTIFY_RELAY_PATH = '/v1/notify';
+/** Last-resort API host for native builds when env was not inlined at build time. */
+const NATIVE_PRODUCTION_API_ORIGIN = 'https://finance.solofi.cloud';
 
 function apiBaseFromNotifyUrl(notifyUrl: string, opts?: { relativeOrigin?: string }): string {
   const u = notifyUrl.trim();
@@ -58,5 +60,8 @@ export function resolveHouseholdApiBase(): string {
   const cfgOk = fromCfg.startsWith('http') && !(native && isCapacitorLocalOrigin(fromCfg));
   if (cfgOk) return fromCfg;
   if (fromEnv.startsWith('http')) return fromEnv;
-  return cfgOk ? fromCfg : fromEnv || fromCfg;
+  const merged = cfgOk ? fromCfg : fromEnv || fromCfg;
+  if (merged.startsWith('http') && !(native && isCapacitorLocalOrigin(merged))) return merged;
+  if (native) return NATIVE_PRODUCTION_API_ORIGIN;
+  return merged;
 }

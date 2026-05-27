@@ -1,4 +1,4 @@
-import { apiBaseFromNotifyUrl, resolveNotifyRelayUrl } from './notifyRelayConfig';
+import { formatHouseholdApiError, householdApiFetch } from './householdApiFetch';
 import { readHouseholdSession } from './householdSession';
 import { serverAuthBearer } from './serverAuth';
 
@@ -58,28 +58,28 @@ export async function createHouseholdBearerKey(
   const bearer = serverAuthBearer();
   if (!bearer) return { ok: false, error: 'Not authorized — sign in again.' };
 
-  const base = apiBaseFromNotifyUrl(resolveNotifyRelayUrl());
-  if (!base) return { ok: false, error: 'API is not available on this host.' };
-
-  const res = await fetch(`${base}/v1/household/bearer-keys`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${bearer}`,
-    },
-    body: JSON.stringify({ householdId: hid, action: 'create', label }),
-  });
-
-  const text = await res.text();
-  let j: Record<string, unknown> = {};
+  let j: Record<string, unknown>;
   try {
-    j = JSON.parse(text) as Record<string, unknown>;
-  } catch {
-    /* ignore */
-  }
-
-  if (!res.ok) {
-    return { ok: false, error: (j.error as string) || text || `HTTP ${res.status}` };
+    const res = await householdApiFetch('/v1/household/bearer-keys', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${bearer}`,
+      },
+      body: JSON.stringify({ householdId: hid, action: 'create', label }),
+    });
+    const text = await res.text();
+    j = {};
+    try {
+      j = JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      /* ignore */
+    }
+    if (!res.ok) {
+      return { ok: false, error: (j.error as string) || text || `HTTP ${res.status}` };
+    }
+  } catch (e) {
+    return { ok: false, error: formatHouseholdApiError(e, '/v1/household/bearer-keys') };
   }
 
   const key = typeof j.key === 'string' ? j.key : '';

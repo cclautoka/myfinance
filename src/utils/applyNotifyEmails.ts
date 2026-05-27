@@ -1,5 +1,6 @@
 import { HOUSEHOLD_MODE_KEY } from './householdMode';
-import { apiBaseFromNotifyUrl, readNotifyRelayConfig, writeNotifyRelayConfig } from './notifyRelayConfig';
+import { readNotifyRelayConfig, writeNotifyRelayConfig } from './notifyRelayConfig';
+import { getHouseholdApiJson } from './householdApiJson';
 import { readHouseholdSession } from './householdSession';
 
 export type NotifyEmailsPayload = {
@@ -38,15 +39,15 @@ export function applyNotifyEmails(payload: NotifyEmailsPayload | undefined | nul
 export async function fetchAndApplyNotifyEmails(): Promise<NotifyEmailsPayload | null> {
   const sess = readHouseholdSession();
   if (!sess?.token || !sess.householdId) return null;
-  const { url } = readNotifyRelayConfig();
-  const base = apiBaseFromNotifyUrl(url);
-  if (!base) return null;
-  const res = await fetch(
-    `${base}/v1/household/notify-emails?id=${encodeURIComponent(sess.householdId)}`,
-    { headers: { Authorization: `Bearer ${sess.token}` } },
-  );
-  if (!res.ok) return null;
-  const j = (await res.json()) as { notifyEmails?: NotifyEmailsPayload };
+  let j: { notifyEmails?: NotifyEmailsPayload };
+  try {
+    j = (await getHouseholdApiJson(
+      `/v1/household/notify-emails?id=${encodeURIComponent(sess.householdId)}`,
+      { auth: 'session' },
+    )) as { notifyEmails?: NotifyEmailsPayload };
+  } catch {
+    return null;
+  }
   if (j.notifyEmails) applyNotifyEmails(j.notifyEmails);
   return j.notifyEmails ?? null;
 }

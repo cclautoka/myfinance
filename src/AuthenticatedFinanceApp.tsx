@@ -61,7 +61,9 @@ import {
   subscribeHouseholdSessionChanged,
   writeHouseholdSession,
 } from './utils/householdSession';
-import { apiBaseFromNotifyUrl, readNotifyRelayConfig } from './utils/notifyRelayConfig';
+import { householdApiFetch } from './utils/householdApiFetch';
+import { resolveHouseholdApiBase } from './utils/householdApiBase';
+import { readNotifyRelayConfig } from './utils/notifyRelayConfig';
 import { applyThemeClass } from './utils/themePreference';
 
 const PaymentsLifetimePanel = lazy(() =>
@@ -170,8 +172,7 @@ export function AuthenticatedFinanceApp() {
   );
 
   const [setupTick, setSetupTick] = useState(0);
-  const notifyCfgForVerify = readNotifyRelayConfig();
-  const apiConfiguredForVerify = Boolean(apiBaseFromNotifyUrl(notifyCfgForVerify.url));
+  const apiConfiguredForVerify = Boolean(resolveHouseholdApiBase());
   const [emailVerified, setEmailVerified] = useState(() => {
     const sess = readHouseholdSession();
     if (sess?.emailVerified === true) return true;
@@ -192,8 +193,7 @@ export function AuthenticatedFinanceApp() {
       setEmailVerified(true);
       return;
     }
-    const base = apiBaseFromNotifyUrl(readNotifyRelayConfig().url);
-    if (!base) {
+    if (!resolveHouseholdApiBase()) {
       setEmailVerified(true);
       return;
     }
@@ -207,7 +207,7 @@ export function AuthenticatedFinanceApp() {
       return;
     }
     let cancelled = false;
-    void fetch(`${base}/v1/household/auth/me`, {
+    void householdApiFetch('/v1/household/auth/me', {
       headers: { Authorization: `Bearer ${sess.token}` },
     })
       .then(async (res) => {
@@ -253,9 +253,8 @@ export function AuthenticatedFinanceApp() {
     const refresh = () => {
       const sess = readHouseholdSession();
       if (!sess?.token) return;
-      const base = apiBaseFromNotifyUrl(readNotifyRelayConfig().url);
-      if (!base) return;
-      void fetch(`${base}/v1/household/auth/refresh`, {
+      if (!resolveHouseholdApiBase()) return;
+      void householdApiFetch('/v1/household/auth/refresh', {
         method: 'POST',
         headers: { Authorization: `Bearer ${sess.token}` },
       })
@@ -272,7 +271,6 @@ export function AuthenticatedFinanceApp() {
     return () => window.removeEventListener('focus', refresh);
   }, []);
 
-  const notifyCfg = readNotifyRelayConfig();
   const setupDone = useMemo(
     () =>
       isHouseholdSetupComplete(state, readNotifyRelayConfig(), {
@@ -282,7 +280,7 @@ export function AuthenticatedFinanceApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional
     [state, setupTick, serverWorkbookExists],
   );
-  const needsVerifyGate = Boolean(apiBaseFromNotifyUrl(notifyCfg.url)) && !emailVerified;
+  const needsVerifyGate = Boolean(resolveHouseholdApiBase()) && !emailVerified;
 
   useEffect(() => {
     try {

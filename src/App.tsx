@@ -9,6 +9,7 @@ import {
   parseVerifyTokenFromHash,
   postNotifyRelayPublicJson,
   setNotifyRelayHouseholdId,
+  syncHouseholdIdFromSession,
 } from './utils/notifyRelayConfig';
 import { fetchAndApplyNotifyEmails } from './utils/applyNotifyEmails';
 import { readHouseholdSession, subscribeHouseholdSessionChanged, writeHouseholdSession } from './utils/householdSession';
@@ -31,6 +32,10 @@ export default function App() {
   useEffect(() => {
     bootstrapPublicApiConfig();
   }, []);
+
+  useEffect(() => {
+    if (householdSignedIn) syncHouseholdIdFromSession();
+  }, [householdSignedIn]);
 
   useEffect(() => {
     if (readHouseholdSession()?.token) {
