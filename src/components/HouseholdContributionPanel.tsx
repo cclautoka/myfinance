@@ -158,17 +158,17 @@ function IncomeSpendBarRow({
       </div>
 
       <div className="shrink-0 text-right leading-tight tabular-nums">
-        <p className="font-display text-[15px] font-extrabold tracking-tight text-sage-950 dark:text-moss-fg sm:text-sm">
+        <p className="min-w-0 max-w-full font-display font-semibold tabular-nums leading-[1.05] tracking-tight text-[clamp(1.05rem,3.4cqi+0.55rem,1.35rem)] text-sage-950 dark:text-moss-fg">
           {formatMoney(row.incomeLogged)}
         </p>
         <p className="text-[11px] font-semibold text-sage-600 dark:text-moss-muted">logged pay</p>
         {row.remaining > 0 ? (
-          <p className="mt-1 text-[12px] font-extrabold leading-none text-teal-800 dark:text-teal-300">
+          <p className="mt-1 text-[12px] font-semibold leading-none text-teal-800 dark:text-teal-300">
             {formatMoney(row.remaining)} <span className="font-semibold">left</span>
           </p>
         ) : null}
         {row.overspend > 0 ? (
-          <p className="mt-1 text-[12px] font-extrabold leading-none text-red-700 dark:text-red-300">
+          <p className="mt-1 text-[12px] font-semibold leading-none text-red-700 dark:text-red-300">
             +{formatMoney(row.overspend)} <span className="font-semibold">over</span>
           </p>
         ) : null}
