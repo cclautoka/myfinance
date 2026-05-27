@@ -1,44 +1,44 @@
-import { useMemo } from 'react';
+import { useCallback, useId, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { FinanceState } from '../types/finance';
 import { currentMonthKey, formatCalendarMonthHeading } from '../data/defaults';
 import { formatMoney } from '../utils/format';
 import { monthIncomeSpendSummary, type IncomeSpendRow } from '../utils/householdIncomeSpend';
 import { Card } from './ui/Card';
-import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
-const PRIMARY_SPENT = '#0f766e';
-const PRIMARY_LEFT = '#99f6e4';
-const PARTNER_SPENT = '#0369a1';
-const PARTNER_LEFT = '#7dd3fc';
-const JOINT_SPENT = '#6d28d9';
-const JOINT_LEFT = '#ddd6fe';
-const EXTRA_SPENT = '#b45309';
-const EXTRA_LEFT = '#fde68a';
-
-function fillsForKey(key: string): { spent: string; remaining: string } {
-  if (key === 'owner') return { spent: PRIMARY_SPENT, remaining: PRIMARY_LEFT };
-  if (key === 'partner') return { spent: PARTNER_SPENT, remaining: PARTNER_LEFT };
-  if (key === 'joint') return { spent: JOINT_SPENT, remaining: JOINT_LEFT };
-  return { spent: EXTRA_SPENT, remaining: EXTRA_LEFT };
-}
-
-type ChartRow = IncomeSpendRow & {
-  name: string;
-  spentStack: number;
-  remainingStack: number;
+const ROW_STYLES: Record<
+  string,
+  { income: string; spent: string; overspend: string }
+> = {
+  owner: {
+    income: 'bg-teal-500/35 dark:bg-teal-500/25',
+    spent: 'bg-teal-800/75 dark:bg-teal-900/80',
+    overspend: 'bg-red-600/85 dark:bg-red-700/90',
+  },
+  partner: {
+    income: 'bg-sky-500/35 dark:bg-sky-500/25',
+    spent: 'bg-sky-800/75 dark:bg-sky-900/80',
+    overspend: 'bg-red-600/85 dark:bg-red-700/90',
+  },
+  joint: {
+    income: 'bg-violet-500/35 dark:bg-violet-500/25',
+    spent: 'bg-violet-800/75 dark:bg-violet-900/80',
+    overspend: 'bg-red-600/85 dark:bg-red-700/90',
+  },
+  extra: {
+    income: 'bg-amber-500/35 dark:bg-amber-500/25',
+    spent: 'bg-amber-700/75 dark:bg-amber-900/80',
+    overspend: 'bg-red-600/85 dark:bg-red-700/90',
+  },
 };
 
-function IncomeSpendTooltip({
-  active,
-  payload,
-}: {
-  active?: boolean;
-  payload?: Array<{ payload?: ChartRow }>;
-}) {
-  if (!active || !payload?.[0]?.payload) return null;
-  const row = payload[0].payload;
+function rowStyle(key: string) {
+  return ROW_STYLES[key] ?? ROW_STYLES.extra;
+}
+
+function IncomeSpendBreakdown({ row }: { row: IncomeSpendRow }) {
   return (
-    <div className="max-w-xs rounded-xl border border-slate-200/90 bg-white p-3 text-xs shadow-lg dark:border-moss-border dark:bg-moss-elevated">
+    <div className="max-h-[min(70vh,320px)] overflow-y-auto overscroll-contain pr-1 text-xs">
       <p className="font-bold text-slate-900 dark:text-moss-fg">{row.label}</p>
       <p className="mt-1 text-slate-600 dark:text-moss-subtle">
         Logged pay: <strong className="text-slate-900 dark:text-moss-fg">{formatMoney(row.incomeLogged)}</strong>
@@ -72,7 +72,7 @@ function IncomeSpendTooltip({
       <p className="mt-2 border-t border-slate-200/80 pt-2 dark:border-moss-border">
         Spent: <strong>{formatMoney(row.spent)}</strong>
         {row.overspend > 0 ? (
-          <span className="text-amber-800 dark:text-amber-200"> ({formatMoney(row.overspend)} over logged pay)</span>
+          <span className="text-red-700 dark:text-red-300"> ({formatMoney(row.overspend)} over pay)</span>
         ) : null}
       </p>
       <p className="mt-1 text-teal-800 dark:text-teal-200">
@@ -82,19 +82,156 @@ function IncomeSpendTooltip({
   );
 }
 
+function IncomeSpendBarRow({
+  row,
+  onHover,
+  onLeave,
+  isActive,
+}: {
+  row: IncomeSpendRow;
+  onHover: (row: IncomeSpendRow, el: HTMLElement) => void;
+  onLeave: () => void;
+  isActive: boolean;
+}) {
+  const styles = rowStyle(row.key);
+  const trackMax = Math.max(row.incomeLogged, row.spent, 1);
+  const incomePct = (row.incomeLogged / trackMax) * 100;
+  const spentPct = (Math.min(row.spent, row.incomeLogged) / trackMax) * 100;
+  const spentWithinIncomePct = row.incomeLogged > 0 ? (Math.min(row.spent, row.incomeLogged) / row.incomeLogged) * 100 : 0;
+  const overspendPct = (row.overspend / trackMax) * 100;
+
+  return (
+    <div
+      className={`grid grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-2 sm:grid-cols-[5.5rem_minmax(0,1fr)_auto] sm:gap-3 ${
+        isActive ? 'rounded-lg ring-2 ring-teal-500/40 dark:ring-teal-400/30' : ''
+      }`}
+      onMouseEnter={(e) => onHover(row, e.currentTarget)}
+      onMouseLeave={onLeave}
+      onFocus={(e) => onHover(row, e.currentTarget)}
+      onBlur={onLeave}
+      tabIndex={0}
+      role="group"
+      aria-label={`${row.label}: income ${formatMoney(row.incomeLogged)}, spent ${formatMoney(row.spent)}`}
+    >
+      <span className="text-xs font-semibold text-sage-800 dark:text-moss-subtle">{row.label}</span>
+
+      <div className="relative h-9 min-w-0 rounded-lg bg-slate-200/50 dark:bg-moss-bg/80">
+        {/* Full-income band (light) */}
+        {row.incomeLogged > 0 ? (
+          <div
+            className={`absolute inset-y-1 left-0 rounded-md ${styles.income}`}
+            style={{ width: `${incomePct}%` }}
+          />
+        ) : null}
+        {/* Spent overlay on top of income portion */}
+        {spentWithinIncomePct > 0 && row.incomeLogged > 0 ? (
+          <div
+            className={`absolute inset-y-1 left-0 rounded-md ${styles.spent}`}
+            style={{ width: `${spentPct}%` }}
+            title={`Spent ${formatMoney(Math.min(row.spent, row.incomeLogged))}`}
+          />
+        ) : null}
+        {/* Spent with no income — show spent bar only */}
+        {row.incomeLogged <= 0 && row.spent > 0 ? (
+          <div
+            className={`absolute inset-y-1 left-0 rounded-md ${styles.spent}`}
+            style={{ width: `${(row.spent / trackMax) * 100}%` }}
+          />
+        ) : null}
+        {/* Overspend beyond income (red) */}
+        {row.overspend > 0 ? (
+          <div
+            className={`absolute inset-y-1 rounded-md ${styles.overspend}`}
+            style={{ left: `${incomePct}%`, width: `${overspendPct}%` }}
+            title={`Over pay ${formatMoney(row.overspend)}`}
+          />
+        ) : null}
+        {/* Left-from-pay hint inside bar (only when room) */}
+        {row.remaining > 0 && incomePct > 28 ? (
+          <span
+            className="pointer-events-none absolute inset-y-0 flex items-center pl-2 text-[10px] font-semibold text-teal-950/70 dark:text-teal-100/80"
+            style={{ left: `${spentPct}%`, maxWidth: `${Math.max(0, incomePct - spentPct)}%` }}
+          >
+            {formatMoney(row.remaining)} left
+          </span>
+        ) : null}
+      </div>
+
+      <div className="shrink-0 text-right leading-tight">
+        <p className="font-display text-sm font-bold tabular-nums tracking-tight text-sage-950 dark:text-moss-fg">
+          {formatMoney(row.incomeLogged)}
+        </p>
+        <p className="text-[10px] font-medium text-sage-600 dark:text-moss-muted">logged pay</p>
+        {row.remaining > 0 && incomePct <= 28 ? (
+          <p className="mt-0.5 text-[10px] font-semibold text-teal-800 dark:text-teal-300">
+            {formatMoney(row.remaining)} left
+          </p>
+        ) : null}
+        {row.overspend > 0 ? (
+          <p className="mt-0.5 text-[10px] font-semibold text-red-700 dark:text-red-300">
+            +{formatMoney(row.overspend)} over
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function FloatingBreakdown({
+  row,
+  anchorRect,
+  onEnter,
+  onLeave,
+}: {
+  row: IncomeSpendRow;
+  anchorRect: DOMRect;
+  onEnter: () => void;
+  onLeave: () => void;
+}) {
+  const pad = 8;
+  const maxW = 320;
+  const left = Math.min(Math.max(pad, anchorRect.left), window.innerWidth - maxW - pad);
+  const topBelow = anchorRect.bottom + pad;
+  const estHeight = 280;
+  const top =
+    topBelow + estHeight > window.innerHeight - pad ? Math.max(pad, anchorRect.top - estHeight - pad) : topBelow;
+
+  return createPortal(
+    <div
+      className="fixed z-[200] w-[min(320px,calc(100vw-1rem))] rounded-xl border border-slate-200/90 bg-white p-3 shadow-2xl dark:border-moss-border dark:bg-moss-elevated"
+      style={{ left, top }}
+      role="dialog"
+      aria-label={`${row.label} breakdown`}
+      onMouseEnter={onEnter}
+      onMouseLeave={onLeave}
+    >
+      <IncomeSpendBreakdown row={row} />
+    </div>,
+    document.body,
+  );
+}
+
 export function HouseholdContributionPanel({ state }: { state: FinanceState }) {
   const monthKey = currentMonthKey();
   const summary = useMemo(() => monthIncomeSpendSummary(state, monthKey), [state, monthKey]);
+  const panelId = useId();
+  const [hovered, setHovered] = useState<{ row: IncomeSpendRow; rect: DOMRect } | null>(null);
+  const leaveTimer = useRef<number | null>(null);
 
-  const chartData = useMemo<ChartRow[]>(
-    () =>
-      summary.rows.map((row) => ({
-        ...row,
-        name: row.label,
-        spentStack:
-          row.incomeLogged > 0 ? Math.min(row.spent, row.incomeLogged) : row.spent > 0 ? row.spent : 0,
-        remainingStack: row.incomeLogged > 0 ? row.remaining : 0,
-      })),
+  const cancelLeave = useCallback(() => {
+    if (leaveTimer.current != null) {
+      window.clearTimeout(leaveTimer.current);
+      leaveTimer.current = null;
+    }
+  }, []);
+
+  const scheduleLeave = useCallback(() => {
+    cancelLeave();
+    leaveTimer.current = window.setTimeout(() => setHovered(null), 150);
+  }, [cancelLeave]);
+
+  const displayRows = useMemo(
+    () => summary.rows.filter((r) => r.key === 'owner' || r.key === 'partner' || r.incomeLogged > 0 || r.spent > 0),
     [summary.rows],
   );
 
@@ -102,76 +239,56 @@ export function HouseholdContributionPanel({ state }: { state: FinanceState }) {
   const anyIncome = summary.rows.some((r) => r.incomeLogged > 0);
   const anyActivity = anyIncome || summary.rows.some((r) => r.spent > 0) || summary.unassigned.billsTotal > 0;
 
+  const onHover = useCallback(
+    (row: IncomeSpendRow, el: HTMLElement) => {
+      cancelLeave();
+      setHovered({ row, rect: el.getBoundingClientRect() });
+    },
+    [cancelLeave],
+  );
+
+  const onLeave = scheduleLeave;
+
   return (
     <Card
       accent="emerald"
       title="Income vs spend this month"
-      subtitle={`${monthLabel} — logged pay is the full bar; darker portion is bills you marked plus your unexpected costs.`}
+      subtitle={`${monthLabel} — light band is logged pay; darker shading is what they marked paid plus their surprise costs; red is over pay.`}
+      className="!overflow-visible"
     >
       {!anyActivity ? (
         <p className="text-sm font-medium text-sage-600 dark:text-moss-muted">
           Log pay in the Paycheque log, then mark bills or add surprise costs to see Primary vs Partner bars.
         </p>
       ) : (
-        <>
-          <div className="mb-3 flex flex-wrap gap-4 text-xs font-semibold text-sage-700 dark:text-moss-subtle">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="inline-block h-2.5 w-6 rounded-sm" style={{ background: PRIMARY_SPENT }} aria-hidden />
-              Spent (Primary)
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="inline-block h-2.5 w-6 rounded-sm border border-teal-900/20" style={{ background: PRIMARY_LEFT }} aria-hidden />
-              Left (Primary)
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="inline-block h-2.5 w-6 rounded-sm" style={{ background: PARTNER_SPENT }} aria-hidden />
-              Spent (Partner)
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="inline-block h-2.5 w-6 rounded-sm border border-sky-900/20" style={{ background: PARTNER_LEFT }} aria-hidden />
-              Left (Partner)
-            </span>
-          </div>
-          <div className="w-full min-w-0" style={{ height: Math.max(160, chartData.length * 56 + 48) }}>
-            <ResponsiveContainer
-              width="100%"
-              height="100%"
-              className="[&_.recharts-cartesian-axis-tick_text]:fill-sage-600 dark:[&_.recharts-cartesian-axis-tick_text]:fill-moss-muted"
-            >
-              <BarChart
-                data={chartData}
-                layout="vertical"
-                margin={{ left: 8, right: 16, top: 8, bottom: 8 }}
-              >
-                <XAxis
-                  type="number"
-                  domain={[0, summary.chartMax]}
-                  tickFormatter={(v) => formatMoney(Number(v))}
-                />
-                <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 12 }} />
-                <Tooltip content={<IncomeSpendTooltip />} cursor={{ fill: 'rgba(15, 118, 110, 0.08)' }} />
-                <Bar dataKey="spentStack" stackId="pay" radius={[0, 0, 0, 0]}>
-                  {chartData.map((row) => (
-                    <Cell key={`${row.key}-spent`} fill={fillsForKey(row.key).spent} />
-                  ))}
-                </Bar>
-                <Bar dataKey="remainingStack" stackId="pay" radius={[0, 6, 6, 0]}>
-                  {chartData.map((row) => (
-                    <Cell key={`${row.key}-left`} fill={fillsForKey(row.key).remaining} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+        <div id={panelId} className="space-y-4 overflow-visible">
+          {displayRows.map((row) => (
+            <IncomeSpendBarRow
+              key={row.key}
+              row={row}
+              onHover={onHover}
+              onLeave={onLeave}
+              isActive={hovered?.row.key === row.key}
+            />
+          ))}
+
+          {hovered ? (
+            <FloatingBreakdown
+              row={hovered.row}
+              anchorRect={hovered.rect}
+              onEnter={cancelLeave}
+              onLeave={scheduleLeave}
+            />
+          ) : null}
+
           {summary.unassigned.billsTotal > 0 ? (
-            <p className="mt-3 rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-xs leading-relaxed text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+            <p className="rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-xs leading-relaxed text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
               <strong>{formatMoney(summary.unassigned.billsTotal)}</strong> in marked bills are not tied to Primary or
               Partner yet ({summary.unassigned.bills.length} item
-              {summary.unassigned.bills.length === 1 ? '' : 's'}). Re-mark them while signed in, or run the household
-              attribution backfill.
+              {summary.unassigned.bills.length === 1 ? '' : 's'}).
             </p>
           ) : null}
-        </>
+        </div>
       )}
     </Card>
   );
