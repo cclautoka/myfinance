@@ -123,6 +123,9 @@ export type SurpriseCategory =
   | 'family'
   | 'other';
 
+/** Who paid / logged this surprise (Primary = owner, Partner = partner session). */
+export type SurprisePaidByRole = 'owner' | 'partner';
+
 /** One-off costs that were not in the regular plan (vet bill, broken fridge, etc.) */
 export interface SurpriseExpenseEntry {
   id: string;
@@ -130,6 +133,8 @@ export interface SurpriseExpenseEntry {
   amount: number;
   date: string;
   category: SurpriseCategory;
+  /** Primary vs Partner — used on income vs spend chart. */
+  paidByRole?: SurprisePaidByRole;
 }
 
 /** Dollars you moved from planned “unallocated” room into the emergency saver (manual bookkeeping). */

@@ -2,8 +2,13 @@ import { useState } from 'react';
 import type { FinanceState, SurpriseCategory, SurpriseExpenseEntry } from '../types/finance';
 import { SURPRISE_CATEGORY_OPTIONS } from '../data/selectOptions';
 import { formatMoney } from '../utils/format';
+import {
+  defaultSurprisePaidByRole,
+  SURPRISE_PAID_BY_OPTIONS,
+} from '../utils/surprisePaidBy';
 import { ListboxSelect } from './ui/ListboxSelect';
 import { NumericAmountInput } from './ui/NumericInputs';
+import type { SurprisePaidByRole } from '../types/finance';
 
 const uid = (): string => Math.random().toString(36).slice(2, 10);
 
@@ -28,6 +33,7 @@ export function SurpriseExpenses({
   const [label, setLabel] = useState('');
   const [amount, setAmount] = useState(50);
   const [category, setCategory] = useState<SurpriseCategory>('other');
+  const [paidByRole, setPaidByRole] = useState<SurprisePaidByRole>(() => defaultSurprisePaidByRole());
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
 
   const submit = () => {
@@ -38,6 +44,7 @@ export function SurpriseExpenses({
       amount,
       category,
       date,
+      paidByRole,
     });
     setLabel('');
   };
@@ -73,6 +80,19 @@ export function SurpriseExpenses({
             value={amount}
             onValueChange={setAmount}
           />
+          </label>
+          <label className="block text-sm font-medium text-sage-800 dark:text-moss-fg">
+            Paid by
+            <div className="mt-1">
+              <ListboxSelect
+                ariaLabel="Who paid this surprise cost"
+                popoverFixed
+                buttonClassName="w-full rounded-xl px-3 py-2 text-sm shadow-none"
+                value={paidByRole}
+                options={SURPRISE_PAID_BY_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                onChange={(v) => setPaidByRole(v as SurprisePaidByRole)}
+              />
+            </div>
           </label>
           <label className="block text-sm font-medium text-sage-800 dark:text-moss-fg">
             Category

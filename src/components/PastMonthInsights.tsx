@@ -5,6 +5,7 @@ import type {
   FinanceState,
   SurpriseCategory,
   SurpriseExpenseEntry,
+  SurprisePaidByRole,
 } from '../types/finance';
 import { pastMonthInsightsTip } from '../copy/tooltips';
 import {
@@ -17,6 +18,7 @@ import { billsHandledBreakdownForMonth } from '../utils/billsTimeline';
 import { incomeLogOvertimeMonthTotal } from '../utils/expectedPaycheque';
 import { incomeLogMonthTotal } from '../utils/incomeLog';
 import { formatMoney, formatShortDate } from '../utils/format';
+import { defaultSurprisePaidByRole, SURPRISE_PAID_BY_OPTIONS } from '../utils/surprisePaidBy';
 import { Card } from './ui/Card';
 import { EXTRA_INCOME_CATEGORY_OPTIONS, SURPRISE_CATEGORY_OPTIONS } from '../data/selectOptions';
 import { BillPaymentMarkControls } from './BillPaymentMarkControls';
@@ -123,6 +125,7 @@ function SurpriseRow({
   const [amount, setAmount] = useState(e.amount);
   const [date, setDate] = useState(e.date);
   const [category, setCategory] = useState(e.category);
+  const [paidByRole, setPaidByRole] = useState<SurprisePaidByRole>(e.paidByRole ?? 'owner');
   return (
     <li className="grid gap-2 rounded-xl border border-sage-200/80 bg-white/80 p-3 dark:border-moss-border dark:bg-moss-elevated sm:grid-cols-2">
       <input
@@ -146,6 +149,14 @@ function SurpriseRow({
           onChange={(ev) => setDate(ev.target.value)}
         />
         <ListboxSelect
+          ariaLabel="Surprise paid by"
+          popoverFixed
+          buttonClassName="min-w-[8rem] shrink-0 rounded-lg px-2 py-1.5 text-sm shadow-none"
+          value={paidByRole}
+          options={SURPRISE_PAID_BY_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+          onChange={(v) => setPaidByRole(v as SurprisePaidByRole)}
+        />
+        <ListboxSelect
           ariaLabel="Surprise expense category"
           popoverFixed
           buttonClassName="min-w-[10rem] shrink-0 rounded-lg px-2 py-1.5 text-sm shadow-none"
@@ -156,7 +167,7 @@ function SurpriseRow({
         <button
           type="button"
           className="btn-secondary btn-secondary-sm"
-          onClick={() => onSave(e.id, { label: label.trim(), amount, date, category })}
+          onClick={() => onSave(e.id, { label: label.trim(), amount, date, category, paidByRole })}
         >
           Save row
         </button>
@@ -184,6 +195,7 @@ function PastMonthRetroCashForms({
   const [suLabel, setSuLabel] = useState('');
   const [suAmount, setSuAmount] = useState(50);
   const [suCategory, setSuCategory] = useState<SurpriseCategory>('other');
+  const [suPaidBy, setSuPaidBy] = useState<SurprisePaidByRole>(() => defaultSurprisePaidByRole());
   const [suDate, setSuDate] = useState(() => defaultDateInMonth(monthKey));
   const [hint, setHint] = useState<string | null>(null);
 
@@ -217,6 +229,7 @@ function PastMonthRetroCashForms({
       amount: suAmount,
       category: suCategory,
       date: suDate,
+      paidByRole: suPaidBy,
     });
     setSuLabel('');
   };
@@ -317,6 +330,19 @@ function PastMonthRetroCashForms({
                 value={suDate}
                 onChange={(ev) => setSuDate(ev.target.value)}
               />
+            </label>
+            <label className="block text-xs font-medium text-sage-800 dark:text-moss-fg">
+              Paid by
+              <div className="mt-1">
+                <ListboxSelect
+                  ariaLabel="Surprise paid by for past month"
+                  popoverFixed
+                  buttonClassName="min-w-0 rounded-lg px-2 py-1.5 text-sm shadow-none"
+                  value={suPaidBy}
+                  options={SURPRISE_PAID_BY_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                  onChange={(v) => setSuPaidBy(v as SurprisePaidByRole)}
+                />
+              </div>
             </label>
             <div className="sm:col-span-2">
               <p className="text-xs font-medium text-sage-800 dark:text-moss-fg">Category</p>

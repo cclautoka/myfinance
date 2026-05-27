@@ -1,11 +1,15 @@
-/** Currency with cents — keeps payroll-style amounts honest (492.76, etc.). */
-export const formatMoney = (n: number, currency = 'USD'): string =>
-  new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(Number.isFinite(n) ? n : 0);
+/** Fixed en-US + narrow $ so phones never show "USD" / "US$" from device locale. */
+const moneyFormatter = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  currencyDisplay: 'narrowSymbol',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+/** Currency with cents — always `$1,234.56` (symbol only, not a currency code). */
+export const formatMoney = (n: number): string =>
+  moneyFormatter.format(Number.isFinite(n) ? n : 0);
 
 export const formatMoneyDetailed = formatMoney;
 

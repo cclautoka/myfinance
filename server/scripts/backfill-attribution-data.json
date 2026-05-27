@@ -1,0 +1,27 @@
+{
+  "householdId": "61c575ad5352b15bbb964349ed258cd6",
+  "ownerEmail": "shahilsunny18@gmail.com",
+  "partnerEmail": "zahrafatima.o898@gmail.com",
+  "bills": [
+    { "billId": "anz", "payKey": "2026-05", "role": "owner" },
+    { "billId": "bsp", "payKey": "2026-05", "role": "owner" },
+    { "billId": "car", "payKey": "2026-05", "role": "owner" },
+    { "billId": "efl", "payKey": "2026-05", "role": "partner" },
+    { "billId": "net", "payKey": "2026-05", "role": "partner" },
+    { "billId": "hp-phone", "payKey": "2026-05", "role": "partner" },
+    { "billId": "hp-laptop", "payKey": "2026-05", "role": "owner" },
+    { "billId": "food", "payKey": "2026-05-02", "role": "owner" },
+    { "billId": "food", "payKey": "2026-05-09", "role": "owner" },
+    { "billId": "food", "payKey": "2026-05-16", "role": "partner" },
+    { "billId": "farun", "payKey": "2026-05", "role": "owner" },
+    { "billId": "shamil", "payKey": "2026-05", "role": "owner" },
+    { "billId": "sandeep", "payKey": "2026-05", "role": "owner" }
+  ],
+  "surprises": [
+    { "match": { "date": "2026-05-16", "amount": 43.78, "label": "Doctor-meds" }, "paidByRole": "partner" },
+    { "match": { "date": "2026-05-15", "amount": 220, "label": "Qurbani share" }, "paidByRole": "partner" },
+    { "match": { "date": "2026-05-15", "amount": 11.9, "label": "Fresh choice shopping" }, "paidByRole": "partner" },
+    { "match": { "date": "2026-05-15", "amount": 43.19, "label": "True Mart shopping" }, "paidByRole": "partner" },
+    { "match": { "date": "2026-05-15", "amount": 65.45, "label": "Maccas dinner" }, "paidByRole": "owner" }
+  ]
+}

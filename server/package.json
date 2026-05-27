@@ -9,7 +9,8 @@
     "seed:shahil": "node scripts/seed-shahil-household.mjs",
     "list:households": "node scripts/list-households.mjs",
     "create-cron-key": "node scripts/create-cron-bearer-key.mjs",
-    "mark:verified": "node scripts/mark-email-verified.mjs"
+    "mark:verified": "node scripts/mark-email-verified.mjs",
+    "backfill:attribution": "node scripts/backfill-attribution.mjs --apply"
   },
   "engines": {
     "node": ">=20"

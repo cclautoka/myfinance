@@ -9,9 +9,10 @@ const escapeHtml = (s) =>
     .replaceAll("'", '&#39;');
 
 const fmtMoney = (n) =>
-  new Intl.NumberFormat(undefined, {
+  new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
+    currencyDisplay: 'narrowSymbol',
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(Number.isFinite(n) ? n : 0);
