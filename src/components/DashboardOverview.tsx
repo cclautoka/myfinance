@@ -439,7 +439,7 @@ export function DashboardOverview({
                 tip={ringFirst1kTip()}
               />
               {onEmergencyFund ? (
-                <div className="flex flex-wrap justify-center gap-2">
+                <div className="flex flex-wrap items-center justify-center gap-2">
                   {[25, 50, 100].map((n) => (
                     <button
                       key={n}
@@ -450,6 +450,46 @@ export function DashboardOverview({
                       +{formatMoney(n)}
                     </button>
                   ))}
+                  <div className="flex items-center gap-2">
+                    <NumericAmountInput
+                      min={0}
+                      className="w-[7.5rem] rounded-lg border border-sage-300 bg-white px-2 py-1.5 text-sm text-sage-900 dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
+                      value={manualGoalAdds['__emergencyFund1k'] ?? goalManualDefault}
+                      onValueChange={(n) => setManualGoalAdds((m) => ({ ...m, __emergencyFund1k: n }))}
+                    />
+                    <button
+                      type="button"
+                      className="btn-primary btn-primary-sm"
+                      onClick={() => {
+                        const raw = Number(manualGoalAdds['__emergencyFund1k'] ?? goalManualDefault);
+                        if (!Number.isFinite(raw) || raw <= 0) return;
+                        onEmergencyFund(Math.max(0, (Number(state.emergencyFund) || 0) + raw));
+                      }}
+                    >
+                      Add
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <NumericAmountInput
+                      min={0}
+                      className="w-[7.5rem] rounded-lg border border-sage-300 bg-white px-2 py-1.5 text-sm text-sage-900 dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
+                      value={manualGoalSubs['__emergencyFund1k'] ?? goalSubDefault}
+                      onValueChange={(n) => setManualGoalSubs((m) => ({ ...m, __emergencyFund1k: n }))}
+                    />
+                    <button
+                      type="button"
+                      className="btn-secondary btn-secondary-sm border border-rose-300/70 bg-rose-50 text-rose-800 hover:bg-rose-100 dark:border-rose-400/30 dark:bg-rose-950/25 dark:text-rose-200 dark:hover:bg-rose-950/40"
+                      onClick={() => {
+                        const raw = Number(manualGoalSubs['__emergencyFund1k'] ?? goalSubDefault);
+                        if (!Number.isFinite(raw) || raw <= 0) return;
+                        const sub = Math.min(raw, Number(state.emergencyFund) || 0);
+                        if (sub <= 0) return;
+                        onEmergencyFund(Math.max(0, (Number(state.emergencyFund) || 0) - sub));
+                      }}
+                    >
+                      Deduct
+                    </button>
+                  </div>
                 </div>
               ) : null}
             </div>
@@ -519,7 +559,7 @@ export function DashboardOverview({
                       />
                       <button
                         type="button"
-                        className="btn-secondary btn-secondary-sm"
+                        className="btn-secondary btn-secondary-sm border border-rose-300/70 bg-rose-50 text-rose-800 hover:bg-rose-100 dark:border-rose-400/30 dark:bg-rose-950/25 dark:text-rose-200 dark:hover:bg-rose-950/40"
                         onClick={() => {
                           const raw = Number(manualGoalSubs[g.id] ?? goalSubDefault);
                           if (!Number.isFinite(raw) || raw <= 0) return;
