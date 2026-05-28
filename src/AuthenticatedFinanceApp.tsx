@@ -628,22 +628,24 @@ export function AuthenticatedFinanceApp() {
 
         {appTab === 'tools' ? (
           <div role="tabpanel" id="app-tabpanel-tools" aria-labelledby="app-tab-tools">
-            <FinanceToolsShell
-              tab={toolsTab}
-              onTabChange={setToolsTab}
-              panels={{
-                sync: (
-                  <FinanceToolsPanel
-                    state={state}
-                    onPatch={update}
-                    onReloadFromServer={reloadFromServer}
-                    onReplayTour={openTourReplay}
-                    onRequestReset={() => setResetDialogOpen(true)}
-                  />
-                ),
-                audit: <AuditLogPanel />,
-              }}
-            />
+            <div className="px-5 sm:px-8">
+              <FinanceToolsShell
+                tab={toolsTab}
+                onTabChange={setToolsTab}
+                panels={{
+                  sync: (
+                    <FinanceToolsPanel
+                      state={state}
+                      onPatch={update}
+                      onReloadFromServer={reloadFromServer}
+                      onReplayTour={openTourReplay}
+                      onRequestReset={() => setResetDialogOpen(true)}
+                    />
+                  ),
+                  audit: <AuditLogPanel />,
+                }}
+              />
+            </div>
           </div>
         ) : null}
 
