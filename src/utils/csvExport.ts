@@ -15,6 +15,17 @@ import { monthSpendableCarry, totalSurplusSweptForMonth } from './budgetSurplus'
 
 const escape = (s: string): string => `"${s.replace(/"/g, '""')}"`;
 
+function monthKeyFromIsoDate(dateStr: string): string | null {
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function keyMatchesMonth(key: string, monthKey: string): boolean {
+  // billPaymentKey can be YYYY-MM (monthly) or YYYY-MM-DD (weekly essentials).
+  return key === monthKey || key.startsWith(`${monthKey}-`);
+}
+
 export const exportFinanceCsv = (state: FinanceState, snapshotMonth?: string): string => {
   const rows: string[][] = [];
   const mk = snapshotMonth ?? currentMonthKey();
@@ -59,7 +70,7 @@ export const exportFinanceCsv = (state: FinanceState, snapshotMonth?: string): s
     ]);
   }
 
-  for (const e of state.incomeLog) {
+  for (const e of state.incomeLog.filter((x) => monthKeyFromIsoDate(x.date) === mk)) {
     rows.push([
       'Income log',
       `${e.label} (${e.date}, ${e.earner})`,
@@ -78,6 +89,12 @@ export const exportFinanceCsv = (state: FinanceState, snapshotMonth?: string): s
     'Surprise expenses total',
     String(Math.round(surpriseExpensesMonthTotal(state, mk))),
   ]);
+  rows.push(['This month', 'Planned savings (monthly, plan lane)', String(Math.round(state.plannedSavingsMonthly ?? 0))]);
+  rows.push([
+    'This month',
+    'Planned personal (monthly, plan lane)',
+    String(Math.round(state.plannedPersonalMonthly ?? 0)),
+  ]);
   rows.push([
     'Unused plan sweep',
     'Total moved to typed emergency balance (manual bookkeeping)',
@@ -86,11 +103,62 @@ export const exportFinanceCsv = (state: FinanceState, snapshotMonth?: string): s
 
   const sweeps = (state.budgetSurplusSweeps ?? []).filter((s) => s.monthKey === mk);
   for (const s of sweeps) {
-    rows.push(['Sweep to emergency', `Applied ${s.date} (month ${mk})`, String(Math.round(s.amount))]);
+    rows.push([
+      'Sweep to emergency',
+      `Applied ${s.date} (month ${mk})`,
+      `amount=${Math.round(s.amount)} paidByRole=${(s as any).paidByRole ?? ''}`,
+    ]);
   }
 
-  for (const e of state.surpriseExpenses) {
+  for (const e of state.surpriseExpenses.filter((x) => monthKeyFromIsoDate(x.date) === mk)) {
     rows.push(['Surprise', `${e.label} (${e.date}, ${e.category})`, String(e.amount)]);
+  }
+
+  for (const e of state.extraIncome.filter((x) => monthKeyFromIsoDate(x.date) === mk)) {
+    rows.push(['Extra income', `${e.label} (${e.date}, ${e.category})`, String(e.amount)]);
+  }
+
+  // Savings goals + wallets aren't month-scoped in state; include current definitions for completeness.
+  for (const g of state.savingsGoals ?? []) {
+    rows.push(['Savings goal', `${g.name} (id=${g.id})`, `target=${g.targetAmount} balance=${g.balance}`]);
+  }
+  rows.push([
+    'Wallets',
+    'Husband budget/spent',
+    `budget=${state.wallets.husbandBudget} spent=${state.wallets.husbandSpent}`,
+  ]);
+  rows.push(['Wallets', 'Wife budget/spent', `budget=${state.wallets.wifeBudget} spent=${state.wallets.wifeSpent}`]);
+
+  // Bills paid & amounts/attribution for the snapshot month.
+  for (const [billId, keys] of Object.entries(state.billsPaid ?? {})) {
+    const matched = (keys ?? []).filter((k) => keyMatchesMonth(k, mk));
+    for (const k of matched) rows.push(['Bills', `Marked handled billId=${billId}`, k]);
+  }
+  for (const [billId, byKey] of Object.entries(state.billPaidAmounts ?? {})) {
+    for (const [k, amt] of Object.entries(byKey ?? {})) {
+      if (!keyMatchesMonth(k, mk)) continue;
+      rows.push(['Bills', `Actual paid billId=${billId} key=${k}`, String(amt)]);
+    }
+  }
+  for (const [billId, byKey] of Object.entries(state.billPaymentAttribution ?? {})) {
+    for (const [k, at] of Object.entries(byKey ?? {})) {
+      if (!keyMatchesMonth(k, mk)) continue;
+      rows.push([
+        'Bills',
+        `Attribution billId=${billId} key=${k}`,
+        `by=${(at as any)?.paidByRole ?? ''} at=${(at as any)?.atIso ?? ''}`,
+      ]);
+    }
+  }
+
+  const opening = state.monthCashflowOpening?.[mk];
+  if (opening) {
+    rows.push(['Month opening', 'confirmedAt', opening.confirmedAt]);
+    rows.push(['Month opening', 'settledFromPriorMonthKey', opening.settledFromPriorMonthKey]);
+    rows.push(['Month opening', 'priorSurplusRemainderShown', String(opening.priorSurplusRemainderShown)]);
+    rows.push(['Month opening', 'savingsDirectedAway', String(opening.savingsDirectedAway)]);
+    rows.push(['Month opening', 'carryApplied', String(opening.carryApplied)]);
+    rows.push(['Month opening', 'migrated', String(Boolean(opening.migrated))]);
   }
 
   rows.push(['Meta', 'Export month', mk]);
