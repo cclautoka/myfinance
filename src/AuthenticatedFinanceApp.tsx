@@ -72,9 +72,6 @@ const HouseholdContributionPanel = lazy(() =>
   import('./components/HouseholdContributionPanel').then((m) => ({ default: m.HouseholdContributionPanel })),
 );
 const DebtSnowball = lazy(() => import('./components/DebtSnowball').then((m) => ({ default: m.DebtSnowball })));
-const AllocationPanel = lazy(() =>
-  import('./components/AllocationPanel').then((m) => ({ default: m.AllocationPanel })),
-);
 
 function ChartPanelSkeleton() {
   return <div className="h-48 animate-pulse rounded-xl bg-slate-100/90 dark:bg-moss-bg/60" aria-hidden />;
@@ -580,9 +577,6 @@ export function AuthenticatedFinanceApp() {
                 ),
                 plan: (
                   <div id="finance-plan" data-tour="tour-plan" className="space-y-10">
-                    <Suspense fallback={<ChartPanelSkeleton />}>
-                      <AllocationPanel state={state} onPatch={update} />
-                    </Suspense>
                     <div>
                       <h3 className="mb-2 font-display text-xl font-bold text-sage-900 dark:text-moss-fg">
                         Fun money & emergency savings
