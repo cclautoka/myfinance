@@ -6,6 +6,7 @@ create table if not exists push_device_token (
   member_id uuid not null references household_member(id) on delete cascade,
   platform text not null check (platform in ('ios', 'android')),
   token text not null,
+  device_name text not null default '',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

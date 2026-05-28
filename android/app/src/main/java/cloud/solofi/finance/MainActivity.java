@@ -14,6 +14,7 @@ public class MainActivity extends BridgeActivity {
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
     WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
+    registerPlugin(WidgetBridgePlugin.class);
     createNotificationChannels();
   }
 

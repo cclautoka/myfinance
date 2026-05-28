@@ -45,6 +45,7 @@ import {
 } from '../setup/setupCompletion';
 import { pushToast } from '../ui/toast/toastBus';
 import { loadThemePreference, saveThemePreference } from '../utils/themePreference';
+import { writeWidgetCache } from '../utils/widgetCacheWriter';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -150,6 +151,14 @@ export function usePersistedFinance() {
     saveFinanceState(state);
   }, [state]);
 
+  // Native widgets need a shared-cache payload even when nothing changed yet.
+  // Write once on mount (local cache) and again after the first server hydration.
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    void writeWidgetCache(stateRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   /** Server hydration when signed in (server is source of truth). */
   useEffect(() => {
     if (!readHouseholdSession()?.token) return;
@@ -185,6 +194,8 @@ export function usePersistedFinance() {
             serverSaveRef.current = null;
           }
           applyRemoteState(remote.state, remote.updatedAt);
+          // Ensure widgets have real data immediately after login hydration.
+          void writeWidgetCache(remote.state);
           const relayCfg = readNotifyRelayConfig();
           if (relayCfg.enabled && relayCfg.url && serverAuthBearer()) {
             void postSnapshotRelay(buildSnapshotForReminders(remote.state)).then((r) => {
@@ -574,6 +585,7 @@ export function usePersistedFinance() {
         billPaymentAttribution,
       };
       stateRef.current = next;
+      void writeWidgetCache(next);
       return next;
     });
     if (serverSaveRef.current !== null) {
@@ -584,7 +596,11 @@ export function usePersistedFinance() {
   }, [flushServerSave]);
 
   const addExtraIncome = useCallback((entry: ExtraIncomeEntry) => {
-    setState((s) => ({ ...s, extraIncome: [entry, ...s.extraIncome] }));
+    setState((s) => {
+      const next = { ...s, extraIncome: [entry, ...s.extraIncome] };
+      void writeWidgetCache(next);
+      return next;
+    });
     const label = entry.label?.trim();
     pushToast({
       type: 'success',
@@ -594,7 +610,11 @@ export function usePersistedFinance() {
 
   const removeExtraIncome = useCallback((id: string) => {
     const entry = stateRef.current.extraIncome.find((e) => e.id === id);
-    setState((s) => ({ ...s, extraIncome: s.extraIncome.filter((e) => e.id !== id) }));
+    setState((s) => {
+      const next = { ...s, extraIncome: s.extraIncome.filter((e) => e.id !== id) };
+      void writeWidgetCache(next);
+      return next;
+    });
     const label = entry?.label?.trim();
     pushToast({
       type: 'success',
@@ -603,7 +623,11 @@ export function usePersistedFinance() {
   }, []);
 
   const addSurpriseExpense = useCallback((entry: SurpriseExpenseEntry) => {
-    setState((s) => ({ ...s, surpriseExpenses: [entry, ...s.surpriseExpenses] }));
+    setState((s) => {
+      const next = { ...s, surpriseExpenses: [entry, ...s.surpriseExpenses] };
+      void writeWidgetCache(next);
+      return next;
+    });
     const label = entry.label?.trim();
     pushToast({
       type: 'success',
@@ -613,10 +637,14 @@ export function usePersistedFinance() {
 
   const removeSurpriseExpense = useCallback((id: string) => {
     const entry = stateRef.current.surpriseExpenses.find((e) => e.id === id);
-    setState((s) => ({
-      ...s,
-      surpriseExpenses: s.surpriseExpenses.filter((e) => e.id !== id),
-    }));
+    setState((s) => {
+      const next = {
+        ...s,
+        surpriseExpenses: s.surpriseExpenses.filter((e) => e.id !== id),
+      };
+      void writeWidgetCache(next);
+      return next;
+    });
     const label = entry?.label?.trim();
     pushToast({
       type: 'success',
@@ -625,7 +653,11 @@ export function usePersistedFinance() {
   }, []);
 
   const addIncomeLog = useCallback((entry: IncomeLogEntry) => {
-    setState((s) => ({ ...s, incomeLog: [entry, ...s.incomeLog] }));
+    setState((s) => {
+      const next = { ...s, incomeLog: [entry, ...s.incomeLog] };
+      void writeWidgetCache(next);
+      return next;
+    });
     const label = entry.label?.trim();
     pushToast({
       type: 'success',
@@ -635,7 +667,11 @@ export function usePersistedFinance() {
 
   const removeIncomeLog = useCallback((id: string) => {
     const entry = stateRef.current.incomeLog.find((e) => e.id === id);
-    setState((s) => ({ ...s, incomeLog: s.incomeLog.filter((e) => e.id !== id) }));
+    setState((s) => {
+      const next = { ...s, incomeLog: s.incomeLog.filter((e) => e.id !== id) };
+      void writeWidgetCache(next);
+      return next;
+    });
     const label = entry?.label?.trim();
     pushToast({
       type: 'success',
@@ -644,24 +680,36 @@ export function usePersistedFinance() {
   }, []);
 
   const updateIncomeLog = useCallback((id: string, patch: Partial<IncomeLogEntry>) => {
-    setState((s) => ({
-      ...s,
-      incomeLog: s.incomeLog.map((e) => (e.id === id ? { ...e, ...patch } : e)),
-    }));
+    setState((s) => {
+      const next = {
+        ...s,
+        incomeLog: s.incomeLog.map((e) => (e.id === id ? { ...e, ...patch } : e)),
+      };
+      void writeWidgetCache(next);
+      return next;
+    });
   }, []);
 
   const updateExtraIncome = useCallback((id: string, patch: Partial<ExtraIncomeEntry>) => {
-    setState((s) => ({
-      ...s,
-      extraIncome: s.extraIncome.map((e) => (e.id === id ? { ...e, ...patch } : e)),
-    }));
+    setState((s) => {
+      const next = {
+        ...s,
+        extraIncome: s.extraIncome.map((e) => (e.id === id ? { ...e, ...patch } : e)),
+      };
+      void writeWidgetCache(next);
+      return next;
+    });
   }, []);
 
   const updateSurpriseExpense = useCallback((id: string, patch: Partial<SurpriseExpenseEntry>) => {
-    setState((s) => ({
-      ...s,
-      surpriseExpenses: s.surpriseExpenses.map((e) => (e.id === id ? { ...e, ...patch } : e)),
-    }));
+    setState((s) => {
+      const next = {
+        ...s,
+        surpriseExpenses: s.surpriseExpenses.map((e) => (e.id === id ? { ...e, ...patch } : e)),
+      };
+      void writeWidgetCache(next);
+      return next;
+    });
   }, []);
 
   const setMonthSpendableCarry = useCallback((monthKey: string, amount: number) => {

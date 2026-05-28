@@ -126,6 +126,52 @@ export async function sendBillReminderPush(householdId, { monthKey, counts }, lo
   return { ok: true, sent, failed, tokenCount: registrationTokens.length };
 }
 
+/** Data-only push to ask clients to refresh widgets (best-effort). */
+export async function sendWidgetsRefreshPush(householdId, log, opts = {}) {
+  const tokens = await listPushTokensForHousehold(householdId);
+  if (!tokens.length) return { ok: true, skipped: true, reason: 'no_tokens' };
+
+  const msg = await getMessaging(log);
+  if (!msg) return { ok: true, skipped: true, reason: 'push_not_configured' };
+
+  const registrationTokens = tokens.map((t) => t.token);
+  const reason = String(opts.reason ?? '').slice(0, 64);
+  let sent = 0;
+  let failed = 0;
+
+  const chunkSize = 500;
+  for (let i = 0; i < registrationTokens.length; i += chunkSize) {
+    const slice = registrationTokens.slice(i, i + chunkSize);
+    try {
+      const res = await msg.sendEachForMulticast({
+        tokens: slice,
+        data: {
+          type: 'widgets_refresh',
+          householdId: householdId.slice(0, 64),
+          reason,
+        },
+        apns: {
+          payload: { aps: { 'content-available': 1 } },
+          headers: {
+            'apns-push-type': 'background',
+            'apns-priority': '5',
+          },
+        },
+        android: {
+          priority: 'high',
+        },
+      });
+      sent += res.successCount;
+      failed += res.failureCount;
+    } catch (e) {
+      log?.error?.(e, 'widgets refresh push failed');
+      return { ok: false, error: 'Failed to send widget refresh push' };
+    }
+  }
+
+  return { ok: true, sent, failed, tokenCount: registrationTokens.length };
+}
+
 /** Test push to one member's devices only. */
 export async function sendTestPushToMember(householdId, memberId, log, opts = {}) {
   const currentToken = String(opts.currentToken ?? '').trim();

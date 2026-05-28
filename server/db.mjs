@@ -136,6 +136,7 @@ export async function initDbIfNeeded(log) {
         member_id uuid not null references household_member(id) on delete cascade,
         platform text not null check (platform in ('ios', 'android')),
         token text not null,
+        device_name text not null default '',
         created_at timestamptz not null default now(),
         updated_at timestamptz not null default now()
       );
@@ -146,6 +147,7 @@ export async function initDbIfNeeded(log) {
     await pool.query(`
       create index if not exists push_device_token_household_idx on push_device_token (household_id);
     `);
+    await pool.query(`alter table push_device_token add column if not exists device_name text not null default '';`);
     await pool.query(`alter table household_invite add column if not exists partner_email text;`);
     await pool.query(`
       alter table household_invite add column if not exists partner_member_id uuid
@@ -609,21 +611,23 @@ const CORE_TABLES = [
   'push_device_token',
 ];
 
-export async function upsertPushDeviceToken({ householdId, memberId, platform, token }) {
+export async function upsertPushDeviceToken({ householdId, memberId, platform, token, deviceName }) {
   if (!pool) throw new Error('DB not initialized');
   const plat = platform === 'android' ? 'android' : 'ios';
   const tok = String(token ?? '').trim().slice(0, 4096);
+  const name = String(deviceName ?? '').trim().slice(0, 80);
   if (!tok) throw new Error('token required');
   const r = await pool.query(
-    `insert into push_device_token (household_id, member_id, platform, token, updated_at)
-     values ($1, $2, $3, $4, now())
+    `insert into push_device_token (household_id, member_id, platform, token, device_name, updated_at)
+     values ($1, $2, $3, $4, $5, now())
      on conflict (token) do update set
        household_id = excluded.household_id,
        member_id = excluded.member_id,
        platform = excluded.platform,
+       device_name = excluded.device_name,
        updated_at = now()
      returning id`,
-    [householdId, memberId, plat, tok],
+    [householdId, memberId, plat, tok, name],
   );
   return r.rows[0];
 }
@@ -671,7 +675,7 @@ export async function memberHasPushToken(memberId, token) {
 export async function listPushDevicesForHousehold(householdId) {
   if (!pool) throw new Error('DB not initialized');
   const r = await pool.query(
-    `select t.id, t.household_id, t.member_id, t.platform, t.token, t.updated_at, m.email as member_email, m.role as member_role
+    `select t.id, t.household_id, t.member_id, t.platform, t.token, t.device_name, t.updated_at, m.email as member_email, m.role as member_role
      from push_device_token t
      join household_member m on m.id = t.member_id
      where t.household_id = $1

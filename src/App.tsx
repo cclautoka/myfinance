@@ -145,6 +145,32 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    // Widget deep links (home/lock screen).
+    // Examples:
+    // - #widget=paylog → scroll to pay log
+    // - #widget=bills → scroll to bills checklist (dashboard)
+    const h = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
+    const p = new URLSearchParams(h);
+    const kind = (p.get('widget') ?? '').trim();
+    if (!kind) return;
+    const scrollTo = (id: string) => {
+      window.setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 250);
+    };
+    if (kind === 'paylog') scrollTo('income-log-this-month');
+    else if (kind === 'bills') scrollTo('bills-timeline');
+    else if (kind === 'goals') scrollTo('savings-goals');
+    else if (kind === 'income') scrollTo('household-income-spend');
+
+    // Clear hash so it doesn't re-trigger on refresh.
+    try {
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    } catch {
+      /* ignore */
+    }
+  }, [householdSignedIn]);
+
   return (
     <>
       <ToastProvider />

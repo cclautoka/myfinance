@@ -77,6 +77,7 @@ import {
 } from './db.mjs';
 import { auditSummaryFromDiff, computeFinanceStateDiff } from './financeStateDiff.mjs';
 import { isPushDeliveryConfigured, sendTestPushToMember } from './pushSend.mjs';
+import { sendWidgetsRefreshPush } from './pushSend.mjs';
 import { hashPassword, verifyPassword } from './password.mjs';
 import { signFinanceSession, verifyFinanceSession } from './sessionToken.mjs';
 import { buildEmptyFinanceState } from './emptyFinanceState.mjs';
@@ -708,6 +709,11 @@ fastify.put('/v1/state', async (request, reply) => {
         request.log.warn({ err }, 'audit log insert failed');
       }
     }
+  }
+
+  if (body?.notify === true) {
+    // Best-effort: nudge devices to reload widgets quickly (OS throttling applies).
+    void sendWidgetsRefreshPush(id, request.log, { reason: 'state_saved' });
   }
   return reply.send({ ok: true, id, updatedAt: r.updatedAt });
 });
@@ -1784,6 +1790,7 @@ fastify.get('/v1/household/push/devices', async (request, reply) => {
     devices: rows.map((r) => ({
       id: r.id,
       platform: r.platform,
+      deviceName: String(r.device_name ?? '').trim() || undefined,
       memberEmail: maskEmailForDeviceList(r.member_email),
       memberRole: r.member_role,
       isMine: r.member_id === member.id,
@@ -1818,6 +1825,7 @@ fastify.post('/v1/household/push/register', async (request, reply) => {
   const body = request.body ?? {};
   const token = String(body.token ?? '').trim();
   const platform = String(body.platform ?? '').trim();
+  const deviceName = String(body.deviceName ?? '').trim();
   if (token.length < 8) return reply.code(400).send({ error: 'Invalid push token.' });
   if (platform !== 'ios' && platform !== 'android') {
     return reply.code(400).send({ error: 'platform must be ios or android.' });
@@ -1829,6 +1837,7 @@ fastify.post('/v1/household/push/register', async (request, reply) => {
     memberId: member.id,
     platform,
     token,
+    deviceName,
   });
   return reply.send({ ok: true });
 });

@@ -1,5 +1,6 @@
 import UIKit
 import Capacitor
+import WidgetKit
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -9,6 +10,22 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Override point for customization after application launch.
         return true
+    }
+
+    func application(
+        _ application: UIApplication,
+        didReceiveRemoteNotification userInfo: [AnyHashable : Any],
+        fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+    ) {
+        // Best-effort "push-nudge" to reload widgets (OS may throttle background delivery).
+        if let type = userInfo["type"] as? String, type == "widgets_refresh" {
+            if #available(iOS 14.0, *) {
+                WidgetCenter.shared.reloadAllTimelines()
+            }
+            completionHandler(.newData)
+            return
+        }
+        completionHandler(.noData)
     }
 
     func applicationWillResignActive(_ application: UIApplication) {

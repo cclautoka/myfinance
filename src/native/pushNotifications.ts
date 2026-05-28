@@ -4,6 +4,7 @@ import type { PluginListenerHandle } from '@capacitor/core';
 import { registerPushToken, unregisterPushToken } from '../utils/pushDeviceApi';
 import { readStoredPushToken, writeStoredPushToken } from '../utils/pushTokenStorage';
 import { pushToast } from '../ui/toast/toastBus';
+import { getNativeDeviceDisplayName } from './nativeDeviceName';
 
 const ANDROID_CHANNEL_ID = 'bill_reminders';
 
@@ -97,7 +98,8 @@ export async function enableNativePush(): Promise<void> {
   const token = await obtainNativePushToken();
 
   try {
-    await registerPushToken(token, nativePlatform());
+    const deviceName = await getNativeDeviceDisplayName();
+    await registerPushToken(token, nativePlatform(), deviceName);
     writeStoredPushToken(token);
   } catch (e) {
     writeStoredPushToken('');

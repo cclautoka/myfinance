@@ -11,11 +11,13 @@ import {
 import {
   fetchPushDevices,
   fetchPushStatus,
+  registerPushToken,
   revokePushDevice,
   sendTestPush,
   type PushDeviceRow,
   type PushStatus,
 } from '../utils/pushDeviceApi';
+import { getNativeDeviceDisplayName } from '../native/nativeDeviceName';
 import { resolvePushNotificationPrefs } from '../utils/pushNotificationPrefs';
 import { readHouseholdSession } from '../utils/householdSession';
 import { pushToast } from '../ui/toast/toastBus';
@@ -49,6 +51,7 @@ export function AppNotificationsPanel({
   const [devices, setDevices] = useState<PushDeviceRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [localToken, setLocalToken] = useState(() => readStoredPushToken());
+  const [localDeviceName, setLocalDeviceName] = useState('');
   const native = isNativePushAvailable();
   const pushRegisterReady = isNativePushRegistrationReady();
   const isOwner = readHouseholdSession()?.role === 'owner';
@@ -68,8 +71,40 @@ export function AppNotificationsPanel({
     void refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    if (!native) return;
+    let cancelled = false;
+    void (async () => {
+      const nm = (await getNativeDeviceDisplayName()) ?? '';
+      if (cancelled) return;
+      setLocalDeviceName(nm);
+
+      // Best-effort: if server row is missing deviceName, "touch" registration to backfill.
+      const tok = readStoredPushToken();
+      const platform = Capacitor.getPlatform() === 'android' ? 'android' : 'ios';
+      if (tok && nm) {
+        try {
+          await registerPushToken(tok, platform, nm);
+          await refresh();
+        } catch {
+          /* ignore */
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [native, refresh]);
+
   const thisDeviceOn = Boolean(status?.deviceRegistered);
   const localTokenOnly = Boolean(localToken && status && !status.deviceRegistered);
+
+  const deviceLabelWithLocalFallback = (d: PushDeviceRow): string => {
+    const name = String(d.deviceName ?? '').trim();
+    if (name) return name;
+    if (d.isThisDevice && localDeviceName.trim()) return localDeviceName.trim();
+    return platformLabel(d.platform);
+  };
 
   const setBillReminders = (on: boolean) => {
     onPatch({
@@ -272,7 +307,7 @@ export function AppNotificationsPanel({
               >
                 <div className="min-w-0">
                   <p className="font-medium text-slate-900 dark:text-moss-fg">
-                    {platformLabel(d.platform)}
+                    {deviceLabelWithLocalFallback(d)}
                     {d.isThisDevice ? (
                       <span className="ml-2 rounded-md bg-teal-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-teal-900 dark:bg-teal-950/50 dark:text-teal-200">
                         This device

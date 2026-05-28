@@ -19,6 +19,7 @@ export type PushStatus = {
 export type PushDeviceRow = {
   id: string;
   platform: 'ios' | 'android';
+  deviceName?: string;
   memberEmail: string;
   memberRole: string;
   isMine: boolean;
@@ -97,7 +98,11 @@ export async function revokePushDevice(deviceId: string): Promise<void> {
   if (!res.ok) throw new Error(await parseApiError(res));
 }
 
-export async function registerPushToken(token: string, platform: 'ios' | 'android'): Promise<void> {
+export async function registerPushToken(
+  token: string,
+  platform: 'ios' | 'android',
+  deviceName?: string,
+): Promise<void> {
   const sess = readHouseholdSession();
   const base = resolveHouseholdApiBase();
   if (!sess?.householdId || !base) {
@@ -106,7 +111,7 @@ export async function registerPushToken(token: string, platform: 'ios' | 'androi
   const res = await householdApiFetch(`/v1/household/push/register?id=${encodeURIComponent(sess.householdId)}`, {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ token, platform }),
+    body: JSON.stringify({ token, platform, deviceName }),
   });
   if (!res.ok) throw new Error(await parseApiError(res));
 }
