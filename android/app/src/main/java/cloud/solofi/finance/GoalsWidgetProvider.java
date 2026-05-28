@@ -72,11 +72,10 @@ public class GoalsWidgetProvider extends AppWidgetProvider {
       rv.setViewVisibility(R.id.widget_goal1, n >= 1 ? View.VISIBLE : View.GONE);
       rv.setViewVisibility(R.id.widget_goal2, n >= 2 ? View.VISIBLE : View.GONE);
       rv.setViewVisibility(R.id.widget_goal3, n >= 3 ? View.VISIBLE : View.GONE);
-      // In short height, prioritize money line; hide labels.
-      int labelVis = shortHeight ? View.GONE : View.VISIBLE;
-      rv.setViewVisibility(R.id.widget_goal1_label, labelVis);
-      rv.setViewVisibility(R.id.widget_goal2_label, labelVis);
-      rv.setViewVisibility(R.id.widget_goal3_label, labelVis);
+      // Always show titles so rings are identifiable. Layout ensures label is single-line.
+      rv.setViewVisibility(R.id.widget_goal1_label, View.VISIBLE);
+      rv.setViewVisibility(R.id.widget_goal2_label, View.VISIBLE);
+      rv.setViewVisibility(R.id.widget_goal3_label, View.VISIBLE);
 
       if (n >= 1) {
         WidgetCache.GoalItem g = cache.goals.get(0);

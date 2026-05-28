@@ -45,10 +45,11 @@
         android:includeFontPadding="false"
         android:gravity="center"
         android:text="First $1k"
-        android:textSize="11sp"
+        android:textSize="10sp"
         android:textStyle="bold"
         android:textColor="@android:color/white"
-        android:maxLines="2" />
+        android:singleLine="true"
+        android:ellipsize="end" />
 
       <TextView
         android:id="@+id/widget_goal1_meta"
@@ -88,10 +89,11 @@
         android:includeFontPadding="false"
         android:gravity="center"
         android:text="3-month"
-        android:textSize="11sp"
+        android:textSize="10sp"
         android:textStyle="bold"
         android:textColor="@android:color/white"
-        android:maxLines="2" />
+        android:singleLine="true"
+        android:ellipsize="end" />
 
       <TextView
         android:id="@+id/widget_goal2_meta"
@@ -129,10 +131,11 @@
         android:includeFontPadding="false"
         android:gravity="center"
         android:text="Goal"
-        android:textSize="11sp"
+        android:textSize="10sp"
         android:textStyle="bold"
         android:textColor="@android:color/white"
-        android:maxLines="2" />
+        android:singleLine="true"
+        android:ellipsize="end" />
 
       <TextView
         android:id="@+id/widget_goal3_meta"
