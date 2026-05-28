@@ -1,6 +1,6 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { defineConfig } from 'vite';
 
@@ -8,6 +8,15 @@ import { defineConfig } from 'vite';
 const apiProxyTarget = process.env.VITE_API_PROXY_TARGET ?? 'http://127.0.0.1:8787';
 /** Relative asset paths required for Capacitor native WebView — see docs/capacitor.md */
 const isCapacitorBuild = process.env.CAPACITOR === 'true';
+const pkgVersion = (() => {
+  try {
+    const raw = readFileSync(new URL('./package.json', import.meta.url), 'utf8');
+    const j = JSON.parse(raw) as { version?: string };
+    return j.version?.trim() || '1.0.0';
+  } catch {
+    return '1.0.0';
+  }
+})();
 
 export default defineConfig({
   base: isCapacitorBuild ? './' : '/',
@@ -50,6 +59,7 @@ export default defineConfig({
         process.env.CI_PIPELINE_IID ??
         '0',
     ),
+    __APP_VERSION__: JSON.stringify(process.env.APP_VERSION ?? pkgVersion),
     __ANDROID_PUSH_READY__: JSON.stringify(
       existsSync('android/app/google-services.json'),
     ),
