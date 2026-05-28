@@ -455,7 +455,7 @@ export function AuthenticatedFinanceApp() {
                       }}
                     />
                     <Suspense fallback={<ChartPanelSkeleton />}>
-                      <div id="household-income-spend">
+                      <div id="household-income-spend" className="scroll-mt-24">
                         <HouseholdContributionPanel state={state} />
                       </div>
                     </Suspense>

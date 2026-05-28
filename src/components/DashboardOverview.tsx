@@ -419,11 +419,12 @@ export function DashboardOverview({
           }
         >
           <div
-            className={
+            id="dashboard-goal-rings"
+            className={`scroll-mt-24 ${
               preview
                 ? 'mx-auto flex flex-wrap justify-center gap-6 rounded-2xl bg-white/95 px-4 py-6 shadow-lg dark:bg-moss-elevated/95'
                 : 'mx-auto flex flex-wrap justify-center gap-14 rounded-3xl bg-white/95 px-8 py-10 shadow-lg dark:bg-moss-elevated/95'
-            }
+            }`}
           >
             <div className="flex flex-col items-center gap-2">
               <ProgressRing

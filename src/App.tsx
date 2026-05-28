@@ -188,7 +188,7 @@ export default function App() {
 
       if (kind === 'paylog') tryScrollTo('income-log-this-month', { focusId: 'income-log-this-month-label' });
       else if (kind === 'bills') tryScrollTo('bills-timeline');
-      else if (kind === 'goals') tryScrollTo('savings-goals');
+      else if (kind === 'goals') tryScrollTo('dashboard-goal-rings');
       else if (kind === 'income') tryScrollTo('household-income-spend');
     };
 
