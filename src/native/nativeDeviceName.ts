@@ -14,20 +14,15 @@ export async function getNativeDeviceDisplayName(): Promise<string | undefined> 
   if (!Capacitor.isNativePlatform()) return undefined;
 
   try {
-    // Capacitor plugin API can vary slightly by platform/version; keep this best-effort and resilient.
-    const anyDevice = Device as unknown as {
-      getName?: () => Promise<{ name?: string }>;
-      getInfo?: () => Promise<{ model?: string; manufacturer?: string }>;
-    };
-
-    const nameRes = anyDevice.getName ? await anyDevice.getName() : null;
+    // Prefer explicit device name when supported (commonly iOS).
+    const nameRes = await (Device as unknown as { getName?: () => Promise<{ name?: string }> }).getName?.();
     const explicitName = cleanLabel(String(nameRes?.name ?? ''));
     if (explicitName) return explicitName.slice(0, 80);
 
-    const info = anyDevice.getInfo ? await anyDevice.getInfo() : null;
-
-    const manufacturer = cleanLabel(String(info?.manufacturer ?? ''));
-    const model = cleanLabel(String(info?.model ?? ''));
+    // Fallback: manufacturer + model (Android).
+    const info = await Device.getInfo();
+    const manufacturer = cleanLabel(String(info.manufacturer ?? ''));
+    const model = cleanLabel(String(info.model ?? ''));
     const friendly = cleanLabel([manufacturer, model].filter(Boolean).join(' '));
     if (friendly) return friendly.slice(0, 80);
     if (model) return model.slice(0, 80);

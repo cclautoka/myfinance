@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import type { SavingsGoal } from '../types/finance';
 import { NumericAmountInput } from '../components/ui/NumericInputs';
 import { newSetupId } from './setupIds';
@@ -13,9 +14,20 @@ export type SetupSavingsGoalsRowsProps = {
 };
 
 export function SetupSavingsGoalsRows({ rows, onChange, errors }: SetupSavingsGoalsRowsProps) {
+  const [manualAdds, setManualAdds] = useState<Record<string, number>>({});
+
   const patch = (id: string, patchRow: Partial<SavingsGoal>) => {
     onChange(rows.map((x) => (x.id === id ? { ...x, ...patchRow } : x)));
   };
+
+  const addToBalance = (id: string, delta: number) => {
+    if (!Number.isFinite(delta) || delta <= 0) return;
+    const row = rows.find((x) => x.id === id);
+    if (!row) return;
+    patch(id, { balance: Math.max(0, (Number(row.balance) || 0) + delta) });
+  };
+
+  const manualDefault = useMemo(() => 200, []);
 
   const add = () => onChange([...rows, createStarterSavingsGoal()]);
 
@@ -68,6 +80,43 @@ export function SetupSavingsGoalsRows({ rows, onChange, errors }: SetupSavingsGo
                   onValueChange={(n) => patch(g.id, { balance: n })}
                 />
               </label>
+              <div className="flex flex-wrap gap-2 sm:col-span-2">
+                {[25, 50, 100].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    className="btn-secondary btn-secondary-sm"
+                    onClick={() => addToBalance(g.id, n)}
+                  >
+                    +${n}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className="btn-secondary btn-secondary-sm"
+                  onClick={() => addToBalance(g.id, 500)}
+                >
+                  +$500
+                </button>
+                <div className="flex items-center gap-2">
+                  <NumericAmountInput
+                    min={0}
+                    className="w-[7.5rem] rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
+                    value={manualAdds[g.id] ?? manualDefault}
+                    onValueChange={(n) => setManualAdds((m) => ({ ...m, [g.id]: n }))}
+                  />
+                  <button
+                    type="button"
+                    className="btn-primary btn-primary-sm"
+                    onClick={() => {
+                      const n = Number(manualAdds[g.id] ?? manualDefault);
+                      addToBalance(g.id, n);
+                    }}
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
               <div className="sm:col-span-2">
                 <button
                   type="button"

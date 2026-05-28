@@ -62,7 +62,12 @@ function goalsToWidget(goals: SavingsGoal[]): WidgetGoalItem[] {
         target: tgt,
       };
     })
-    .sort((a, b) => b.progressPct - a.progressPct);
+    .sort((a, b) => {
+      const aSavings = a.name.toLowerCase().includes('savings') ? 1 : 0;
+      const bSavings = b.name.toLowerCase().includes('savings') ? 1 : 0;
+      if (aSavings !== bSavings) return bSavings - aSavings;
+      return b.progressPct - a.progressPct;
+    });
 }
 
 function parseMoneyFromTitle(title: string): { label: string; amount: number } {
@@ -126,7 +131,41 @@ export function buildWidgetCacheV1(state: FinanceState, opts?: { householdId?: s
     monthKey,
     nextDue,
     overdue,
-    goals: goalsToWidget(state.savingsGoals ?? []),
+    goals: (() => {
+      const ef = round2(Math.max(0, Number(state.emergencyFund ?? 0)));
+      const threeMonthTarget = round2(Math.max(0, Number(state.threeMonthFundTarget ?? 0)));
+      const savingsGoals = goalsToWidget(state.savingsGoals ?? []);
+
+      const out: WidgetGoalItem[] = [];
+
+      // Match the in-app rings: show "First $1,000" always.
+      out.push({
+        id: 'milestone-1k',
+        name: 'First $1,000',
+        progressPct: round2(clampPct((ef / 1000) * 100)),
+        balance: ef,
+        target: 1000,
+      });
+
+      // 3‑month cushion ring (legacy). Avoid duplicates if a legacy row already exists.
+      if (threeMonthTarget > 0 && !savingsGoals.some((g) => g.id === 'legacy-three-month' || g.name.toLowerCase().includes('3-month'))) {
+        const bal = round2(Math.min(ef, threeMonthTarget));
+        out.push({
+          id: 'legacy-three-month',
+          name: '3-month cushion',
+          progressPct: round2(clampPct((bal / Math.max(threeMonthTarget, 1)) * 100)),
+          balance: bal,
+          target: threeMonthTarget,
+        });
+      }
+
+      // Custom goals (holiday, school fees, etc.) including legacy-three-month if present.
+      out.push(...savingsGoals);
+
+      // Highest signal first: milestone + cushion + then other goals by progress.
+      // (We already ordered savingsGoals; keep our inserted items at the front.)
+      return out;
+    })(),
     incomeVsSpend,
   };
 }

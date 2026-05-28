@@ -4,13 +4,14 @@
   android:layout_width="match_parent"
   android:layout_height="match_parent"
   android:orientation="vertical"
-  android:padding="12dp"
+  android:padding="10dp"
   android:background="@drawable/widget_bg">
 
   <TextView
     android:id="@+id/widget_title"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:text="Bills"
     android:textStyle="bold"
     android:textSize="12sp"
     android:textColor="@android:color/white" />
@@ -19,15 +20,28 @@
     android:id="@+id/widget_line1"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:textSize="16sp"
+    android:text="Next due + overdue"
+    android:textSize="15sp"
     android:textStyle="bold"
     android:textColor="@android:color/white"
     android:maxLines="1" />
+
+  <ProgressBar
+    android:id="@+id/widget_progress"
+    style="?android:attr/progressBarStyleHorizontal"
+    android:layout_width="match_parent"
+    android:layout_height="6dp"
+    android:layout_marginTop="8dp"
+    android:layout_marginBottom="6dp"
+    android:indeterminate="false"
+    android:max="100"
+    android:progress="0" />
 
   <TextView
     android:id="@+id/widget_line2"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:text="Tap to open app"
     android:textSize="12sp"
     android:textColor="@android:color/white"
     android:maxLines="1" />
@@ -36,6 +50,7 @@
     android:id="@+id/widget_meta"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:text="Updates after sync"
     android:textSize="12sp"
     android:textColor="@android:color/white"
     android:alpha="0.85" />

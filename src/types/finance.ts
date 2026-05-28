@@ -144,6 +144,8 @@ export interface BudgetSurplusSweepEntry {
   amount: number;
   /** Calendar date you tapped the sweep (ISO yyyy-mm-dd). */
   date: string;
+  /** Primary vs Partner — used in income vs spend chart + widgets. */
+  paidByRole?: SurprisePaidByRole;
 }
 
 export interface MonthCashflowOpening {

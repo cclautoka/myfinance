@@ -1,9 +1,16 @@
 import type { FinanceState } from '../types/finance';
 import { buildWidgetCacheV1 } from './widgetCache';
 import { readHouseholdSession } from './householdSession';
-import { requestWidgetRefreshNative, writeWidgetCacheNative } from '../native/widgetBridge';
+import { requestWidgetRefreshNative } from '../native/widgetBridge';
+import { Capacitor } from '@capacitor/core';
+import { registerPlugin } from '@capacitor/core';
 
 const LOCAL_KEY = 'finance-widget-cache-v1';
+
+type WidgetBridgePlugin = {
+  writeCache: (opts: { json: string; householdId?: string; token?: string }) => Promise<void>;
+};
+const WidgetBridge = registerPlugin<WidgetBridgePlugin>('WidgetBridge');
 
 export async function writeWidgetCache(state: FinanceState): Promise<void> {
   const sess = readHouseholdSession();
@@ -17,7 +24,13 @@ export async function writeWidgetCache(state: FinanceState): Promise<void> {
     /* ignore */
   }
 
-  await writeWidgetCacheNative(json);
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await WidgetBridge.writeCache({ json, householdId: sess?.householdId, token: sess?.token });
+    } catch {
+      /* ignore */
+    }
+  }
   await requestWidgetRefreshNative();
 }
 

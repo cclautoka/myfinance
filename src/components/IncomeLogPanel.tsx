@@ -103,6 +103,8 @@ export function IncomeLogPanel({
 
   const wrapperId =
     variant === 'dashboard' ? 'income-log-this-month' : 'income-log-past-month';
+  const labelInputId =
+    variant === 'dashboard' ? 'income-log-this-month-label' : 'income-log-past-month-label';
   const title =
     variant === 'dashboard'
       ? 'Paycheque log — this calendar month'
@@ -160,6 +162,7 @@ export function IncomeLogPanel({
                   <label className="block text-sm font-medium text-sage-800 dark:text-moss-fg">
                     What hit the account?
                     <input
+                      id={labelInputId}
                       className="mt-1 w-full rounded-xl border border-sage-300 bg-white px-3 py-2 text-sage-900 dark:border-moss-border dark:bg-moss-elevated dark:text-moss-fg"
                       value={label}
                       onChange={(e) => setLabel(e.target.value)}

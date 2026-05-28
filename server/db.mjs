@@ -624,7 +624,7 @@ export async function upsertPushDeviceToken({ householdId, memberId, platform, t
        household_id = excluded.household_id,
        member_id = excluded.member_id,
        platform = excluded.platform,
-       device_name = excluded.device_name,
+       device_name = case when excluded.device_name <> '' then excluded.device_name else push_device_token.device_name end,
        updated_at = now()
      returning id`,
     [householdId, memberId, plat, tok, name],

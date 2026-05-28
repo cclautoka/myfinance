@@ -665,6 +665,10 @@ fastify.put('/v1/state', async (request, reply) => {
   const body = request.body;
   const state = body?.state;
   if (!state || typeof state !== 'object') return reply.code(400).send({ error: 'Body must include "state" object.' });
+  // Optional: store a precomputed widget cache snapshot alongside state for background widget refreshes.
+  if (body?.widgetCacheV1 && typeof body.widgetCacheV1 === 'object') {
+    state._widgetCacheV1 = body.widgetCacheV1;
+  }
   const previous = await readState(id);
   const baseUpdatedAt =
     typeof body?.baseUpdatedAt === 'string' && body.baseUpdatedAt.trim()

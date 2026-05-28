@@ -147,28 +147,54 @@ export default function App() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    // Widget deep links (home/lock screen).
-    // Examples:
-    // - #widget=paylog → scroll to pay log
-    // - #widget=bills → scroll to bills checklist (dashboard)
-    const h = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
-    const p = new URLSearchParams(h);
-    const kind = (p.get('widget') ?? '').trim();
-    if (!kind) return;
-    const scrollTo = (id: string) => {
-      window.setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 250);
-    };
-    if (kind === 'paylog') scrollTo('income-log-this-month');
-    else if (kind === 'bills') scrollTo('bills-timeline');
-    else if (kind === 'goals') scrollTo('savings-goals');
-    else if (kind === 'income') scrollTo('household-income-spend');
+    const apply = () => {
+      // Widget deep links (home/lock screen).
+      // Examples:
+      // - #widget=paylog → scroll to pay log
+      // - #widget=bills → scroll to bills checklist (dashboard)
+      const h = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
+      const p = new URLSearchParams(h);
+      const kind = (p.get('widget') ?? '').trim();
+      if (!kind) return;
+      const tryScrollTo = (id: string, opts?: { focusId?: string }) => {
+        const startedAt = Date.now();
+        const maxMs = 6000;
 
-    // Clear hash so it doesn't re-trigger on refresh.
-    try {
-      history.replaceState(null, '', window.location.pathname + window.location.search);
-    } catch {
-      /* ignore */
-    }
+        const tick = () => {
+          const el = document.getElementById(id);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            if (opts?.focusId) {
+                const focusId = opts.focusId;
+                window.setTimeout(
+                  () => (document.getElementById(focusId) as HTMLInputElement | null)?.focus(),
+                  350,
+                );
+            }
+            // Clear hash only once we actually handled it (element exists).
+            try {
+              history.replaceState(null, '', window.location.pathname + window.location.search);
+            } catch {
+              /* ignore */
+            }
+            return;
+          }
+          if (Date.now() - startedAt > maxMs) return;
+          window.setTimeout(tick, 200);
+        };
+
+        window.setTimeout(tick, 150);
+      };
+
+      if (kind === 'paylog') tryScrollTo('income-log-this-month', { focusId: 'income-log-this-month-label' });
+      else if (kind === 'bills') tryScrollTo('bills-timeline');
+      else if (kind === 'goals') tryScrollTo('savings-goals');
+      else if (kind === 'income') tryScrollTo('household-income-spend');
+    };
+
+    apply();
+    window.addEventListener('hashchange', apply);
+    return () => window.removeEventListener('hashchange', apply);
   }, [householdSignedIn]);
 
   return (

@@ -115,14 +115,24 @@ const finalizeIncomeMergeForLoad = (template: IncomeConfig, partial?: Partial<In
 };
 
 const normalizeSavingsGoals = (state: FinanceState): FinanceState => {
-  if (state.savingsGoals?.length) return { ...state, savingsGoals: state.savingsGoals };
+  const ef = Math.max(0, Number(state.emergencyFund) || 0);
+  // If we already have goals, still repair the legacy 3‑month row if present (older builds stored balance=0).
+  if (state.savingsGoals?.length) {
+    const next = state.savingsGoals.map((g) => {
+      if (g.id !== 'legacy-three-month') return g;
+      const tgt = Math.max(0, Number(g.targetAmount) || 0);
+      const bal = Math.min(ef, Math.max(tgt, 0));
+      return { ...g, name: g.name || '3-month cushion', balance: bal, targetAmount: tgt };
+    });
+    return { ...state, savingsGoals: next };
+  }
   const legacyTarget = Number(state.threeMonthFundTarget) || 0;
   if (legacyTarget > 0) {
     const goal: SavingsGoal = {
       id: 'legacy-three-month',
       name: '3-month cushion',
       targetAmount: legacyTarget,
-      balance: Math.min(Number(state.emergencyFund) || 0, legacyTarget),
+      balance: Math.min(ef, legacyTarget),
     };
     return { ...state, savingsGoals: [goal] };
   }
@@ -395,7 +405,7 @@ export const watchServerStateChanges = async (
 
 export const putServerFinanceState = async (
   state: FinanceState,
-  opts?: { force?: boolean; baseUpdatedAt?: string | null },
+  opts?: { force?: boolean; baseUpdatedAt?: string | null; notify?: boolean; widgetCacheV1?: unknown },
 ): Promise<
   | { ok: true; updatedAt: string }
   | { ok: false; status: number; error: string; conflict?: boolean }
@@ -403,11 +413,13 @@ export const putServerFinanceState = async (
   const c = getServerStorageConfig(opts);
   if (!c.enabled) return { ok: false, status: 0, error: 'Server storage not configured' };
   const path = `/v1/state?id=${encodeURIComponent(c.householdId)}`;
-  const body: { state: FinanceState; baseUpdatedAt?: string; force?: boolean } = {
+  const body: { state: FinanceState; baseUpdatedAt?: string; force?: boolean; notify?: boolean; widgetCacheV1?: unknown } = {
     state: stateForServerSync(state),
   };
   if (opts?.baseUpdatedAt) body.baseUpdatedAt = opts.baseUpdatedAt;
   if (opts?.force) body.force = true;
+  if (opts?.notify === true) body.notify = true;
+  if (opts?.widgetCacheV1) body.widgetCacheV1 = opts.widgetCacheV1;
   const res = await householdApiFetch(path, {
     method: 'PUT',
     headers: { ...serverRequestHeaders(), 'Content-Type': 'application/json' },

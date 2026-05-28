@@ -6,8 +6,27 @@ import android.appwidget.AppWidgetProvider;
 import android.content.Context;
 import android.content.Intent;
 import android.widget.RemoteViews;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 
 public class BillsWidgetProvider extends AppWidgetProvider {
+  private static int clamp(int n, int lo, int hi) {
+    return Math.max(lo, Math.min(hi, n));
+  }
+
+  private static int dueProgress(String dueIso) {
+    try {
+      // 14-day horizon: 0 = far, 100 = due/overdue.
+      LocalDate due = LocalDate.parse(dueIso);
+      long days = ChronoUnit.DAYS.between(LocalDate.now(), due);
+      int left = (int) days;
+      int pct = 100 - (left * 100 / 14);
+      return clamp(pct, 0, 100);
+    } catch (Exception e) {
+      return 0;
+    }
+  }
+
   @Override
   public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
     String json = WidgetBridgePlugin.readCacheJson(context);
@@ -20,11 +39,13 @@ public class BillsWidgetProvider extends AppWidgetProvider {
         rv.setTextViewText(R.id.widget_line1, cache.nextDue.label);
         rv.setTextViewText(R.id.widget_line2, cache.nextDue.dueDateIso);
         rv.setTextViewText(R.id.widget_meta, cache.overdue.size() > 0 ? ("Overdue: " + cache.overdue.size()) : "No overdue");
+        rv.setProgressBar(R.id.widget_progress, 100, dueProgress(cache.nextDue.dueDateIso), false);
       } else {
         rv.setTextViewText(R.id.widget_title, "Bills");
         rv.setTextViewText(R.id.widget_line1, "Open app to sync");
         rv.setTextViewText(R.id.widget_line2, "");
         rv.setTextViewText(R.id.widget_meta, "");
+        rv.setProgressBar(R.id.widget_progress, 100, 0, false);
       }
 
       Intent open = new Intent(context, MainActivity.class);

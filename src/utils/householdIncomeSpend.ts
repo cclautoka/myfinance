@@ -15,7 +15,7 @@ export type IncomeSpendRowKey = 'owner' | 'partner' | 'joint' | 'extra';
 export type SpendLineItem = {
   label: string;
   amount: number;
-  kind: 'bill' | 'surprise';
+  kind: 'bill' | 'surprise' | 'sweep';
 };
 
 export type IncomeSpendRow = {
@@ -132,9 +132,13 @@ function buildPersonRow(
 ): IncomeSpendRow {
   const bills = collectAttributedBills(state, monthKey, key);
   const surprises = surprisesForRole(state, monthKey, key);
+  const sweeps = (state.budgetSurplusSweeps ?? [])
+    .filter((e) => e.monthKey === monthKey && (e.paidByRole ?? 'owner') === key)
+    .map((e) => ({ label: `Sweep to savings (${e.date})`, amount: round2(e.amount), kind: 'sweep' as const }));
   const billsTotal = round2(bills.reduce((s, b) => s + b.amount, 0));
   const surprisesTotal = round2(surprises.reduce((s, b) => s + b.amount, 0));
-  const spent = round2(billsTotal + surprisesTotal);
+  const sweepsTotal = round2(sweeps.reduce((s, b) => s + b.amount, 0));
+  const spent = round2(billsTotal + surprisesTotal + sweepsTotal);
   const remaining = round2(Math.max(0, incomeLogged - spent));
   const overspend = round2(Math.max(0, spent - incomeLogged));
   return {
@@ -145,9 +149,9 @@ function buildPersonRow(
     remaining,
     overspend,
     bills,
-    surprises,
+    surprises: [...surprises, ...sweeps],
     billsTotal,
-    surprisesTotal,
+    surprisesTotal: round2(surprisesTotal + sweepsTotal),
   };
 }
 

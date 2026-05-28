@@ -3,7 +3,7 @@ import { registerPlugin } from '@capacitor/core';
 
 type WidgetBridgePlugin = {
   /** Persist widget cache in native shared storage (App Group / SharedPreferences). */
-  writeCache: (opts: { json: string }) => Promise<void>;
+  writeCache: (opts: { json: string; householdId?: string; token?: string }) => Promise<void>;
   /** Request widgets to refresh (best-effort; OS may throttle). */
   requestRefresh: () => Promise<void>;
 };

@@ -46,6 +46,7 @@ import {
 import { pushToast } from '../ui/toast/toastBus';
 import { loadThemePreference, saveThemePreference } from '../utils/themePreference';
 import { writeWidgetCache } from '../utils/widgetCacheWriter';
+import { buildWidgetCacheV1 } from '../utils/widgetCache';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -391,6 +392,8 @@ export function usePersistedFinance() {
         const result = await putServerFinanceState(stateRef.current, {
           baseUpdatedAt,
           force: opts?.force,
+          notify: true,
+          widgetCacheV1: buildWidgetCacheV1(stateRef.current, { householdId: readHouseholdSession()?.householdId }),
         });
         if (result.ok) {
           lastSaveErrorToastRef.current = null;
@@ -767,10 +770,15 @@ export function usePersistedFinance() {
       const room = surplusSweepRoomRemaining(s, mk);
       const amt = Math.min(amount, room);
       if (amt <= 0) return s;
+      const sess = readHouseholdSession();
+      const role = sess?.role === 'partner' ? 'partner' : 'owner';
       return {
         ...s,
         emergencyFund: s.emergencyFund + amt,
-        budgetSurplusSweeps: [...(s.budgetSurplusSweeps ?? []), { id, monthKey: mk, amount: amt, date: today }],
+        budgetSurplusSweeps: [
+          ...(s.budgetSurplusSweeps ?? []),
+          { id, monthKey: mk, amount: amt, date: today, paidByRole: role },
+        ],
       };
     });
   }, []);

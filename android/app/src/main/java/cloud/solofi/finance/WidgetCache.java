@@ -23,10 +23,14 @@ public class WidgetCache {
   public static class GoalItem {
     public final String name;
     public final double progressPct;
+    public final double balance;
+    public final double target;
 
-    public GoalItem(String name, double progressPct) {
+    public GoalItem(String name, double progressPct, double balance, double target) {
       this.name = name;
       this.progressPct = progressPct;
+      this.balance = balance;
+      this.target = target;
     }
   }
 
@@ -35,13 +39,15 @@ public class WidgetCache {
     public final double partnerIncome;
     public final double primaryLeft;
     public final double partnerLeft;
+    public final double primaryOver;
     public final double partnerOver;
 
-    public IncomeVsSpend(double pi, double pai, double pl, double pal, double po) {
+    public IncomeVsSpend(double pi, double pai, double pl, double pal, double pOver, double po) {
       this.primaryIncome = pi;
       this.partnerIncome = pai;
       this.primaryLeft = pl;
       this.partnerLeft = pal;
+      this.primaryOver = pOver;
       this.partnerOver = po;
     }
   }
@@ -82,7 +88,14 @@ public class WidgetCache {
         for (int i = 0; i < gg.length(); i++) {
           JSONObject it = gg.optJSONObject(i);
           if (it == null) continue;
-          goals.add(new GoalItem(it.optString("name"), it.optDouble("progressPct", 0)));
+          goals.add(
+            new GoalItem(
+              it.optString("name"),
+              it.optDouble("progressPct", 0),
+              it.optDouble("balance", 0),
+              it.optDouble("target", 0)
+            )
+          );
         }
       }
 
@@ -92,6 +105,7 @@ public class WidgetCache {
         ivs != null ? ivs.optDouble("partnerIncome", 0) : 0,
         ivs != null ? ivs.optDouble("primaryLeft", 0) : 0,
         ivs != null ? ivs.optDouble("partnerLeft", 0) : 0,
+        ivs != null ? ivs.optDouble("primaryOver", 0) : 0,
         ivs != null ? ivs.optDouble("partnerOver", 0) : 0
       );
 
