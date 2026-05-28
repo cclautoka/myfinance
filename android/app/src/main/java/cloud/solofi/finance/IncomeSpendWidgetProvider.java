@@ -115,12 +115,14 @@ public class IncomeSpendWidgetProvider extends AppWidgetProvider {
         }
 
         int w = 320;
-        int h = 44;
+        int h = 32;
         try {
           Bundle opts = appWidgetManager.getAppWidgetOptions(id);
           int minWdp = opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 180);
+          int minHdp = opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 72);
           float density = context.getResources().getDisplayMetrics().density;
           w = Math.max(220, (int) (minWdp * density));
+          if (minHdp >= 140) h = 44;
         } catch (Exception e) {
           // ignore
         }
@@ -128,7 +130,7 @@ public class IncomeSpendWidgetProvider extends AppWidgetProvider {
       } else {
         rv.setTextViewText(R.id.widget_line1, "Open app to sync");
         rv.setTextViewText(R.id.widget_line2, "");
-        rv.setImageViewBitmap(R.id.widget_chart, drawBars(320, 44, new WidgetCache.IncomeVsSpend(0, 0, 0, 0, 0, 0)));
+        rv.setImageViewBitmap(R.id.widget_chart, drawBars(320, 32, new WidgetCache.IncomeVsSpend(0, 0, 0, 0, 0, 0)));
       }
 
       Intent open = new Intent(context, MainActivity.class);
