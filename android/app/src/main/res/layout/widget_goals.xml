@@ -33,15 +33,15 @@
 
       <ImageView
         android:id="@+id/widget_goal1_ring"
-        android:layout_width="44dp"
-        android:layout_height="44dp"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
         android:contentDescription="Goal ring 1" />
 
       <TextView
         android:id="@+id/widget_goal1_label"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
+        android:layout_marginTop="2dp"
         android:gravity="center"
         android:text="First $1k"
         android:textSize="11sp"
@@ -55,7 +55,7 @@
         android:layout_height="wrap_content"
         android:gravity="center"
         android:text="$500 / $1000"
-        android:textSize="10sp"
+        android:textSize="9sp"
         android:textColor="@android:color/white"
         android:alpha="0.85"
         android:maxLines="1" />
@@ -73,15 +73,15 @@
 
       <ImageView
         android:id="@+id/widget_goal2_ring"
-        android:layout_width="44dp"
-        android:layout_height="44dp"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
         android:contentDescription="Goal ring 2" />
 
       <TextView
         android:id="@+id/widget_goal2_label"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
+        android:layout_marginTop="2dp"
         android:gravity="center"
         android:text="3-month"
         android:textSize="11sp"
@@ -95,7 +95,7 @@
         android:layout_height="wrap_content"
         android:gravity="center"
         android:text="$500 / $10200"
-        android:textSize="10sp"
+        android:textSize="9sp"
         android:textColor="@android:color/white"
         android:alpha="0.85"
         android:maxLines="1" />
@@ -111,15 +111,15 @@
 
       <ImageView
         android:id="@+id/widget_goal3_ring"
-        android:layout_width="44dp"
-        android:layout_height="44dp"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
         android:contentDescription="Goal ring 3" />
 
       <TextView
         android:id="@+id/widget_goal3_label"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
+        android:layout_marginTop="2dp"
         android:gravity="center"
         android:text="Goal"
         android:textSize="11sp"
@@ -133,7 +133,7 @@
         android:layout_height="wrap_content"
         android:gravity="center"
         android:text="$0 / $0"
-        android:textSize="10sp"
+        android:textSize="9sp"
         android:textColor="@android:color/white"
         android:alpha="0.85"
         android:maxLines="1" />

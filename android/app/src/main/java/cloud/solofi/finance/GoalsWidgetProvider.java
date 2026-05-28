@@ -48,10 +48,12 @@ public class GoalsWidgetProvider extends AppWidgetProvider {
       rv.setTextViewText(R.id.widget_title, "Goals");
       int px = 96;
       int rings = 1;
+      boolean shortHeight = false;
       try {
         Bundle opts = appWidgetManager.getAppWidgetOptions(id);
         int minWdp = opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 120);
         int minHdp = opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 80);
+        shortHeight = minHdp <= 90;
         int minDp = Math.min(minWdp, minHdp);
         float density = context.getResources().getDisplayMetrics().density;
         // Height is usually the limiting factor; aim for a ring that's clearly visible.
@@ -70,6 +72,11 @@ public class GoalsWidgetProvider extends AppWidgetProvider {
       rv.setViewVisibility(R.id.widget_goal1, n >= 1 ? View.VISIBLE : View.GONE);
       rv.setViewVisibility(R.id.widget_goal2, n >= 2 ? View.VISIBLE : View.GONE);
       rv.setViewVisibility(R.id.widget_goal3, n >= 3 ? View.VISIBLE : View.GONE);
+      // In short height, prioritize money line; hide labels.
+      int labelVis = shortHeight ? View.GONE : View.VISIBLE;
+      rv.setViewVisibility(R.id.widget_goal1_label, labelVis);
+      rv.setViewVisibility(R.id.widget_goal2_label, labelVis);
+      rv.setViewVisibility(R.id.widget_goal3_label, labelVis);
 
       if (n >= 1) {
         WidgetCache.GoalItem g = cache.goals.get(0);
