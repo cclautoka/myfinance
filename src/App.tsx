@@ -156,14 +156,29 @@ export default function App() {
       const p = new URLSearchParams(h);
       const kind = (p.get('widget') ?? '').trim();
       if (!kind) return;
+      const stickyOffsetPx = (): number => {
+        // Best-effort: account for sticky header + mobile bottom nav if present.
+        const header = document.querySelector('header') as HTMLElement | null;
+        const headerH = header ? Math.max(0, Math.round(header.getBoundingClientRect().height)) : 0;
+        // Bottom nav height is ~56px on mobile; only subtract if we’re on a small viewport.
+        const bottomNavH = window.matchMedia('(max-width: 1023.98px)').matches ? 56 : 0;
+        return headerH + bottomNavH + 12;
+      };
+
+      const scrollToId = (id: string) => {
+        const el = document.getElementById(id);
+        if (!el) return false;
+        const top = el.getBoundingClientRect().top + window.scrollY - stickyOffsetPx();
+        window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+        return true;
+      };
+
       const tryScrollTo = (id: string, opts?: { focusId?: string }) => {
         const startedAt = Date.now();
         const maxMs = 6000;
 
         const tick = () => {
-          const el = document.getElementById(id);
-          if (el) {
-            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          if (scrollToId(id)) {
             if (opts?.focusId) {
                 const focusId = opts.focusId;
                 window.setTimeout(
