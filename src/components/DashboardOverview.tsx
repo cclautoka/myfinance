@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import type { FinanceState } from '../types/finance';
 import {
   dashboardBillsTickedTip,
@@ -37,6 +37,7 @@ import { payLoggedVersusPlannedLine } from '../copy/payVsPlannedNotes';
 import { currentMonthKey } from '../data/defaults';
 import { HoverTip } from './ui/HoverTip';
 import { ProgressRing } from './ui/ProgressRing';
+import { NumericAmountInput } from './ui/NumericInputs';
 
 /**
  * Card-local type scale (`cqi` = 1% of card inline size). Viewport `vw` was wrong here: the snapshot
@@ -98,6 +99,10 @@ export function DashboardOverview({
   onGoToWorkspaceGoals?: () => void;
 }) {
   const preview = variant === 'preview';
+  const [manualGoalAdds, setManualGoalAdds] = useState<Record<string, number>>({});
+  const [manualGoalSubs, setManualGoalSubs] = useState<Record<string, number>>({});
+  const goalManualDefault = useMemo(() => 200, []);
+  const goalSubDefault = useMemo(() => 100, []);
   const income = combinedMonthlyIncome(state);
   const debt = totalDebtRemaining(state.debts);
   const mk = currentMonthKey();
@@ -458,7 +463,7 @@ export function DashboardOverview({
                   tip={`Savings goal “${g.name}”. Use Dashboard to allocate; manage goals in Workspace.`}
                 />
                 {onSavingsGoals ? (
-                  <div className="flex flex-wrap justify-center gap-2">
+                  <div className="flex flex-wrap items-center justify-center gap-2">
                     {[25, 50, 100].map((n) => (
                       <button
                         key={n}
@@ -484,6 +489,48 @@ export function DashboardOverview({
                     >
                       −{formatMoney(50)}
                     </button>
+                    <div className="flex items-center gap-2">
+                      <NumericAmountInput
+                        min={0}
+                        className="w-[7.5rem] rounded-lg border border-sage-300 bg-white px-2 py-1.5 text-sm text-sage-900 dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
+                        value={manualGoalAdds[g.id] ?? goalManualDefault}
+                        onValueChange={(n) => setManualGoalAdds((m) => ({ ...m, [g.id]: n }))}
+                      />
+                      <button
+                        type="button"
+                        className="btn-primary btn-primary-sm"
+                        onClick={() => {
+                          const raw = Number(manualGoalAdds[g.id] ?? goalManualDefault);
+                          if (!Number.isFinite(raw) || raw <= 0) return;
+                          const add = Math.min(raw, allocRoom);
+                          if (add <= 0) return;
+                          onSavingsGoals(goalRows.map((x) => (x.id === g.id ? { ...x, balance: (Number(x.balance) || 0) + add } : x)));
+                        }}
+                      >
+                        Add
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <NumericAmountInput
+                        min={0}
+                        className="w-[7.5rem] rounded-lg border border-sage-300 bg-white px-2 py-1.5 text-sm text-sage-900 dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
+                        value={manualGoalSubs[g.id] ?? goalSubDefault}
+                        onValueChange={(n) => setManualGoalSubs((m) => ({ ...m, [g.id]: n }))}
+                      />
+                      <button
+                        type="button"
+                        className="btn-secondary btn-secondary-sm"
+                        onClick={() => {
+                          const raw = Number(manualGoalSubs[g.id] ?? goalSubDefault);
+                          if (!Number.isFinite(raw) || raw <= 0) return;
+                          const sub = Math.min(raw, Number(g.balance) || 0);
+                          if (sub <= 0) return;
+                          onSavingsGoals(goalRows.map((x) => (x.id === g.id ? { ...x, balance: Math.max(0, (Number(x.balance) || 0) - sub) } : x)));
+                        }}
+                      >
+                        Deduct
+                      </button>
+                    </div>
                   </div>
                 ) : null}
               </div>
