@@ -10,6 +10,7 @@ import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.os.Bundle;
+import android.view.View;
 import android.widget.RemoteViews;
 
 public class GoalsWidgetProvider extends AppWidgetProvider {
@@ -41,23 +42,10 @@ public class GoalsWidgetProvider extends AppWidgetProvider {
   @Override
   public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
     WidgetCache cache = WidgetCache.parse(WidgetBridgePlugin.readCacheJson(context));
-    String name = (cache != null && cache.goals.size() > 0) ? cache.goals.get(0).name : "Set goals";
-    float pct = (cache != null && cache.goals.size() > 0) ? (float) cache.goals.get(0).progressPct : 0f;
 
     for (int id : appWidgetIds) {
       RemoteViews rv = new RemoteViews(context.getPackageName(), R.layout.widget_goals);
       rv.setTextViewText(R.id.widget_title, "Goals");
-      rv.setTextViewText(R.id.widget_line1, name);
-      if (cache != null && cache.goals.size() > 0) {
-        WidgetCache.GoalItem g = cache.goals.get(0);
-        if (g.target > 0 && g.balance > 0) {
-          rv.setTextViewText(R.id.widget_meta, "$" + (int) g.balance + " / $" + (int) g.target);
-        } else {
-          rv.setTextViewText(R.id.widget_meta, ((int) pct) + "%");
-        }
-      } else {
-        rv.setTextViewText(R.id.widget_meta, ((int) pct) + "%");
-      }
       int px = 96;
       int rings = 1;
       try {
@@ -67,37 +55,37 @@ public class GoalsWidgetProvider extends AppWidgetProvider {
         int minDp = Math.min(minWdp, minHdp);
         float density = context.getResources().getDisplayMetrics().density;
         // Height is usually the limiting factor; aim for a ring that's clearly visible.
-        px = Math.max(56, Math.min(160, (int) (minDp * density * 0.8)));
+        px = Math.max(44, Math.min(120, (int) (minDp * density * 0.55)));
         // Show more goals when there is enough width.
         rings = (minWdp >= 240) ? 3 : (minWdp >= 180 ? 2 : 1);
       } catch (Exception e) {
         // ignore
       }
 
-      // Composite rings (up to 3) into the one ImageView.
-      int n = (cache != null && cache.goals != null) ? Math.min(rings, cache.goals.size()) : 0;
-      if (n <= 0) {
-        rv.setImageViewBitmap(R.id.widget_pie, drawPie(px, pct));
-      } else if (n == 1) {
-        rv.setImageViewBitmap(R.id.widget_pie, drawPie(px, (float) cache.goals.get(0).progressPct));
-      } else {
-        int gap = Math.max(8, (int) (px * 0.12f));
-        int w = px * n + gap * (n - 1);
-        Bitmap b = Bitmap.createBitmap(w, px, Bitmap.Config.ARGB_8888);
-        Canvas c = new Canvas(b);
-        StringBuilder line = new StringBuilder();
-        for (int i = 0; i < n; i++) {
-          WidgetCache.GoalItem g = cache.goals.get(i);
-          Bitmap ring = drawPie(px, (float) g.progressPct);
-          c.drawBitmap(ring, i * (px + gap), 0, null);
-          if (i == 0) {
-            line.append(g.name);
-          } else {
-            line.append(" · ").append(g.name);
-          }
-        }
-        rv.setImageViewBitmap(R.id.widget_pie, b);
-        rv.setTextViewText(R.id.widget_line1, line.toString());
+      int available = (cache != null && cache.goals != null) ? cache.goals.size() : 0;
+      int n = Math.min(rings, available);
+      // Toggle slots.
+      rv.setViewVisibility(R.id.widget_goal1, n >= 1 ? View.VISIBLE : View.GONE);
+      rv.setViewVisibility(R.id.widget_goal2, n >= 2 ? View.VISIBLE : View.GONE);
+      rv.setViewVisibility(R.id.widget_goal3, n >= 3 ? View.VISIBLE : View.GONE);
+
+      if (n >= 1) {
+        WidgetCache.GoalItem g = cache.goals.get(0);
+        rv.setImageViewBitmap(R.id.widget_goal1_ring, drawPie(px, (float) g.progressPct));
+        rv.setTextViewText(R.id.widget_goal1_label, g.name);
+        rv.setTextViewText(R.id.widget_goal1_meta, "$" + (int) g.balance + " / $" + (int) g.target);
+      }
+      if (n >= 2) {
+        WidgetCache.GoalItem g = cache.goals.get(1);
+        rv.setImageViewBitmap(R.id.widget_goal2_ring, drawPie(px, (float) g.progressPct));
+        rv.setTextViewText(R.id.widget_goal2_label, g.name);
+        rv.setTextViewText(R.id.widget_goal2_meta, "$" + (int) g.balance + " / $" + (int) g.target);
+      }
+      if (n >= 3) {
+        WidgetCache.GoalItem g = cache.goals.get(2);
+        rv.setImageViewBitmap(R.id.widget_goal3_ring, drawPie(px, (float) g.progressPct));
+        rv.setTextViewText(R.id.widget_goal3_label, g.name);
+        rv.setTextViewText(R.id.widget_goal3_meta, "$" + (int) g.balance + " / $" + (int) g.target);
       }
 
       Intent open = new Intent(context, MainActivity.class);

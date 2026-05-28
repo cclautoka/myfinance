@@ -16,33 +16,129 @@
     android:textSize="12sp"
     android:textColor="@android:color/white" />
 
-  <ImageView
-    android:id="@+id/widget_pie"
-    android:layout_width="match_parent"
-    android:layout_height="44dp"
-    android:layout_marginTop="8dp"
-    android:scaleType="fitCenter"
-    android:contentDescription="Goal progress" />
-
-  <TextView
-    android:id="@+id/widget_line1"
+  <LinearLayout
+    android:id="@+id/widget_rings_row"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_marginTop="8dp"
-    android:text="First $1,000 • 3-month cushion"
-    android:textSize="12sp"
-    android:textStyle="bold"
-    android:textColor="@android:color/white"
-    android:maxLines="2" />
+    android:orientation="horizontal">
 
-  <TextView
-    android:id="@+id/widget_meta"
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:text="$500 / $1000"
-    android:textSize="12sp"
-    android:textColor="@android:color/white"
-    android:alpha="0.85"
-    android:maxLines="1" />
+    <LinearLayout
+      android:id="@+id/widget_goal1"
+      android:layout_width="0dp"
+      android:layout_height="wrap_content"
+      android:layout_weight="1"
+      android:orientation="vertical"
+      android:gravity="center_horizontal">
+
+      <ImageView
+        android:id="@+id/widget_goal1_ring"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:contentDescription="Goal ring 1" />
+
+      <TextView
+        android:id="@+id/widget_goal1_label"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:gravity="center"
+        android:text="First $1k"
+        android:textSize="11sp"
+        android:textStyle="bold"
+        android:textColor="@android:color/white"
+        android:maxLines="2" />
+
+      <TextView
+        android:id="@+id/widget_goal1_meta"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="$500 / $1000"
+        android:textSize="10sp"
+        android:textColor="@android:color/white"
+        android:alpha="0.85"
+        android:maxLines="1" />
+    </LinearLayout>
+
+    <LinearLayout
+      android:id="@+id/widget_goal2"
+      android:layout_width="0dp"
+      android:layout_height="wrap_content"
+      android:layout_weight="1"
+      android:orientation="vertical"
+      android:gravity="center_horizontal"
+      android:paddingStart="6dp"
+      android:paddingEnd="6dp">
+
+      <ImageView
+        android:id="@+id/widget_goal2_ring"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:contentDescription="Goal ring 2" />
+
+      <TextView
+        android:id="@+id/widget_goal2_label"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:gravity="center"
+        android:text="3-month"
+        android:textSize="11sp"
+        android:textStyle="bold"
+        android:textColor="@android:color/white"
+        android:maxLines="2" />
+
+      <TextView
+        android:id="@+id/widget_goal2_meta"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="$500 / $10200"
+        android:textSize="10sp"
+        android:textColor="@android:color/white"
+        android:alpha="0.85"
+        android:maxLines="1" />
+    </LinearLayout>
+
+    <LinearLayout
+      android:id="@+id/widget_goal3"
+      android:layout_width="0dp"
+      android:layout_height="wrap_content"
+      android:layout_weight="1"
+      android:orientation="vertical"
+      android:gravity="center_horizontal">
+
+      <ImageView
+        android:id="@+id/widget_goal3_ring"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:contentDescription="Goal ring 3" />
+
+      <TextView
+        android:id="@+id/widget_goal3_label"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:gravity="center"
+        android:text="Goal"
+        android:textSize="11sp"
+        android:textStyle="bold"
+        android:textColor="@android:color/white"
+        android:maxLines="2" />
+
+      <TextView
+        android:id="@+id/widget_goal3_meta"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="$0 / $0"
+        android:textSize="10sp"
+        android:textColor="@android:color/white"
+        android:alpha="0.85"
+        android:maxLines="1" />
+    </LinearLayout>
+  </LinearLayout>
+
 </LinearLayout>
 
