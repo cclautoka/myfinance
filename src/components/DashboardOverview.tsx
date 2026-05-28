@@ -87,9 +87,15 @@ function MetricWithTip({
 export function DashboardOverview({
   state,
   variant = 'default',
+  onEmergencyFund,
+  onSavingsGoals,
+  onGoToWorkspaceGoals,
 }: {
   state: FinanceState;
   variant?: 'default' | 'preview';
+  onEmergencyFund?: (next: number) => void;
+  onSavingsGoals?: (next: FinanceState['savingsGoals']) => void;
+  onGoToWorkspaceGoals?: () => void;
 }) {
   const preview = variant === 'preview';
   const income = combinedMonthlyIncome(state);
@@ -113,6 +119,9 @@ export function DashboardOverview({
 
   const fund1k = Math.min(1, state.emergencyFund / 1000);
   const fund3 = Math.min(1, state.emergencyFund / Math.max(state.threeMonthFundTarget, 1));
+  const goalRows = state.savingsGoals ?? [];
+  const allocatedTotal = goalRows.reduce((s, g) => s + (Number(g.balance) || 0), 0);
+  const allocRoom = Math.max(0, (Number(state.emergencyFund) || 0) - allocatedTotal);
 
   const extrasLine =
     extraIn === 0 && surprises === 0
@@ -416,20 +425,67 @@ export function DashboardOverview({
                 : 'mx-auto flex flex-wrap justify-center gap-14 rounded-3xl bg-white/95 px-8 py-10 shadow-lg dark:bg-moss-elevated/95'
             }
           >
-            <ProgressRing
-              value={fund1k}
-              label={fund1k >= 1 ? '$1k reserve milestone met' : '$1k reserve milestone'}
-              sublabel={`Balance ${formatMoney(state.emergencyFund)}`}
-              tip={ringFirst1kTip()}
-            />
-            {(state.savingsGoals ?? []).map((g) => (
+            <div className="flex flex-col items-center gap-2">
               <ProgressRing
-                key={g.id}
-                value={Math.min(1, g.balance / Math.max(g.targetAmount, 1))}
-                label={g.name}
-                sublabel={`${formatMoney(g.balance)} of ${formatMoney(g.targetAmount)}`}
-                tip={`Savings goal “${g.name}” — edit under Plan & bills.`}
+                value={fund1k}
+                label={fund1k >= 1 ? '$1k reserve milestone met' : '$1k reserve milestone'}
+                sublabel={`Balance ${formatMoney(state.emergencyFund)}`}
+                tip={ringFirst1kTip()}
               />
+              {onEmergencyFund ? (
+                <div className="flex flex-wrap justify-center gap-2">
+                  {[25, 50, 100].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      className="btn-secondary btn-secondary-sm"
+                      onClick={() => onEmergencyFund(Math.max(0, (Number(state.emergencyFund) || 0) + n))}
+                    >
+                      +{formatMoney(n)}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+
+            {goalRows.map((g) => (
+              <div key={g.id} className="flex flex-col items-center gap-2">
+                <ProgressRing
+                  value={Math.min(1, g.balance / Math.max(g.targetAmount, 1))}
+                  label={g.name}
+                  sublabel={`${formatMoney(g.balance)} of ${formatMoney(g.targetAmount)}`}
+                  tip={`Savings goal “${g.name}”. Use Dashboard to allocate; manage goals in Workspace.`}
+                />
+                {onSavingsGoals ? (
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {[25, 50, 100].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        className="btn-secondary btn-secondary-sm"
+                        onClick={() => {
+                          const add = Math.min(n, allocRoom);
+                          if (add <= 0) return;
+                          onSavingsGoals(goalRows.map((x) => (x.id === g.id ? { ...x, balance: (Number(x.balance) || 0) + add } : x)));
+                        }}
+                      >
+                        +{formatMoney(n)}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      className="btn-secondary btn-secondary-sm"
+                      onClick={() => {
+                        const sub = Math.min(50, Number(g.balance) || 0);
+                        if (sub <= 0) return;
+                        onSavingsGoals(goalRows.map((x) => (x.id === g.id ? { ...x, balance: Math.max(0, (Number(x.balance) || 0) - sub) } : x)));
+                      }}
+                    >
+                      −{formatMoney(50)}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             ))}
             {(state.savingsGoals ?? []).length === 0 && state.threeMonthFundTarget > 0 ? (
               <ProgressRing
@@ -440,6 +496,15 @@ export function DashboardOverview({
               />
             ) : null}
           </div>
+          {onGoToWorkspaceGoals ? (
+            <button
+              type="button"
+              className="mx-auto mt-6 text-center text-[11px] font-semibold text-white/85 underline decoration-white/40 underline-offset-2 hover:text-white"
+              onClick={onGoToWorkspaceGoals}
+            >
+              ? Manage goals / withdraw in Workspace (Plan)
+            </button>
+          ) : null}
         </div>
       </div>
     </section>

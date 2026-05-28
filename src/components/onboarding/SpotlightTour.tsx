@@ -16,7 +16,8 @@ const SAFE = 16;
 
 function readDismissed(): boolean {
   try {
-    return typeof localStorage !== 'undefined' && localStorage.getItem(ONBOARDING_STORAGE_KEY) === '1';
+    if (typeof localStorage !== 'undefined' && localStorage.getItem(ONBOARDING_STORAGE_KEY) === '1') return true;
+    return typeof sessionStorage !== 'undefined' && sessionStorage.getItem(ONBOARDING_STORAGE_KEY) === '1';
   } catch {
     return false;
   }
@@ -25,6 +26,8 @@ function readDismissed(): boolean {
 function persistDismiss() {
   try {
     localStorage.setItem(ONBOARDING_STORAGE_KEY, '1');
+    // Some webviews wipe localStorage on auth transitions; keep a session fallback so it doesn't re-open immediately.
+    sessionStorage.setItem(ONBOARDING_STORAGE_KEY, '1');
   } catch {
     /* ignore */
   }

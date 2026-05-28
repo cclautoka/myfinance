@@ -14,11 +14,14 @@ export function EmergencyFund({
   onFund,
   onTarget,
   onSavingsGoals,
+  mode = 'allocate',
 }: {
   state: FinanceState;
   onFund: (n: number) => void;
   onTarget: (n: number) => void;
   onSavingsGoals: (goals: SavingsGoal[]) => void;
+  /** `allocate`: balance edits here (legacy). `manage`: goal definition + withdraw only. */
+  mode?: 'allocate' | 'manage';
 }) {
   const br = allocationBreakdown(state);
   const monthlyFloor = Math.max(1, br.essentials + br.debt);
@@ -108,6 +111,7 @@ export function EmergencyFund({
         <h4 className="mb-3 font-display text-base font-bold text-sage-900 dark:text-moss-fg">Savings goals</h4>
         <SetupSavingsGoalsRows
           rows={goals}
+          variant={mode === 'manage' ? 'manage' : 'setup'}
           onChange={(rows) => {
             const next = sanitizeSavingsGoals(rows);
             onSavingsGoals(next);

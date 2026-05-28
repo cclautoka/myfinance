@@ -8,7 +8,6 @@ import {
   useSyncExternalStore,
 } from 'react';
 import { TimelineColumnSpotlight } from './components/TimelineColumnSpotlight';
-import { BudgetSurplusPanel } from './components/BudgetSurplusPanel';
 import { BillsTimeline } from './components/BillsTimeline';
 import { DashboardOverview } from './components/DashboardOverview';
 import { DataEditor } from './components/DataEditor';
@@ -151,8 +150,6 @@ export function AuthenticatedFinanceApp() {
     updateIncomeLog,
     updateExtraIncome,
     updateSurpriseExpense,
-    applyBudgetSurplusToEmergency,
-    setMonthSpendableCarry,
     completeMonthCashflowOpening,
     setIncome,
     setEssentials,
@@ -445,7 +442,18 @@ export function AuthenticatedFinanceApp() {
               <div className="relative isolate flex min-w-0 flex-col gap-10 lg:block">
                 <div className="order-3 flex min-w-0 flex-col gap-8 lg:order-none lg:ml-[calc((100%-4rem)*3/12+2rem)] lg:mr-[calc((100%-4rem)*3/12+2rem)] lg:w-[calc((100%-4rem)*6/12)]">
                   <div data-tour="tour-dashboard-snapshot" className="min-w-0 space-y-8">
-                    <DashboardOverview state={state} />
+                    <DashboardOverview
+                      state={state}
+                      onEmergencyFund={setEmergency}
+                      onSavingsGoals={(savingsGoals) => update({ savingsGoals })}
+                      onGoToWorkspaceGoals={() => {
+                        setAppTab('workspace');
+                        setWorkspaceTab('plan');
+                        requestAnimationFrame(() => {
+                          document.getElementById('savings-goals')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        });
+                      }}
+                    />
                     <Suspense fallback={<ChartPanelSkeleton />}>
                       <HouseholdContributionPanel state={state} />
                     </Suspense>
@@ -484,11 +492,7 @@ export function AuthenticatedFinanceApp() {
                       <Suspense fallback={<ChartPanelSkeleton />}>
                         <DebtSnowball state={state} compact />
                       </Suspense>
-                      <BudgetSurplusPanel
-                        state={state}
-                        onSweepToEmergency={applyBudgetSurplusToEmergency}
-                        onSetMonthSpendableCarry={setMonthSpendableCarry}
-                      />
+                      {/* Surplus sweep moved into savings goal allocation on Dashboard. */}
                     </div>
                   </details>
                   <LifeThisMonth state={state} onAddExtra={addExtraIncome} onRemoveExtra={removeExtraIncome} />
