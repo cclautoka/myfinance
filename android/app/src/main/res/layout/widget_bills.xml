@@ -41,7 +41,7 @@
     android:id="@+id/widget_line2"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:text="Tap to open app"
+    android:text="Due yyyy-mm-dd • $0"
     android:textSize="12sp"
     android:textColor="@android:color/white"
     android:maxLines="1" />

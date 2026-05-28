@@ -37,7 +37,7 @@ public class BillsWidgetProvider extends AppWidgetProvider {
       if (cache != null && cache.nextDue != null) {
         rv.setTextViewText(R.id.widget_title, "Next due");
         rv.setTextViewText(R.id.widget_line1, cache.nextDue.label);
-        rv.setTextViewText(R.id.widget_line2, cache.nextDue.dueDateIso);
+        rv.setTextViewText(R.id.widget_line2, cache.nextDue.dueDateIso + " • $" + (int) cache.nextDue.amount);
         rv.setTextViewText(R.id.widget_meta, cache.overdue.size() > 0 ? ("Overdue: " + cache.overdue.size()) : "No overdue");
         rv.setProgressBar(R.id.widget_progress, 100, dueProgress(cache.nextDue.dueDateIso), false);
       } else {
