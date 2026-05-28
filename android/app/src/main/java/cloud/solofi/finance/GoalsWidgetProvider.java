@@ -61,7 +61,7 @@ public class GoalsWidgetProvider extends AppWidgetProvider {
         // Show more goals when there is enough width.
         rings = (minWdp >= 240) ? 3 : (minWdp >= 180 ? 2 : 1);
         // In a 1-row short widget, show one ring so the $ values fit.
-        if (minHdp <= 110) rings = 1;
+        if (minHdp <= 90) rings = 1;
       } catch (Exception e) {
         // ignore
       }

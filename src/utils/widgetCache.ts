@@ -99,14 +99,18 @@ export function buildWidgetCacheV1(state: FinanceState, opts?: { householdId?: s
   const sections = buildBillsHeadsUpSections(state, ref);
   const dueSoon = sections.find((s) => s.heading.toLowerCase().startsWith('due soon'))?.items ?? [];
   const overdueItems = sections.find((s) => s.heading.toLowerCase() === 'overdue')?.items ?? [];
+  const horizonItems = sections.find((s) => s.heading.toLowerCase().startsWith('on the horizon'))?.items ?? [];
 
   const overdue = overdueItems
     .map((x) => toWidgetBillItem(x))
     .filter((x): x is WidgetBillItem => Boolean(x && x.label));
 
-  const nextDue =
-    dueSoon.map((x) => toWidgetBillItem(x)).find((x): x is WidgetBillItem => Boolean(x && x.label)) ??
-    null;
+  // Prefer "Due soon" (incl grace); fall back to the earliest horizon item so the widget
+  // doesn't get stuck on "Open app to sync" when nothing is yet classified as "soon".
+  const nextDueFromSoon = dueSoon.map((x) => toWidgetBillItem(x)).find((x): x is WidgetBillItem => Boolean(x && x.label)) ?? null;
+  const nextDueFromHorizon =
+    horizonItems.map((x) => toWidgetBillItem(x)).find((x): x is WidgetBillItem => Boolean(x && x.label)) ?? null;
+  const nextDue = nextDueFromSoon ?? nextDueFromHorizon ?? null;
 
   const summary = monthIncomeSpendSummary(state, monthKey);
   const primary = summary.rows.find((r) => r.key === 'owner');
