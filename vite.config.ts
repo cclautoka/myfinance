@@ -43,6 +43,13 @@ export default defineConfig({
         })(),
     ),
     __BUILD_TIME_ISO__: JSON.stringify(new Date().toISOString()),
+    __BUILD_NUMBER__: JSON.stringify(
+      process.env.DOKPLOY_BUILD_NUMBER ??
+        process.env.GITHUB_RUN_NUMBER ??
+        process.env.GITHUB_RUN_ID ??
+        process.env.CI_PIPELINE_IID ??
+        '0',
+    ),
     __ANDROID_PUSH_READY__: JSON.stringify(
       existsSync('android/app/google-services.json'),
     ),

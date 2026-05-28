@@ -22,6 +22,9 @@ export function Header({
   onOpenAccount?: () => void;
 }) {
   const [buildOpen, setBuildOpen] = useState(false);
+  const buildStamp = new Date(__BUILD_TIME_ISO__).toLocaleString();
+  const buildLine = import.meta.env.PROD ? `Build ${__BUILD_NUMBER__} · ${buildStamp}` : `Build dev · ${buildStamp}`;
+  const buildLineExpanded = import.meta.env.PROD ? `Build ${__BUILD_NUMBER__} · ${buildStamp}` : `${__BUILD_SHA__} · ${buildStamp}`;
 
   return (
     <header
@@ -53,12 +56,12 @@ export function Header({
             </button>
             {buildOpen ? (
               <p className="mt-1 font-mono text-[10px] leading-snug text-slate-600 dark:text-moss-muted">
-                {__BUILD_SHA__} · {new Date(__BUILD_TIME_ISO__).toLocaleString()}
+                {buildLineExpanded}
               </p>
             ) : null}
           </div>
           <p className="mt-1 hidden text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-moss-muted md:block">
-            Build {__BUILD_SHA__} · {new Date(__BUILD_TIME_ISO__).toLocaleString()}
+            {buildLine}
           </p>
         </div>
         <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:shrink-0 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:gap-3">

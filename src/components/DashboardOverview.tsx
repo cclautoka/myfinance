@@ -140,6 +140,119 @@ export function DashboardOverview({
   const gridCols = preview ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2';
   const splitCols = preview ? 'grid-cols-1 gap-4' : 'grid-cols-1 gap-8 sm:grid-cols-2';
 
+  const DEDUCT_BUTTON_CLASS =
+    'btn-secondary btn-secondary-sm border border-rose-300/70 bg-rose-50 text-rose-800 hover:bg-rose-100 dark:border-rose-400/30 dark:bg-rose-950/25 dark:text-rose-200 dark:hover:bg-rose-950/40';
+
+  function RingControls({
+    id,
+    canDeductQuick50,
+    onAdd,
+    onDeduct,
+    addCap,
+    currentBalance,
+  }: {
+    id: string;
+    /** Show the quick −$50 button (for goals). */
+    canDeductQuick50?: boolean;
+    /** Called with the final +delta to apply (already capped). */
+    onAdd: (delta: number) => void;
+    /** Called with the final −delta to apply (already capped). */
+    onDeduct: (delta: number) => void;
+    /** Upper bound for how much can be added right now. */
+    addCap: number;
+    /** Current balance for deduct capping. */
+    currentBalance: number;
+  }) {
+    const addValue = manualGoalAdds[id] ?? goalManualDefault;
+    const subValue = manualGoalSubs[id] ?? goalSubDefault;
+    const canAdd = addCap > 0;
+    const canDeduct = currentBalance > 0;
+
+    return (
+      <div className="flex w-full max-w-[22rem] flex-col items-center gap-2">
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          {[25, 50, 100].map((n) => (
+            <button
+              key={n}
+              type="button"
+              className="btn-secondary btn-secondary-sm"
+              onClick={() => {
+                const add = Math.min(n, addCap);
+                if (add <= 0) return;
+                onAdd(add);
+              }}
+              disabled={!canAdd}
+            >
+              +{formatMoney(n)}
+            </button>
+          ))}
+          {canDeductQuick50 ? (
+            <button
+              type="button"
+              className="btn-secondary btn-secondary-sm"
+              onClick={() => {
+                const sub = Math.min(50, currentBalance);
+                if (sub <= 0) return;
+                onDeduct(sub);
+              }}
+              disabled={!canDeduct}
+            >
+              −{formatMoney(50)}
+            </button>
+          ) : null}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <div className="flex items-center gap-2">
+            <NumericAmountInput
+              min={0}
+              className="w-[7.5rem] rounded-lg border border-sage-300 bg-white px-2 py-1.5 text-sm text-sage-900 dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
+              value={addValue}
+              onValueChange={(n) => setManualGoalAdds((m) => ({ ...m, [id]: n }))}
+            />
+            <button
+              type="button"
+              className="btn-primary btn-primary-sm"
+              onClick={() => {
+                const raw = Number(addValue);
+                if (!Number.isFinite(raw) || raw <= 0) return;
+                const add = Math.min(raw, addCap);
+                if (add <= 0) return;
+                onAdd(add);
+              }}
+              disabled={!canAdd}
+            >
+              Add
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <NumericAmountInput
+              min={0}
+              className="w-[7.5rem] rounded-lg border border-sage-300 bg-white px-2 py-1.5 text-sm text-sage-900 dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
+              value={subValue}
+              onValueChange={(n) => setManualGoalSubs((m) => ({ ...m, [id]: n }))}
+            />
+            <button
+              type="button"
+              className={DEDUCT_BUTTON_CLASS}
+              onClick={() => {
+                const raw = Number(subValue);
+                if (!Number.isFinite(raw) || raw <= 0) return;
+                const sub = Math.min(raw, currentBalance);
+                if (sub <= 0) return;
+                onDeduct(sub);
+              }}
+              disabled={!canDeduct}
+            >
+              Deduct
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <section
       className={`overflow-hidden border border-white/14 bg-gradient-to-br from-sage-900 via-sage-800 to-teal-900 text-white shadow-xl dark:border-white/12 dark:from-moss-bg dark:via-moss-surface dark:to-moss-bg dark:shadow-2xl ${
@@ -439,58 +552,13 @@ export function DashboardOverview({
                 tip={ringFirst1kTip()}
               />
               {onEmergencyFund ? (
-                <div className="flex flex-wrap items-center justify-center gap-2">
-                  {[25, 50, 100].map((n) => (
-                    <button
-                      key={n}
-                      type="button"
-                      className="btn-secondary btn-secondary-sm"
-                      onClick={() => onEmergencyFund(Math.max(0, (Number(state.emergencyFund) || 0) + n))}
-                    >
-                      +{formatMoney(n)}
-                    </button>
-                  ))}
-                  <div className="flex items-center gap-2">
-                    <NumericAmountInput
-                      min={0}
-                      className="w-[7.5rem] rounded-lg border border-sage-300 bg-white px-2 py-1.5 text-sm text-sage-900 dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
-                      value={manualGoalAdds['__emergencyFund1k'] ?? goalManualDefault}
-                      onValueChange={(n) => setManualGoalAdds((m) => ({ ...m, __emergencyFund1k: n }))}
-                    />
-                    <button
-                      type="button"
-                      className="btn-primary btn-primary-sm"
-                      onClick={() => {
-                        const raw = Number(manualGoalAdds['__emergencyFund1k'] ?? goalManualDefault);
-                        if (!Number.isFinite(raw) || raw <= 0) return;
-                        onEmergencyFund(Math.max(0, (Number(state.emergencyFund) || 0) + raw));
-                      }}
-                    >
-                      Add
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <NumericAmountInput
-                      min={0}
-                      className="w-[7.5rem] rounded-lg border border-sage-300 bg-white px-2 py-1.5 text-sm text-sage-900 dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
-                      value={manualGoalSubs['__emergencyFund1k'] ?? goalSubDefault}
-                      onValueChange={(n) => setManualGoalSubs((m) => ({ ...m, __emergencyFund1k: n }))}
-                    />
-                    <button
-                      type="button"
-                      className="btn-secondary btn-secondary-sm border border-rose-300/70 bg-rose-50 text-rose-800 hover:bg-rose-100 dark:border-rose-400/30 dark:bg-rose-950/25 dark:text-rose-200 dark:hover:bg-rose-950/40"
-                      onClick={() => {
-                        const raw = Number(manualGoalSubs['__emergencyFund1k'] ?? goalSubDefault);
-                        if (!Number.isFinite(raw) || raw <= 0) return;
-                        const sub = Math.min(raw, Number(state.emergencyFund) || 0);
-                        if (sub <= 0) return;
-                        onEmergencyFund(Math.max(0, (Number(state.emergencyFund) || 0) - sub));
-                      }}
-                    >
-                      Deduct
-                    </button>
-                  </div>
-                </div>
+                <RingControls
+                  id="__emergencyFund1k"
+                  addCap={Number.POSITIVE_INFINITY}
+                  currentBalance={Math.max(0, Number(state.emergencyFund) || 0)}
+                  onAdd={(delta) => onEmergencyFund(Math.max(0, (Number(state.emergencyFund) || 0) + delta))}
+                  onDeduct={(delta) => onEmergencyFund(Math.max(0, (Number(state.emergencyFund) || 0) - delta))}
+                />
               ) : null}
             </div>
 
@@ -503,75 +571,24 @@ export function DashboardOverview({
                   tip={`Savings goal “${g.name}”. Use Dashboard to allocate; manage goals in Workspace.`}
                 />
                 {onSavingsGoals ? (
-                  <div className="flex flex-wrap items-center justify-center gap-2">
-                    {[25, 50, 100].map((n) => (
-                      <button
-                        key={n}
-                        type="button"
-                        className="btn-secondary btn-secondary-sm"
-                        onClick={() => {
-                          const add = Math.min(n, allocRoom);
-                          if (add <= 0) return;
-                          onSavingsGoals(goalRows.map((x) => (x.id === g.id ? { ...x, balance: (Number(x.balance) || 0) + add } : x)));
-                        }}
-                      >
-                        +{formatMoney(n)}
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      className="btn-secondary btn-secondary-sm"
-                      onClick={() => {
-                        const sub = Math.min(50, Number(g.balance) || 0);
-                        if (sub <= 0) return;
-                        onSavingsGoals(goalRows.map((x) => (x.id === g.id ? { ...x, balance: Math.max(0, (Number(x.balance) || 0) - sub) } : x)));
-                      }}
-                    >
-                      −{formatMoney(50)}
-                    </button>
-                    <div className="flex items-center gap-2">
-                      <NumericAmountInput
-                        min={0}
-                        className="w-[7.5rem] rounded-lg border border-sage-300 bg-white px-2 py-1.5 text-sm text-sage-900 dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
-                        value={manualGoalAdds[g.id] ?? goalManualDefault}
-                        onValueChange={(n) => setManualGoalAdds((m) => ({ ...m, [g.id]: n }))}
-                      />
-                      <button
-                        type="button"
-                        className="btn-primary btn-primary-sm"
-                        onClick={() => {
-                          const raw = Number(manualGoalAdds[g.id] ?? goalManualDefault);
-                          if (!Number.isFinite(raw) || raw <= 0) return;
-                          const add = Math.min(raw, allocRoom);
-                          if (add <= 0) return;
-                          onSavingsGoals(goalRows.map((x) => (x.id === g.id ? { ...x, balance: (Number(x.balance) || 0) + add } : x)));
-                        }}
-                      >
-                        Add
-                      </button>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <NumericAmountInput
-                        min={0}
-                        className="w-[7.5rem] rounded-lg border border-sage-300 bg-white px-2 py-1.5 text-sm text-sage-900 dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
-                        value={manualGoalSubs[g.id] ?? goalSubDefault}
-                        onValueChange={(n) => setManualGoalSubs((m) => ({ ...m, [g.id]: n }))}
-                      />
-                      <button
-                        type="button"
-                        className="btn-secondary btn-secondary-sm border border-rose-300/70 bg-rose-50 text-rose-800 hover:bg-rose-100 dark:border-rose-400/30 dark:bg-rose-950/25 dark:text-rose-200 dark:hover:bg-rose-950/40"
-                        onClick={() => {
-                          const raw = Number(manualGoalSubs[g.id] ?? goalSubDefault);
-                          if (!Number.isFinite(raw) || raw <= 0) return;
-                          const sub = Math.min(raw, Number(g.balance) || 0);
-                          if (sub <= 0) return;
-                          onSavingsGoals(goalRows.map((x) => (x.id === g.id ? { ...x, balance: Math.max(0, (Number(x.balance) || 0) - sub) } : x)));
-                        }}
-                      >
-                        Deduct
-                      </button>
-                    </div>
-                  </div>
+                  <RingControls
+                    id={g.id}
+                    canDeductQuick50
+                    addCap={allocRoom}
+                    currentBalance={Math.max(0, Number(g.balance) || 0)}
+                    onAdd={(delta) => {
+                      onSavingsGoals(
+                        goalRows.map((x) => (x.id === g.id ? { ...x, balance: (Number(x.balance) || 0) + delta } : x)),
+                      );
+                    }}
+                    onDeduct={(delta) => {
+                      onSavingsGoals(
+                        goalRows.map((x) =>
+                          x.id === g.id ? { ...x, balance: Math.max(0, (Number(x.balance) || 0) - delta) } : x,
+                        ),
+                      );
+                    }}
+                  />
                 ) : null}
               </div>
             ))}
