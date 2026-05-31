@@ -15,7 +15,7 @@ import {
   ringThreeMonthTip,
 } from '../copy/tooltips';
 import { allocationBreakdown } from '../utils/allocation';
-import { monthActualExpenseTotal } from '../utils/budgetSurplus';
+import { monthActualExpenseTotal, monthSpendableCarry, pocketLeftSoFar } from '../utils/budgetSurplus';
 import { incomeLogMonthTotal } from '../utils/incomeLog';
 import {
   billIsInGraceAfterDue,
@@ -109,6 +109,8 @@ export function DashboardOverview({
   const extraIn = extraIncomeMonthTotal(state, mk);
   const surprises = surpriseExpensesMonthTotal(state, mk);
   const loggedPay = incomeLogMonthTotal(state, mk);
+  const carriedOver = monthSpendableCarry(state, mk);
+  const pocketLeft = pocketLeftSoFar(state, mk);
   const nb = nextBill(state);
   const backlogOverdue = firstOverdueTimelineBill(state);
   const nextBillStatus = nb ? billVisualStatus(state, nb) : null;
@@ -127,7 +129,6 @@ export function DashboardOverview({
   const goalRows = state.savingsGoals ?? [];
   const allocatedTotal = goalRows.reduce((s, g) => s + (Number(g.balance) || 0), 0);
   const allocRoom = Math.max(0, (Number(state.emergencyFund) || 0) - allocatedTotal);
-  const pocketLeft = loggedPay - actualExpenseMonth - allocatedTotal;
 
   const extrasLine =
     extraIn === 0 && surprises === 0
@@ -306,7 +307,7 @@ export function DashboardOverview({
               </p>
               <div className="mt-4 rounded-xl border border-sage-200/80 bg-sage-50/70 px-4 py-3 dark:border-moss-border dark:bg-moss-bg/40">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-sage-600 dark:text-moss-muted">
-                  Pocket left so far (deposits − counted spend − goal allocations)
+                  Pocket left so far (carry + deposits − counted spend − goal allocations)
                 </p>
                 <p
                   className={`mt-1 ${
@@ -317,6 +318,13 @@ export function DashboardOverview({
                 >
                   {formatMoney(pocketLeft)}
                 </p>
+                {carriedOver > 0 ? (
+                  <p className="mt-2 text-[11px] leading-snug text-teal-800 dark:text-teal-200/90">
+                    Carried over from last month:{' '}
+                    <span className="font-semibold tabular-nums">{formatMoney(carriedOver)}</span>
+                    {' · '}not counted in deposits below — stays in pocket until you spend it down
+                  </p>
+                ) : null}
               </div>
             </MetricCard>
           </MetricWithTip>

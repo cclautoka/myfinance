@@ -4,12 +4,9 @@ import { combinedMonthlyIncome, totalDebtRemaining } from './calculations';
 import { formatMoney } from './format';
 import { ensureNotifyRelayHouseholdId, readNotifyRelayConfig } from './notifyRelayConfig';
 import { serverAuthBearer } from './serverAuth';
-import { monthActualExpenseTotal } from './budgetSurplus';
-import { incomeLogMonthTotal } from './incomeLog';
+import { pocketLeftSoFar } from './budgetSurplus';
 import { digestSectionsForEmail } from './auditDisplay';
 import { computeFinanceStateDiff, type DigestSection } from './financeStateDiff';
-
-const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export const SAVE_EMAIL_DIGEST_VERSION = 1 as const;
 
@@ -38,11 +35,7 @@ export function buildFinanceChangeSummary(state: FinanceState): string {
   return lines.join('\n');
 }
 
-/** Dashboard-aligned: paycheque log this month minus counted spend (handled bills + surprises). */
-export function pocketLeftSoFar(state: FinanceState): number {
-  const mk = currentMonthKey();
-  return round2(incomeLogMonthTotal(state, mk) - monthActualExpenseTotal(state, mk));
-}
+export { pocketLeftSoFar } from './budgetSurplus';
 
 /** True when workbook fields changed in ways that warrant a save heads-up email (not browse-only noise). */
 export function hasFinanceStateNotifyChanges(from: FinanceState, to: FinanceState): boolean {

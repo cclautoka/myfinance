@@ -3,7 +3,7 @@ import type { FinanceState } from '../types/finance';
 import { currentMonthKey, formatCalendarMonthHeading, previousCalendarMonthKey } from '../data/defaults';
 import { formatMoney, formatShortDate } from '../utils/format';
 import { billsDueInFirstDaysOfMonth } from '../utils/monthOpening';
-import { surplusSweepRoomRemaining } from '../utils/budgetSurplus';
+import { monthPocketSlackForRollover } from '../utils/budgetSurplus';
 import { billOccurrenceIsPaid } from '../utils/billsTimeline';
 import { zLayers } from '../ui/zLayers';
 import { FieldError } from './ui/FieldError';
@@ -33,7 +33,7 @@ export function MonthCashflowOpeningModal({
 }) {
   const mk = currentMonthKey();
   const prev = previousCalendarMonthKey(mk);
-  const slack = useMemo(() => surplusSweepRoomRemaining(state, prev), [state, prev]);
+  const slack = useMemo(() => monthPocketSlackForRollover(state, prev), [state, prev]);
   const earlyBills = useMemo(() => billsDueInFirstDaysOfMonth(state, mk, 10), [state, mk]);
   const [savingsDraft, setSavingsDraft] = useState('');
 
@@ -71,13 +71,14 @@ export function MonthCashflowOpeningModal({
 
         <div className="mt-5 rounded-xl border border-sage-200/90 bg-sage-50/90 p-4 text-sm dark:border-moss-border dark:bg-moss-surface/70">
           <p className="font-semibold text-sage-900 dark:text-moss-fg">
-            Unused slack after {formatCalendarMonthHeading(prev)} (workbook math)
+            Pocket slack after {formatCalendarMonthHeading(prev)} (matches dashboard pocket left)
           </p>
           <p className="mt-2 font-display text-2xl font-bold tabular-nums text-sage-900 dark:text-moss-fg">
             {formatMoney(slack)}
           </p>
           <p className="mt-2 text-[12px] leading-snug text-sage-700 dark:text-moss-muted">
-            This is net incl. carry for that month, minus emergency sweeps you already tapped — not bank balance proof.
+            Deposits + any carry for that month, minus counted spend and goal allocations, minus emergency sweeps
+            already taken — not bank balance proof.
           </p>
         </div>
 
@@ -134,7 +135,7 @@ export function MonthCashflowOpeningModal({
           <FieldError id={fieldErrorId('month-savings')} message={savingsParsed.ok ? null : savingsParsed.error} />
         </label>
         <p className="mt-2 text-[12px] text-sage-700 dark:text-moss-muted">
-          We cap at {formatMoney(slack)} — values above shrink to fit. Leaving $0 rolls the full slack into carry-in (if POSITIVE).
+          We cap at {formatMoney(slack)} — values above shrink to fit. Enter <strong className="text-sage-900 dark:text-moss-fg">$0</strong> to roll the full amount into this month&apos;s pocket carry-in (nothing auto-moves to savings goals).
           {slack <= 0 && (
             <>
               {' '}

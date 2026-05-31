@@ -5,6 +5,7 @@ import {
   billPaidStoredAmount,
   timelineOccurrencesDueInCalendarMonth,
 } from './billsTimeline';
+import { currentMonthKey } from '../data/defaults';
 import { extraIncomeMonthTotal, surpriseExpensesMonthTotal } from './calculations';
 import { incomeLogMonthTotal } from './incomeLog';
 
@@ -60,6 +61,41 @@ export function monthAdjustedNetCashflow(state: FinanceState, monthKey: string):
  */
 export function surplusSweepRoomRemaining(state: FinanceState, monthKey: string): number {
   const net = monthAdjustedNetCashflow(state, monthKey);
+  if (net <= 0) return 0;
+  return Math.max(0, round2(net - totalSurplusSweptForMonth(state, monthKey)));
+}
+
+/** Savings goal ring balances allocated from the emergency pool — treated as set aside from pocket. */
+export function savingsGoalsAllocatedTotal(state: FinanceState): number {
+  const rows = state.savingsGoals ?? [];
+  return round2(rows.reduce((s, g) => s + (Number(g.balance) || 0), 0));
+}
+
+/**
+ * Dashboard “pocket left”: typed carry-in + paycheck deposits − counted spend − goal allocations.
+ * Carry-in is not included in {@link incomeLogMonthTotal} / “Deposits recorded”.
+ */
+export function pocketLeftSoFar(state: FinanceState, monthKey?: string): number {
+  const mk = monthKey ?? currentMonthKey();
+  return round2(
+    monthSpendableCarry(state, mk) +
+      incomeLogMonthTotal(state, mk) -
+      monthActualExpenseTotal(state, mk) -
+      savingsGoalsAllocatedTotal(state),
+  );
+}
+
+/**
+ * Prior-month slack that can roll into next month’s carry-in — matches pocket-left math
+ * (incl. carry and goal allocations), minus emergency sweeps already taken that month.
+ */
+export function monthPocketSlackForRollover(state: FinanceState, monthKey: string): number {
+  const net = round2(
+    monthSpendableCarry(state, monthKey) +
+      incomeLogMonthTotal(state, monthKey) -
+      monthActualExpenseTotal(state, monthKey) -
+      savingsGoalsAllocatedTotal(state),
+  );
   if (net <= 0) return 0;
   return Math.max(0, round2(net - totalSurplusSweptForMonth(state, monthKey)));
 }

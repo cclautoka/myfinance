@@ -27,7 +27,7 @@ import { debtIsAutoDeduction } from '../utils/autoBills';
 import type { BillsPaidTogglePayload } from '../utils/billsTimeline';
 import { billPaymentKey } from '../utils/billsTimeline';
 import { applyAutoScheduledPayLogs } from '../utils/autoScheduledPayLog';
-import { surplusSweepRoomRemaining } from '../utils/budgetSurplus';
+import { monthPocketSlackForRollover, surplusSweepRoomRemaining } from '../utils/budgetSurplus';
 import {
   buildSaveEmailDigest,
   buildSnapshotForReminders,
@@ -733,7 +733,7 @@ export function usePersistedFinance() {
     setState((s) => {
       const mk = currentMonthKey();
       const prev = previousCalendarMonthKey(mk);
-      const slack = surplusSweepRoomRemaining(s, prev);
+      const slack = monthPocketSlackForRollover(s, prev);
       let sav = round2(Number(savingsDirectedAwayRaw));
       if (!Number.isFinite(sav)) sav = 0;
       sav = Math.max(0, Math.min(sav, slack));
