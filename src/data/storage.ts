@@ -114,15 +114,20 @@ const finalizeIncomeMergeForLoad = (template: IncomeConfig, partial?: Partial<In
   return migrateOtherPlannedIncome(merged);
 };
 
-const normalizeSavingsGoals = (state: FinanceState): FinanceState => {
+export const normalizeSavingsGoals = (state: FinanceState): FinanceState => {
   const ef = Math.max(0, Number(state.emergencyFund) || 0);
-  // If we already have goals, still repair the legacy 3‑month row if present (older builds stored balance=0).
   if (state.savingsGoals?.length) {
     const next = state.savingsGoals.map((g) => {
       if (g.id !== 'legacy-three-month') return g;
       const tgt = Math.max(0, Number(g.targetAmount) || 0);
-      const bal = Math.min(ef, Math.max(tgt, 0));
-      return { ...g, name: g.name || '3-month cushion', balance: bal, targetAmount: tgt };
+      const stored = Math.max(0, Number(g.balance) || 0);
+      const mirrorCap = Math.min(ef, tgt);
+      // One-time cleanup: older builds mirrored emergencyFund into this balance on every load.
+      const balance =
+        stored > 0 && mirrorCap > 0 && Math.abs(stored - mirrorCap) < 0.01 && Math.abs(stored - ef) < 0.01
+          ? 0
+          : stored;
+      return { ...g, name: g.name || '3-month cushion', balance, targetAmount: tgt };
     });
     return { ...state, savingsGoals: next };
   }

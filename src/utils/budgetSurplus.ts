@@ -5,6 +5,7 @@ import {
   billPaidStoredAmount,
   timelineOccurrencesDueInCalendarMonth,
 } from './billsTimeline';
+import { startOfLocalDay } from './businessDays';
 import { currentMonthKey } from '../data/defaults';
 import { extraIncomeMonthTotal, surpriseExpensesMonthTotal } from './calculations';
 import { incomeLogMonthTotal } from './incomeLog';
@@ -46,6 +47,34 @@ export function monthActualExpenseTotal(state: FinanceState, monthKey: string): 
   return round2(billsPaid + surpriseExpensesMonthTotal(state, monthKey));
 }
 
+/**
+ * Handled bills/surprises counted for “pocket left so far” — only occurrences due on or before `ref`
+ * (default today) so future-dated lines do not reduce pocket early.
+ */
+export function monthActualExpenseSoFarForPocket(
+  state: FinanceState,
+  monthKey: string,
+  ref: Date = new Date(),
+): number {
+  const endOfToday = startOfLocalDay(ref).getTime();
+  const occ = timelineOccurrencesDueInCalendarMonth(state, monthKey);
+  let billsPaid = 0;
+  for (const b of occ) {
+    if (!billOccurrenceIsPaid(state, b)) continue;
+    if (startOfLocalDay(b.due).getTime() > endOfToday) continue;
+    billsPaid += billOccurrencePaidDisplayAmount(state, b, b.amount);
+  }
+  const [y, m] = monthKey.split('-').map(Number);
+  let surprises = 0;
+  for (const e of state.surpriseExpenses) {
+    const d = new Date(e.date);
+    if (d.getFullYear() !== y || d.getMonth() + 1 !== m) continue;
+    if (startOfLocalDay(d).getTime() > endOfToday) continue;
+    surprises += e.amount;
+  }
+  return round2(billsPaid + surprises);
+}
+
 /** Logged pay + extra only, minus outflows (ignores carry-in). */
 export function monthActualNetCashflow(state: FinanceState, monthKey: string): number {
   return round2(monthActualIncomeTotal(state, monthKey) - monthActualExpenseTotal(state, monthKey));
@@ -72,32 +101,41 @@ export function savingsGoalsAllocatedTotal(state: FinanceState): number {
 }
 
 /**
- * Dashboard “pocket left”: typed carry-in + paycheck deposits − counted spend − goal allocations.
- * Carry-in is not included in {@link incomeLogMonthTotal} / “Deposits recorded”.
+ * Dashboard “pocket left”: paycheck deposits this month − counted spend so far.
+ * Carry-in is shown separately; goal ring balances are not subtracted here.
  */
-export function pocketLeftSoFar(state: FinanceState, monthKey?: string): number {
+export function pocketLeftSoFar(state: FinanceState, monthKey?: string, ref: Date = new Date()): number {
   const mk = monthKey ?? currentMonthKey();
-  return round2(
-    monthSpendableCarry(state, mk) +
-      incomeLogMonthTotal(state, mk) -
-      monthActualExpenseTotal(state, mk) -
-      savingsGoalsAllocatedTotal(state),
-  );
+  return round2(incomeLogMonthTotal(state, mk) - monthActualExpenseSoFarForPocket(state, mk, ref));
 }
 
 /**
- * Prior-month slack that can roll into next month’s carry-in — matches pocket-left math
- * (incl. carry and goal allocations), minus emergency sweeps already taken that month.
+ * Prior-month spendable slack for month-opening carry — checking cushion left after pay, spend, and sweeps.
  */
 export function monthPocketSlackForRollover(state: FinanceState, monthKey: string): number {
   const net = round2(
     monthSpendableCarry(state, monthKey) +
       incomeLogMonthTotal(state, monthKey) -
-      monthActualExpenseTotal(state, monthKey) -
-      savingsGoalsAllocatedTotal(state),
+      monthActualExpenseTotal(state, monthKey),
   );
   if (net <= 0) return 0;
   return Math.max(0, round2(net - totalSurplusSweptForMonth(state, monthKey)));
+}
+
+export type MonthOpeningAllocationInput = {
+  emergency?: number;
+  goals?: Record<string, number>;
+};
+
+/** Sum of dollars directed to emergency + savings goals at month open (capped by caller). */
+export function totalMonthOpeningAllocation(input: MonthOpeningAllocationInput): number {
+  let sum = Math.max(0, Number(input.emergency) || 0);
+  if (!Number.isFinite(sum)) sum = 0;
+  for (const v of Object.values(input.goals ?? {})) {
+    const n = Number(v);
+    if (Number.isFinite(n) && n > 0) sum += n;
+  }
+  return round2(sum);
 }
 
 export type MonthCashflowIncomeLine = {

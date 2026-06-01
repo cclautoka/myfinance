@@ -3,14 +3,18 @@ import type { FinanceState } from '../types/finance';
 import { currentMonthKey, formatCalendarMonthHeading, previousCalendarMonthKey } from '../data/defaults';
 import { formatMoney, formatShortDate } from '../utils/format';
 import { billsDueInFirstDaysOfMonth } from '../utils/monthOpening';
-import { monthPocketSlackForRollover } from '../utils/budgetSurplus';
+import {
+  monthPocketSlackForRollover,
+  totalMonthOpeningAllocation,
+  type MonthOpeningAllocationInput,
+} from '../utils/budgetSurplus';
 import { billOccurrenceIsPaid } from '../utils/billsTimeline';
 import { zLayers } from '../ui/zLayers';
 import { FieldError } from './ui/FieldError';
 import { fieldErrorId } from './ui/fieldErrorId';
 import { FieldHelp } from './ui/FieldHelp';
 
-function parseSavingsDraft(s: string): { ok: true; value: number } | { ok: false; error: string } {
+function parseAmountDraft(s: string): { ok: true; value: number } | { ok: false; error: string } {
   const t = s.trim();
   if (!t) return { ok: true, value: 0 };
   const n = Number.parseFloat(t.replace(/,/g, ''));
@@ -21,13 +25,17 @@ function parseSavingsDraft(s: string): { ok: true; value: number } | { ok: false
   return { ok: true, value: n };
 }
 
+const EMERGENCY_FIELD = '__emergency__';
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
 export function MonthCashflowOpeningModal({
   state,
   onConfirm,
   onStartTourAfterUnlock,
 }: {
   state: FinanceState;
-  onConfirm: (savingsDirectedAway: number) => void;
+  onConfirm: (allocations: MonthOpeningAllocationInput) => void;
   /** Clears onboarding dismiss flag and bumps parent tour key after the month is opened. */
   onStartTourAfterUnlock?: () => void;
 }) {
@@ -35,13 +43,59 @@ export function MonthCashflowOpeningModal({
   const prev = previousCalendarMonthKey(mk);
   const slack = useMemo(() => monthPocketSlackForRollover(state, prev), [state, prev]);
   const earlyBills = useMemo(() => billsDueInFirstDaysOfMonth(state, mk, 10), [state, mk]);
-  const [savingsDraft, setSavingsDraft] = useState('');
+  const goalRows = state.savingsGoals ?? [];
 
-  const savingsParsed = useMemo(() => parseSavingsDraft(savingsDraft), [savingsDraft]);
-  const savingsValue = savingsParsed.ok ? savingsParsed.value : 0;
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
 
-  const savingsUsed = Math.min(savingsValue, slack);
-  const carryPreview = Math.max(0, Math.round((slack - savingsUsed) * 100) / 100);
+  const parsedByField = useMemo(() => {
+    const out: Record<string, { ok: true; value: number } | { ok: false; error: string }> = {};
+    out[EMERGENCY_FIELD] = parseAmountDraft(drafts[EMERGENCY_FIELD] ?? '');
+    for (const g of goalRows) {
+      out[g.id] = parseAmountDraft(drafts[g.id] ?? '');
+    }
+    return out;
+  }, [drafts, goalRows]);
+
+  const allParsedOk = Object.values(parsedByField).every((p) => p.ok);
+
+  const allocationInput = useMemo((): MonthOpeningAllocationInput => {
+    const emergencyParsed = parsedByField[EMERGENCY_FIELD];
+    const emergency = emergencyParsed?.ok ? emergencyParsed.value : 0;
+    const goals: Record<string, number> = {};
+    for (const g of goalRows) {
+      const p = parsedByField[g.id];
+      if (p?.ok && p.value > 0) goals[g.id] = p.value;
+    }
+    return { emergency, goals };
+  }, [parsedByField, goalRows]);
+
+  const rawTotal = totalMonthOpeningAllocation(allocationInput);
+  const allocatedTotal = Math.min(rawTotal, slack);
+  const carryPreview = Math.max(0, Math.round((slack - allocatedTotal) * 100) / 100);
+
+  const cappedAllocation = useMemo((): MonthOpeningAllocationInput => {
+    if (rawTotal <= slack || rawTotal <= 0) return allocationInput;
+    let remaining = slack;
+    const emergency = Math.min(Math.max(0, allocationInput.emergency ?? 0), remaining);
+    remaining = round2(remaining - emergency);
+    const goals: Record<string, number> = {};
+    for (const g of goalRows) {
+      const want = allocationInput.goals?.[g.id] ?? 0;
+      const take = Math.min(want, remaining);
+      if (take > 0) goals[g.id] = take;
+      remaining = round2(remaining - take);
+    }
+    return { emergency, goals };
+  }, [allocationInput, goalRows, rawTotal, slack]);
+
+  const setDraft = (id: string, value: string) => {
+    setDrafts((d) => ({ ...d, [id]: value.replace(/[^0-9.,]/g, '') }));
+  };
+
+  const submit = () => {
+    if (!allParsedOk) return;
+    onConfirm(cappedAllocation);
+  };
 
   return (
     <div
@@ -59,11 +113,11 @@ export function MonthCashflowOpeningModal({
           Set {formatCalendarMonthHeading(mk)} before continuing
         </h2>
         <p className="mt-3 text-sm leading-relaxed text-sage-700 dark:text-moss-subtle">
-          We roll <strong className="text-sage-900 dark:text-moss-fg">only what wasn’t saved</strong> from last month into
-          this month&apos;s cushion. Tell us how much you&apos;re moving to{' '}
-          <strong className="text-sage-900 dark:text-moss-fg">savings first</strong> (early bills, payday timing, manual
-          transfers). The remainder becomes <strong className="text-sage-900 dark:text-moss-fg">carry‑in</strong> for{' '}
-          {formatCalendarMonthHeading(mk)} — you can tweak it later on the amber cashflow card.
+          Leftover from <strong className="text-sage-900 dark:text-moss-fg">{formatCalendarMonthHeading(prev)}</strong>{' '}
+          can go to your emergency pool and savings goals — or roll into this month&apos;s{' '}
+          <strong className="text-sage-900 dark:text-moss-fg">carry‑in</strong>. Leave every field blank to put{' '}
+          <strong className="text-sage-900 dark:text-moss-fg">everything</strong> into carry (same as typing $0 in each
+          box).
         </p>
         <p className="mt-3 rounded-xl border border-teal-200/70 bg-teal-50/60 px-3 py-2 text-[13px] leading-snug text-sage-800 dark:border-teal-900/40 dark:bg-teal-950/25 dark:text-teal-100/90">
           First time this month? After you unlock, you can run the short guided tour (Tools has replay too).
@@ -71,14 +125,13 @@ export function MonthCashflowOpeningModal({
 
         <div className="mt-5 rounded-xl border border-sage-200/90 bg-sage-50/90 p-4 text-sm dark:border-moss-border dark:bg-moss-surface/70">
           <p className="font-semibold text-sage-900 dark:text-moss-fg">
-            Pocket slack after {formatCalendarMonthHeading(prev)} (matches dashboard pocket left)
+            Leftover from {formatCalendarMonthHeading(prev)}
           </p>
           <p className="mt-2 font-display text-2xl font-bold tabular-nums text-sage-900 dark:text-moss-fg">
             {formatMoney(slack)}
           </p>
           <p className="mt-2 text-[12px] leading-snug text-sage-700 dark:text-moss-muted">
-            Deposits + any carry for that month, minus counted spend and goal allocations, minus emergency sweeps
-            already taken — not bank balance proof.
+            Prior-month carry + deposits − counted spend − emergency sweeps already taken — not bank balance proof.
           </p>
         </div>
 
@@ -114,55 +167,97 @@ export function MonthCashflowOpeningModal({
           )}
         </div>
 
-        <label className="mt-6 block text-sm font-semibold text-sage-900 dark:text-moss-fg" htmlFor="month-opening-savings">
-          How much stays out of rollover (toward savings / early bills)?
-          <FieldHelp label="Savings / early bills">
-            This is not bank proof — it tells the workbook how much of last month&apos;s positive slack you are not rolling into this
-            month&apos;s cushion (e.g. moved to savings or earmarked for early-month bills).
-          </FieldHelp>
-          <input
-            id="month-opening-savings"
-            type="text"
-            inputMode="decimal"
-            autoComplete="off"
-            placeholder="0.00 — use your judgement"
-            value={savingsDraft}
-            aria-invalid={!savingsParsed.ok}
-            aria-describedby={!savingsParsed.ok ? fieldErrorId('month-savings') : undefined}
-            onChange={(e) => setSavingsDraft(e.target.value.replace(/[^0-9.,-]/g, ''))}
-            className="mt-2 w-full rounded-xl border border-sage-400/80 bg-white px-4 py-3 text-sage-950 dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
-          />
-          <FieldError id={fieldErrorId('month-savings')} message={savingsParsed.ok ? null : savingsParsed.error} />
-        </label>
-        <p className="mt-2 text-[12px] text-sage-700 dark:text-moss-muted">
-          We cap at {formatMoney(slack)} — values above shrink to fit. Enter <strong className="text-sage-900 dark:text-moss-fg">$0</strong> to roll the full amount into this month&apos;s pocket carry-in (nothing auto-moves to savings goals).
+        <div className="mt-6 space-y-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-sage-700 dark:text-moss-muted">
+            Move from leftover into savings (optional)
+          </p>
+
+          <label className="block text-sm font-semibold text-sage-900 dark:text-moss-fg" htmlFor="month-opening-emergency">
+            Emergency / $1k pool
+            <FieldHelp label="Emergency pool">
+              Adds to your rainy-day balance on the Dashboard — not the same as carry-in for daily spending.
+            </FieldHelp>
+            <input
+              id="month-opening-emergency"
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
+              placeholder="0.00 — blank = none"
+              value={drafts[EMERGENCY_FIELD] ?? ''}
+              aria-invalid={parsedByField[EMERGENCY_FIELD] && !parsedByField[EMERGENCY_FIELD].ok}
+              aria-describedby={
+                parsedByField[EMERGENCY_FIELD] && !parsedByField[EMERGENCY_FIELD].ok
+                  ? fieldErrorId('month-emergency')
+                  : undefined
+              }
+              onChange={(e) => setDraft(EMERGENCY_FIELD, e.target.value)}
+              className="mt-2 w-full rounded-xl border border-sage-400/80 bg-white px-4 py-3 text-sage-950 dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
+            />
+            <FieldError
+              id={fieldErrorId('month-emergency')}
+              message={
+                parsedByField[EMERGENCY_FIELD] && !parsedByField[EMERGENCY_FIELD].ok
+                  ? parsedByField[EMERGENCY_FIELD].error
+                  : null
+              }
+            />
+          </label>
+
+          {goalRows.map((g) => {
+            const p = parsedByField[g.id];
+            return (
+              <label
+                key={g.id}
+                className="block text-sm font-semibold text-sage-900 dark:text-moss-fg"
+                htmlFor={`month-opening-goal-${g.id}`}
+              >
+                {g.name}
+                <input
+                  id={`month-opening-goal-${g.id}`}
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  placeholder="0.00 — blank = none"
+                  value={drafts[g.id] ?? ''}
+                  aria-invalid={p && !p.ok}
+                  aria-describedby={p && !p.ok ? fieldErrorId(`month-goal-${g.id}`) : undefined}
+                  onChange={(e) => setDraft(g.id, e.target.value)}
+                  className="mt-2 w-full rounded-xl border border-sage-400/80 bg-white px-4 py-3 text-sage-950 dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
+                />
+                <FieldError id={fieldErrorId(`month-goal-${g.id}`)} message={p && !p.ok ? p.error : null} />
+              </label>
+            );
+          })}
+        </div>
+
+        <p className="mt-3 text-[12px] text-sage-700 dark:text-moss-muted">
+          Total directed to savings cannot exceed {formatMoney(slack)}. Whatever you do not assign below rolls into
+          carry‑in.
           {slack <= 0 && (
             <>
               {' '}
-              <strong className="text-sage-900 dark:text-moss-fg">
-                Slack is flat or negative —
-              </strong>{' '}
-              carry‑in stays $0 unless you bump it afterward on the cashflow card.
+              <strong className="text-sage-900 dark:text-moss-fg">Leftover is flat or negative —</strong> carry‑in
+              stays $0 unless you bump it later on the cashflow card.
             </>
           )}
         </p>
 
         <div className="mt-5 rounded-xl border border-teal-200/80 bg-teal-50/50 p-4 text-sm dark:border-teal-800/40 dark:bg-teal-950/20">
-          <p className="font-semibold text-sage-900 dark:text-moss-fg">Roll into this month (typed carry‑in preview)</p>
+          <p className="font-semibold text-sage-900 dark:text-moss-fg">Roll into this month (carry‑in preview)</p>
           <p className="mt-2 font-display text-xl font-bold tabular-nums text-teal-950 dark:text-teal-100/95">
             {formatMoney(carryPreview)}
           </p>
           <p className="mt-2 text-[12px] text-sage-800 dark:text-moss-muted">
-            = {formatMoney(slack)} slack −{' '}
-            <span className="tabular-nums">{formatMoney(savingsUsed)}</span> staying out for savings.
+            = {formatMoney(slack)} leftover − <span className="tabular-nums">{formatMoney(allocatedTotal)}</span> to
+            savings
           </p>
         </div>
 
         <button
           type="button"
           className="btn-primary mt-6 w-full py-3 text-base font-bold"
-          disabled={!savingsParsed.ok}
-          onClick={() => onConfirm(savingsUsed)}
+          disabled={!allParsedOk}
+          onClick={submit}
         >
           Save & unlock {formatCalendarMonthHeading(mk)}
         </button>
@@ -170,9 +265,9 @@ export function MonthCashflowOpeningModal({
           <button
             type="button"
             className="btn-secondary mt-3 w-full py-2.5 text-sm font-bold"
-            disabled={!savingsParsed.ok}
+            disabled={!allParsedOk}
             onClick={() => {
-              onConfirm(savingsUsed);
+              submit();
               onStartTourAfterUnlock();
             }}
           >

@@ -307,7 +307,7 @@ export function DashboardOverview({
               </p>
               <div className="mt-4 rounded-xl border border-sage-200/80 bg-sage-50/70 px-4 py-3 dark:border-moss-border dark:bg-moss-bg/40">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-sage-600 dark:text-moss-muted">
-                  Pocket left so far (carry + deposits − counted spend − goal allocations)
+                  Pocket left so far (deposits − counted spend due so far; carry shown below)
                 </p>
                 <p
                   className={`mt-1 ${
@@ -322,7 +322,7 @@ export function DashboardOverview({
                   <p className="mt-2 text-[11px] leading-snug text-teal-800 dark:text-teal-200/90">
                     Carried over from last month:{' '}
                     <span className="font-semibold tabular-nums">{formatMoney(carriedOver)}</span>
-                    {' · '}not counted in deposits below — stays in pocket until you spend it down
+                    {' · '}not counted in deposits or pocket above — spend it down as you pay bills
                   </p>
                 ) : null}
               </div>

@@ -71,7 +71,7 @@ export function digestPlainTextSummary(digest: SaveEmailDigestV1): string {
     `Household finances · update saved`,
     `Month: ${digest.monthKey}`,
     `Planned income (combined): ${formatMoney(digest.plannedIncomeCombined)}`,
-    `Pocket left after recorded spend: ${formatMoney(digest.pocketLeft)}`,
+    `Pocket left (deposits − spend due so far): ${formatMoney(digest.pocketLeft)}`,
     '',
   ];
   for (const sec of digest.sections) {

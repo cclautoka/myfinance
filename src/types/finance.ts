@@ -148,6 +148,11 @@ export interface BudgetSurplusSweepEntry {
   paidByRole?: SurprisePaidByRole;
 }
 
+export interface MonthCashflowOpeningAllocations {
+  emergency?: number;
+  goals?: Record<string, number>;
+}
+
 export interface MonthCashflowOpening {
   /** ISO yyyy-mm-dd when you confirmed this month’s opening. */
   confirmedAt: string;
@@ -161,6 +166,8 @@ export interface MonthCashflowOpening {
   savingsDirectedAway: number;
   /** What we set as this month’s typed carry-in (slack minus savings, floored at 0). */
   carryApplied: number;
+  /** Per-target split at confirm (emergency + savings goals). */
+  allocations?: MonthCashflowOpeningAllocations;
   /** Saved automatically on upgrade from builds before month-opening existed. */
   migrated?: boolean;
 }

@@ -158,6 +158,9 @@ export const exportFinanceCsv = (state: FinanceState, snapshotMonth?: string): s
     rows.push(['Month opening', 'priorSurplusRemainderShown', String(opening.priorSurplusRemainderShown)]);
     rows.push(['Month opening', 'savingsDirectedAway', String(opening.savingsDirectedAway)]);
     rows.push(['Month opening', 'carryApplied', String(opening.carryApplied)]);
+    if (opening.allocations) {
+      rows.push(['Month opening', 'allocations', JSON.stringify(opening.allocations)]);
+    }
     rows.push(['Month opening', 'migrated', String(Boolean(opening.migrated))]);
   }
 

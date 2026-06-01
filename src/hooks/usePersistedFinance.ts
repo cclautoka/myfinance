@@ -27,7 +27,12 @@ import { debtIsAutoDeduction } from '../utils/autoBills';
 import type { BillsPaidTogglePayload } from '../utils/billsTimeline';
 import { billPaymentKey } from '../utils/billsTimeline';
 import { applyAutoScheduledPayLogs } from '../utils/autoScheduledPayLog';
-import { monthPocketSlackForRollover, surplusSweepRoomRemaining } from '../utils/budgetSurplus';
+import {
+  monthPocketSlackForRollover,
+  surplusSweepRoomRemaining,
+  totalMonthOpeningAllocation,
+  type MonthOpeningAllocationInput,
+} from '../utils/budgetSurplus';
 import {
   buildSaveEmailDigest,
   buildSnapshotForReminders,
@@ -727,23 +732,49 @@ export function usePersistedFinance() {
   }, []);
 
   /**
-   * Confirm month opening: move `savingsDirectedAway` off prior-month slack, roll the rest into this month’s typed carry-in.
+   * Confirm month opening: apply optional emergency/goal allocations from prior-month slack; roll remainder into carry-in.
    */
-  const completeMonthCashflowOpening = useCallback((savingsDirectedAwayRaw: number) => {
+  const completeMonthCashflowOpening = useCallback((allocations: MonthOpeningAllocationInput) => {
     setState((s) => {
       const mk = currentMonthKey();
       const prev = previousCalendarMonthKey(mk);
       const slack = monthPocketSlackForRollover(s, prev);
-      let sav = round2(Number(savingsDirectedAwayRaw));
-      if (!Number.isFinite(sav)) sav = 0;
-      sav = Math.max(0, Math.min(sav, slack));
-      const carry = round2(Math.max(0, slack - sav));
+      let directed = totalMonthOpeningAllocation(allocations);
+      directed = Math.max(0, Math.min(directed, slack));
+
+      let emergencyAdd = Math.max(0, Number(allocations.emergency) || 0);
+      if (!Number.isFinite(emergencyAdd)) emergencyAdd = 0;
+      emergencyAdd = Math.min(emergencyAdd, directed);
+
+      let remaining = round2(directed - emergencyAdd);
+      const goalAdds: Record<string, number> = {};
+      for (const g of s.savingsGoals ?? []) {
+        const want = Math.max(0, Number(allocations.goals?.[g.id]) || 0);
+        const take = Math.min(want, remaining);
+        if (take > 0) goalAdds[g.id] = take;
+        remaining = round2(remaining - take);
+      }
+
+      const carry = round2(Math.max(0, slack - directed));
       const today = new Date().toISOString().slice(0, 10);
       const carryMap = { ...(s.monthSpendableCarryByMonth ?? {}) };
       if (carry <= 0) delete carryMap[mk];
       else carryMap[mk] = carry;
+
+      const nextGoals = (s.savingsGoals ?? []).map((g) => {
+        const add = goalAdds[g.id] ?? 0;
+        return add > 0 ? { ...g, balance: round2((Number(g.balance) || 0) + add) } : g;
+      });
+
+      const allocRecord: MonthOpeningAllocationInput = {
+        emergency: emergencyAdd > 0 ? emergencyAdd : undefined,
+        goals: Object.keys(goalAdds).length > 0 ? goalAdds : undefined,
+      };
+
       return {
         ...s,
+        emergencyFund: round2(s.emergencyFund + emergencyAdd),
+        savingsGoals: nextGoals,
         monthSpendableCarryByMonth: carryMap,
         monthCashflowOpening: {
           ...(s.monthCashflowOpening ?? {}),
@@ -752,8 +783,9 @@ export function usePersistedFinance() {
             forMonthKey: mk,
             settledFromPriorMonthKey: prev,
             priorSurplusRemainderShown: round2(slack),
-            savingsDirectedAway: sav,
+            savingsDirectedAway: directed,
             carryApplied: carry,
+            allocations: allocRecord,
           },
         },
       };
