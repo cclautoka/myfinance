@@ -1,9 +1,6 @@
 package cloud.solofi.finance;
 
-import android.appwidget.AppWidgetManager;
-import android.content.ComponentName;
 import android.content.Context;
-import android.content.Intent;
 import android.content.SharedPreferences;
 
 import com.getcapacitor.Plugin;
@@ -17,16 +14,6 @@ public class WidgetBridgePlugin extends Plugin {
   private static final String KEY_JSON = "widget-cache-v1.json";
   private static final String KEY_TOKEN = "household-session-token";
   private static final String KEY_HOUSEHOLD = "household-id";
-
-  private static void requestProviderUpdate(Context ctx, Class<?> providerClass) {
-    AppWidgetManager mgr = AppWidgetManager.getInstance(ctx);
-    int[] ids = mgr.getAppWidgetIds(new ComponentName(ctx, providerClass));
-    if (ids == null || ids.length == 0) return;
-    Intent intent = new Intent(ctx, providerClass);
-    intent.setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE);
-    intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids);
-    ctx.sendBroadcast(intent);
-  }
 
   @PluginMethod
   public void writeCache(PluginCall call) {
@@ -43,17 +30,13 @@ public class WidgetBridgePlugin extends Plugin {
     if (token != null && !token.trim().isEmpty()) ed.putString(KEY_TOKEN, token.trim());
     if (householdId != null && !householdId.trim().isEmpty()) ed.putString(KEY_HOUSEHOLD, householdId.trim());
     ed.apply();
+    WidgetRefresh.updateAll(ctx);
     call.resolve();
   }
 
   @PluginMethod
   public void requestRefresh(PluginCall call) {
-    Context ctx = getContext();
-    requestProviderUpdate(ctx, BillsWidgetProvider.class);
-    requestProviderUpdate(ctx, GoalsWidgetProvider.class);
-    requestProviderUpdate(ctx, IncomeSpendWidgetProvider.class);
-    requestProviderUpdate(ctx, PayLogWidgetProvider.class);
-
+    WidgetRefresh.updateAll(getContext());
     call.resolve();
   }
 

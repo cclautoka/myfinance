@@ -9,6 +9,11 @@ import android.widget.RemoteViews;
 
 public class PayLogWidgetProvider extends AppWidgetProvider {
   @Override
+  public void onEnabled(Context context) {
+    WidgetRefresh.updateAll(context.getApplicationContext());
+  }
+
+  @Override
   public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
     for (int id : appWidgetIds) {
       RemoteViews rv = new RemoteViews(context.getPackageName(), R.layout.widget_paylog);

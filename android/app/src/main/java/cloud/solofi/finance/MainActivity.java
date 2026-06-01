@@ -24,6 +24,13 @@ public class MainActivity extends BridgeActivity {
   }
 
   @Override
+  public void onResume() {
+    super.onResume();
+    // Redraw home-screen widgets from cached payload when app returns to foreground.
+    WidgetRefresh.updateAll(getApplicationContext());
+  }
+
+  @Override
   protected void onNewIntent(Intent intent) {
     super.onNewIntent(intent);
     setIntent(intent);

@@ -11,10 +11,30 @@ import android.widget.RemoteViews;
 
 public class GoalsWidgetProvider extends AppWidgetProvider {
   @Override
+  public void onEnabled(Context context) {
+    WidgetRefresh.updateAll(context.getApplicationContext());
+  }
+
+  @Override
   public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
     WidgetCache cache = WidgetCache.parse(WidgetBridgePlugin.readCacheJson(context));
 
     for (int id : appWidgetIds) {
+      try {
+      applyUpdate(context, appWidgetManager, id, cache);
+      } catch (Exception e) {
+        android.util.Log.e("GoalsWidget", "onUpdate failed", e);
+        RemoteViews rv = new RemoteViews(context.getPackageName(), R.layout.widget_goals);
+        rv.setTextViewText(R.id.widget_title, "Savings goals");
+        rv.setTextViewText(R.id.widget_goal1_label, "Open Our Finance");
+        rv.setTextViewText(R.id.widget_goal1_meta, "Tap to load data");
+        rv.setViewVisibility(R.id.widget_goal1, android.view.View.VISIBLE);
+        appWidgetManager.updateAppWidget(id, rv);
+      }
+    }
+  }
+
+  private static void applyUpdate(Context context, AppWidgetManager appWidgetManager, int id, WidgetCache cache) {
       RemoteViews rv = new RemoteViews(context.getPackageName(), R.layout.widget_goals);
       rv.setTextViewText(R.id.widget_title, "Savings goals");
       int px = 96;
@@ -48,23 +68,36 @@ public class GoalsWidgetProvider extends AppWidgetProvider {
       rv.setViewVisibility(R.id.widget_goal2_label, View.VISIBLE);
       rv.setViewVisibility(R.id.widget_goal3_label, View.VISIBLE);
 
-      if (n >= 1) {
+      if (n >= 1 && cache != null) {
         WidgetCache.GoalItem g = cache.goals.get(0);
         rv.setImageViewBitmap(R.id.widget_goal1_ring, WidgetArt.drawGoalRing(px, (float) g.progressPct));
         rv.setTextViewText(R.id.widget_goal1_label, g.name);
         rv.setTextViewText(R.id.widget_goal1_meta, "$" + (int) g.balance + " / $" + (int) g.target);
       }
-      if (n >= 2) {
+      if (n >= 2 && cache != null) {
         WidgetCache.GoalItem g = cache.goals.get(1);
         rv.setImageViewBitmap(R.id.widget_goal2_ring, WidgetArt.drawGoalRing(px, (float) g.progressPct));
         rv.setTextViewText(R.id.widget_goal2_label, g.name);
         rv.setTextViewText(R.id.widget_goal2_meta, "$" + (int) g.balance + " / $" + (int) g.target);
       }
-      if (n >= 3) {
+      if (n >= 3 && cache != null) {
         WidgetCache.GoalItem g = cache.goals.get(2);
         rv.setImageViewBitmap(R.id.widget_goal3_ring, WidgetArt.drawGoalRing(px, (float) g.progressPct));
         rv.setTextViewText(R.id.widget_goal3_label, g.name);
         rv.setTextViewText(R.id.widget_goal3_meta, "$" + (int) g.balance + " / $" + (int) g.target);
+      }
+
+      if (n < 1) {
+        rv.setViewVisibility(R.id.widget_goal1, View.VISIBLE);
+        rv.setViewVisibility(R.id.widget_goal2, View.GONE);
+        rv.setViewVisibility(R.id.widget_goal3, View.GONE);
+        rv.setImageViewBitmap(R.id.widget_goal1_ring, WidgetArt.drawGoalRing(px, 0f));
+        rv.setTextViewText(
+            R.id.widget_goal1_label,
+            cache == null ? "Open Our Finance" : "Waiting for data");
+        rv.setTextViewText(
+            R.id.widget_goal1_meta,
+            cache == null ? "Sign in, then open the app once" : "Open app to refresh");
       }
 
       Intent open = new Intent(context, MainActivity.class);
@@ -74,7 +107,6 @@ public class GoalsWidgetProvider extends AppWidgetProvider {
       rv.setOnClickPendingIntent(R.id.widget_root, pi);
 
       appWidgetManager.updateAppWidget(id, rv);
-    }
   }
 }
 

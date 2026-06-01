@@ -13,6 +13,11 @@ import android.os.Bundle;
 import android.widget.RemoteViews;
 
 public class IncomeSpendWidgetProvider extends AppWidgetProvider {
+  @Override
+  public void onEnabled(Context context) {
+    WidgetRefresh.updateAll(context.getApplicationContext());
+  }
+
   private static int clamp(int n, int lo, int hi) {
     return Math.max(lo, Math.min(hi, n));
   }

@@ -69,22 +69,7 @@ public class WidgetRefreshMessagingService extends MessagingService {
     // Background thread: network fetch + then trigger widget redraw.
     new Thread(() -> {
       refreshCacheFromServerBestEffort();
-
-      Intent i1 = new Intent(this, BillsWidgetProvider.class);
-      i1.setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE);
-      sendBroadcast(i1);
-
-      Intent i2 = new Intent(this, GoalsWidgetProvider.class);
-      i2.setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE);
-      sendBroadcast(i2);
-
-      Intent i3 = new Intent(this, IncomeSpendWidgetProvider.class);
-      i3.setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE);
-      sendBroadcast(i3);
-
-      Intent i4 = new Intent(this, PayLogWidgetProvider.class);
-      i4.setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE);
-      sendBroadcast(i4);
+      WidgetRefresh.updateAll(getApplicationContext());
     }).start();
   }
 

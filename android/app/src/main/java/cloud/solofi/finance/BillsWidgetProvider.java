@@ -11,6 +11,11 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 
 public class BillsWidgetProvider extends AppWidgetProvider {
+  @Override
+  public void onEnabled(Context context) {
+    WidgetRefresh.updateAll(context.getApplicationContext());
+  }
+
   private static int clamp(int n, int lo, int hi) {
     return Math.max(lo, Math.min(hi, n));
   }
@@ -50,6 +55,7 @@ public class BillsWidgetProvider extends AppWidgetProvider {
     WidgetCache cache = WidgetCache.parse(json);
 
     for (int id : appWidgetIds) {
+      try {
       RemoteViews rv = new RemoteViews(context.getPackageName(), R.layout.widget_bills);
       int progressPct = 0;
       boolean urgent = false;
@@ -93,6 +99,9 @@ public class BillsWidgetProvider extends AppWidgetProvider {
       rv.setOnClickPendingIntent(R.id.widget_root, pi);
 
       appWidgetManager.updateAppWidget(id, rv);
+      } catch (Exception e) {
+        android.util.Log.e("BillsWidget", "onUpdate failed", e);
+      }
     }
   }
 }

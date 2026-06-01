@@ -5,7 +5,6 @@
   android:updatePeriodMillis="0"
   android:initialLayout="@layout/widget_bills"
   android:previewImage="@drawable/widget_bg"
-  android:previewLayout="@layout/widget_bills"
   android:resizeMode="horizontal|vertical"
   android:widgetCategory="home_screen|keyguard" />
 
