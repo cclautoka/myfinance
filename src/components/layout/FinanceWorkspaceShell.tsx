@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { sections } from '../../copy/sections';
 import { WORKSPACE_SECTION_SHELL } from './sectionAccents';
 import { SEGMENTED_TRACK_CLASS, segmentedTriggerClass } from '../ui/segmentedSurface';
 
@@ -12,26 +13,7 @@ const TAB_DEF: { id: WorkspaceTab; label: string }[] = [
   { id: 'plan', label: 'Plan & bills' },
 ];
 
-const INTRO_BY_TAB: Record<WorkspaceTab, { eyebrow: string; title: string; body: string; details?: string }> = {
-  past: {
-    eyebrow: 'History & export',
-    title: 'Past months',
-    body: 'Pick a month, recap, export CSV.',
-    details: 'The live month stays on the Dashboard tab.',
-  },
-  household: {
-    eyebrow: 'Household data',
-    title: 'Your numbers',
-    body: 'Income, essentials, loans — edits hit the dashboard the same minute.',
-    details: 'Open when you need to tune the workbook.',
-  },
-  plan: {
-    eyebrow: 'Allocation & savings',
-    title: 'Plan & bills',
-    body: 'Split, envelopes, emergency, debt balances.',
-    details: 'Bill calendar stays on the Dashboard tab.',
-  },
-};
+const INTRO_BY_TAB = sections.workspaceTabs;
 
 const TABLIST_SCROLL =
   '-mx-1 min-w-0 flex-nowrap gap-0 overflow-x-auto overscroll-x-contain pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] snap-x snap-mandatory lg:flex-wrap lg:overflow-visible lg:pb-0 lg:snap-none [&::-webkit-scrollbar]:hidden';

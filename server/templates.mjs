@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { glossary } from './copy/glossary.mjs';
 
 const escapeHtml = (s) =>
   String(s)
@@ -153,15 +154,15 @@ export function renderEmailText({ title, preheader, sections, footerHint, primar
 }
 
 export function buildChangeEmailTemplate({ summaryText, pocketLeft, monthKey }) {
-  const title = 'Update saved';
-  const preheader = `Saved changes for ${monthKey}. Pocket left so far: ${fmtMoney(pocketLeft)}.`;
+  const title = 'Your workbook was updated';
+  const preheader = `Changes saved for ${monthKey}. ${glossary.leftFromDeposits} ${fmtMoney(pocketLeft)}.`;
   return {
     subject: `Household finances · saved · ${monthKey}`,
     title,
     preheader,
     sections: [
       {
-        heading: 'What changed (summary)',
+        heading: 'Changes in your workbook',
         body: summaryText,
       },
     ],
@@ -175,7 +176,7 @@ export function buildSaveEmailTemplate(digest) {
   const pocketLeft = Number.isFinite(Number(digest?.pocketLeft)) ? Number(digest.pocketLeft) : 0;
   const planned = Number.isFinite(Number(digest?.plannedIncomeCombined)) ? Number(digest.plannedIncomeCombined) : 0;
   const title = 'Your workbook was updated';
-  const preheader = `Changes saved for ${monthKey}. Planned income ${fmtMoney(planned)} · Pocket left ${fmtMoney(pocketLeft)}.`;
+  const preheader = `Changes saved for ${monthKey}. ${glossary.plannedMonthlyIncome} ${fmtMoney(planned)} · ${glossary.leftFromDeposits} ${fmtMoney(pocketLeft)}.`;
   const sections = Array.isArray(digest?.sections)
     ? digest.sections.map((s) => ({
         heading: String(s.heading ?? 'Changes').replace(/^What changed$/i, 'Changes in your workbook').slice(0, 120),
@@ -197,43 +198,81 @@ export function buildSaveEmailTemplate(digest) {
   };
 }
 
-export function buildReminderEmailTemplate({ monthKey, dueSoon = [], overdue = [], horizon = [] }) {
+/** Daily push summary template (due soon, overdue, horizon). */
+export function buildDailyPushReminderTemplate({ monthKey, dueSoon = [], overdue = [], horizon = [] }) {
   const nO = overdue.length;
   const nS = dueSoon.length;
   const nH = horizon.length;
-  const title = nO > 0 ? 'Overdue items' : nS > 0 ? 'Upcoming bills' : 'Bills on the horizon';
+  const title = nO > 0 ? glossary.overdue : nS > 0 ? 'Bills due soon' : 'Bills coming up';
   const preheader =
     nO > 0
-      ? `${nO} overdue · ${nS} due soon · ${nH} on horizon.`
+      ? `${nO} ${glossary.overdue.toLowerCase()} · ${nS} ${glossary.dueSoon.toLowerCase()} · ${nH} ${glossary.comingUp.toLowerCase()}.`
       : nS > 0
-        ? `${nS} bill(s) due soon or in grace · ${nH} further out (14d).`
-        : `${nH} unpaid bill(s) due within the next 14 days.`;
+        ? `${nS} due soon or in grace · ${nH} further out.`
+        : `${nH} unpaid within the next 14 days.`;
   return {
-    subject: `Household finances · reminders · ${monthKey}`,
+    subject: `Household finances · daily summary · ${monthKey}`,
     title,
     preheader,
     sections: [
       {
-        heading: 'Due soon (includes grace window)',
-        items: dueSoon.map((b) => ({
+        heading: `${glossary.dueSoon} (includes grace window)`,
+        items: dueSoon.map((b) => rowToEmailItem(b)),
+      },
+      {
+        heading: glossary.overdue,
+        items: overdue.map((b) => rowToEmailItem(b, true)),
+      },
+      {
+        heading: `${glossary.comingUp} (next 14 days)`,
+        items: horizon.map((b) => rowToEmailItem(b)),
+      },
+    ],
+  };
+}
+
+function rowToEmailItem(b, isOverdueSection = false) {
+  return {
+    title: `${b.name} — ${fmtMoney(b.amount)}`,
+    body: b.dueToday ? `Due today (${b.dueDate})` : isOverdueSection ? `Was due ${b.dueDate}` : `Due ${b.dueDate}`,
+    meta: b.note ?? '',
+  };
+}
+
+/** Scheduled email: due today + overdue cadence only. */
+export function buildReminderEmailTemplate({ monthKey, dueToday = [], overdueCadence = [] }) {
+  const nToday = dueToday.length;
+  const nCad = overdueCadence.length;
+  const title =
+    nToday > 0 && nCad > 0
+      ? `${glossary.dueToday} and ${glossary.overdue.toLowerCase()}`
+      : nToday > 0
+        ? glossary.dueToday
+        : glossary.overdueReminders;
+  const preheader =
+    nToday > 0 && nCad > 0
+      ? `${nToday} due today · ${nCad} overdue reminder${nCad === 1 ? '' : 's'}.`
+      : nToday > 0
+        ? `${nToday} bill${nToday === 1 ? '' : 's'} due today.`
+        : `${nCad} overdue reminder${nCad === 1 ? '' : 's'}.`;
+  return {
+    subject: `Household finances · bill reminders · ${monthKey}`,
+    title,
+    preheader,
+    sections: [
+      {
+        heading: glossary.dueToday,
+        items: dueToday.map((b) => ({
           title: `${b.name} — ${fmtMoney(b.amount)}`,
-          body: `Due ${b.dueDate}`,
+          body: `Due today (${b.dueDate})`,
           meta: b.note ?? '',
         })),
       },
       {
-        heading: 'Overdue',
-        items: overdue.map((b) => ({
+        heading: glossary.overdueReminders,
+        items: overdueCadence.map((b) => ({
           title: `${b.name} — ${fmtMoney(b.amount)}`,
-          body: b.dueToday ? `Due today (${b.dueDate})` : `Was due ${b.dueDate}`,
-          meta: b.note ?? '',
-        })),
-      },
-      {
-        heading: 'On the horizon (next 14 days, unpaid)',
-        items: horizon.map((b) => ({
-          title: `${b.name} — ${fmtMoney(b.amount)}`,
-          body: `Due ${b.dueDate}`,
+          body: `Was due ${b.dueDate}`,
           meta: b.note ?? '',
         })),
       },

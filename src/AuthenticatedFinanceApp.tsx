@@ -7,6 +7,7 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react';
+import { sections } from './copy/sections';
 import { TimelineColumnSpotlight } from './components/TimelineColumnSpotlight';
 import { BillsTimeline } from './components/BillsTimeline';
 import { DashboardOverview } from './components/DashboardOverview';
@@ -426,12 +427,18 @@ export function AuthenticatedFinanceApp() {
       ) : null}
       <main className="cap-safe-x mx-auto w-full min-w-0 max-w-7xl space-y-12 overflow-x-clip py-8 sm:py-10 xl:max-w-[96rem]">
         {appTab === 'dashboard' ? (
-          <div role="tabpanel" id="app-tabpanel-dashboard" aria-labelledby="app-tab-dashboard" className="space-y-12">
+          <div
+            key="tab-dashboard"
+            role="tabpanel"
+            id="app-tabpanel-dashboard"
+            aria-labelledby="app-tab-dashboard"
+            className="app-page-enter space-y-12"
+          >
             <PageSection
               id="finance-dashboard"
               dataTour="tour-dashboard"
               title="Dashboard"
-              subtitle="This month: snapshot and pay log in the centre · bills on the sides · snowball & surplus in More this month."
+              subtitle={sections.dashboard.subtitle}
               variant="band"
               accent="emerald"
               eyebrow="Live month"
@@ -530,7 +537,13 @@ export function AuthenticatedFinanceApp() {
         ) : null}
 
         {appTab === 'workspace' ? (
-          <div role="tabpanel" id="app-tabpanel-workspace" aria-labelledby="app-tab-workspace">
+          <div
+            key="tab-workspace"
+            role="tabpanel"
+            id="app-tabpanel-workspace"
+            aria-labelledby="app-tab-workspace"
+            className="app-page-enter"
+          >
             <FinanceWorkspaceShell
               tab={workspaceTab}
               onTabChange={setWorkspaceTab}
@@ -627,7 +640,13 @@ export function AuthenticatedFinanceApp() {
         ) : null}
 
         {appTab === 'tools' ? (
-          <div role="tabpanel" id="app-tabpanel-tools" aria-labelledby="app-tab-tools">
+          <div
+            key="tab-tools"
+            role="tabpanel"
+            id="app-tabpanel-tools"
+            aria-labelledby="app-tab-tools"
+            className="app-page-enter"
+          >
             <div className="px-5 sm:px-8">
               <FinanceToolsShell
                 tab={toolsTab}

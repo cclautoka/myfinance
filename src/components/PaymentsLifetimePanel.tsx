@@ -3,6 +3,7 @@ import type { FinanceState } from '../types/finance';
 import { formatCalendarMonthHeading, HISTORY_TRACKING_STARTED_MONTH_KEY } from '../data/defaults';
 import { formatMoney } from '../utils/format';
 import { lifetimeLifeSpendRows, type LifeSpendKind } from '../utils/paymentHistory';
+import { panels } from '../copy/panels';
 import { Card } from './ui/Card';
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
@@ -34,12 +35,12 @@ export function PaymentsLifetimePanel({ state }: { state: FinanceState }) {
   return (
     <Card
       accent="emerald"
-      title="Life spends (lifetime)"
-      subtitle={`Since ${sinceLabel} — planned bills you marked handled plus unexpected expenses you logged.`}
+      title={panels.billsLifetime.title}
+      subtitle={panels.billsLifetime.subtitle(sinceLabel)}
     >
       {chartData.length === 0 ? (
         <p className="text-sm font-medium text-sage-600 dark:text-moss-muted">
-          No lifetime spends yet. Mark bills handled on the checklist or log an unexpected expense.
+          {panels.billsLifetime.empty}
         </p>
       ) : (
         <>

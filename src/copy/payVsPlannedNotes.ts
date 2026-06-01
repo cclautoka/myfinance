@@ -1,18 +1,18 @@
 import { formatMoney } from '../utils/format';
 
 /**
- * Short, literal copy for Pay logged vs Household monthly total (no jargon like “live month”).
+ * Helper under Deposits this month — compares logged pay to Household monthly plan.
  */
 export function payLoggedVersusPlannedLine(planned: number, logged: number): string {
   if (!Number.isFinite(planned) || !Number.isFinite(logged)) {
-    return 'Compare Household monthly income with deposits you logged this calendar month.';
+    return 'Compare Household monthly income with pay you log this calendar month.';
   }
   if (logged <= 0) {
-    return 'No deposits logged for this month yet — the total stays at zero until you add rows in Paycheque log.';
+    return 'No pay logged this month yet. Add rows in the Paycheque log below.';
   }
   if (logged >= planned) {
-    return `Logged deposits total at least your Household monthly income (${formatMoney(planned)}). That means this month’s pay you entered matches or beats the monthly figure in your plan.`;
+    return `Logged pay is at least your planned monthly income (${formatMoney(planned)}).`;
   }
   const shortBy = planned - logged;
-  return `You logged ${formatMoney(logged)} so far this month. Your Household monthly income total is ${formatMoney(planned)} — so right now you're ${formatMoney(shortBy)} behind that monthly figure with what’s entered in the Paycheque log. You might still deposit more paychecks before the month ends — or incomes this month are simply lower than the plan — both are normal.`;
+  return `You have logged ${formatMoney(logged)} so far. Planned monthly income is ${formatMoney(planned)}, so you are ${formatMoney(shortBy)} short of the plan on paper. You may still receive more pay this month, or income may genuinely be lower. Both are normal.`;
 }

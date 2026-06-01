@@ -81,7 +81,7 @@ export const exportFinanceCsv = (state: FinanceState, snapshotMonth?: string): s
   rows.push(['This month', 'Extra income total', String(Math.round(extraIncomeMonthTotal(state, mk)))]);
   rows.push([
     'This month',
-    'Spendable carry-in typed (prior cushion)',
+    'Carry-over typed (prior cushion)',
     String(Math.round(monthSpendableCarry(state, mk))),
   ]);
   rows.push([
@@ -97,7 +97,7 @@ export const exportFinanceCsv = (state: FinanceState, snapshotMonth?: string): s
   ]);
   rows.push([
     'Unused plan sweep',
-    'Total moved to typed emergency balance (manual bookkeeping)',
+    'Total moved to typed emergency balance (workbook only)',
     String(Math.round(totalSurplusSweptForMonth(state, mk))),
   ]);
 
@@ -132,7 +132,7 @@ export const exportFinanceCsv = (state: FinanceState, snapshotMonth?: string): s
   // Bills paid & amounts/attribution for the snapshot month.
   for (const [billId, keys] of Object.entries(state.billsPaid ?? {})) {
     const matched = (keys ?? []).filter((k) => keyMatchesMonth(k, mk));
-    for (const k of matched) rows.push(['Bills', `Marked handled billId=${billId}`, k]);
+    for (const k of matched) rows.push(['Bills', `Marked as paid billId=${billId}`, k]);
   }
   for (const [billId, byKey] of Object.entries(state.billPaidAmounts ?? {})) {
     for (const [k, amt] of Object.entries(byKey ?? {})) {

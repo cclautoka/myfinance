@@ -54,10 +54,10 @@ export function isPushDeliveryConfigured() {
 
 function reminderPushCopy({ counts, monthKey }) {
   const parts = [];
-  if (counts.overdue > 0) parts.push(`${counts.overdue} overdue`);
-  if (counts.dueSoon > 0) parts.push(`${counts.dueSoon} due soon`);
-  if (counts.horizon > 0) parts.push(`${counts.horizon} coming up`);
-  const summary = parts.length ? parts.join(' · ') : 'Bills need attention';
+  if (counts.overdue > 0) parts.push(`${counts.overdue} Overdue`);
+  if (counts.dueSoon > 0) parts.push(`${counts.dueSoon} Due soon`);
+  if (counts.horizon > 0) parts.push(`${counts.horizon} Coming up`);
+  const summary = parts.length ? parts.join(' · ') : 'Open the app for your bill summary';
   return {
     title: `Our Finance · ${monthKey}`,
     body: summary,

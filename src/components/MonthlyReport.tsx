@@ -17,6 +17,7 @@ import { exportFinanceCsv } from '../utils/csvExport';
 import { totalSurplusSweptForMonth } from '../utils/budgetSurplus';
 import { estimatedDebtFreeMonths } from '../utils/debtFree';
 import { formatMoney } from '../utils/format';
+import { panels } from '../copy/panels';
 import { Card } from './ui/Card';
 import { HoverTip } from './ui/HoverTip';
 
@@ -85,7 +86,7 @@ export function MonthlyReport({
         <div>
           <Card
             title={`${formatCalendarMonthHeading(summaryMonthKey)} spreadsheet`}
-            subtitle="Open a simple list or download CSV for the exact month you chose above — not today’s live dashboard."
+            subtitle={panels.monthlyReport.subtitle}
           >
             <button type="button" className="btn-primary px-5 py-2" onClick={() => setOpen(true)}>
               Open {summaryMonthKey} report
@@ -128,7 +129,7 @@ export function MonthlyReport({
               <li>Extra income logged (dated this month): {formatMoney(summary.extras)}</li>
               <li>Surprise one-off costs (dated this month): {formatMoney(summary.surprises)}</li>
               <li>
-                Unused plan → emergency &quot;sweeps&quot; (bookkeeping moves for this calendar month):{' '}
+                Unused plan moved to emergency savings this month:{' '}
                 {formatMoney(summary.surplusSweepsTotal)}
               </li>
               {summary.surplusSweepsLines.length > 0 && (
@@ -137,7 +138,7 @@ export function MonthlyReport({
                   {summary.surplusSweepsLines.map((s) => `${s.date} +${formatMoney(s.amount)}`).join(' · ')}
                 </li>
               )}
-              <li>Bill lines marked handled (due this month): {summary.billsMarked}</li>
+              <li>Bill lines marked as paid (due this month): {summary.billsMarked}</li>
               <li>Debt remaining (estimate): {formatMoney(summary.debt)}</li>
               <li>
                 Soft months‑to‑debt‑free (linear):{' '}

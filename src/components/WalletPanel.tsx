@@ -2,6 +2,7 @@ import type { FinanceState } from '../types/finance';
 import { walletsTip } from '../copy/tooltips';
 import { allocationBreakdown } from '../utils/allocation';
 import { formatMoney } from '../utils/format';
+import { panels } from '../copy/panels';
 import { Card } from './ui/Card';
 import { HoverTip } from './ui/HoverTip';
 import { NumericAmountInput } from './ui/NumericInputs';
@@ -87,8 +88,8 @@ export function WalletPanel({
     <HoverTip content={walletsTip()}>
       <div>
         <Card
-          title="Fun money per person"
-          subtitle="Split the Personal slice from the pie — his budget + hers, numbers you type yourself."
+          title={panels.wallet.title}
+          subtitle={panels.wallet.subtitle}
         >
           <div className="mb-4 rounded-xl border-2 border-sage-300/50 bg-sage-50 p-3 text-sm font-medium leading-snug text-sage-900 dark:border-moss-border dark:bg-moss-surface/90 dark:text-moss-subtle">
             <p>

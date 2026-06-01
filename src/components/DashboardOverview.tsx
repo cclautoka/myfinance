@@ -7,6 +7,7 @@ import {
   dashboardEmergencyTip,
   dashboardIncomeLoggedVsPlannedTip,
   dashboardIncomeTip,
+  dashboardLeftFromDepositsTip,
   dashboardNextBillTip,
   dashboardPlannedVsActualExpensesTip,
   dashboardSafeSpendTip,
@@ -33,6 +34,7 @@ import {
 import { estimatedDebtFreeMonths } from '../utils/debtFree';
 import { formatMoney, formatTimelineDateLabel } from '../utils/format';
 import { computeSafeSpend } from '../utils/safeSpend';
+import { dashboard as dashboardCopy } from '../copy/dashboard';
 import { payLoggedVersusPlannedLine } from '../copy/payVsPlannedNotes';
 import { currentMonthKey } from '../data/defaults';
 import { HoverTip } from './ui/HoverTip';
@@ -257,7 +259,7 @@ export function DashboardOverview({
 
   return (
     <section
-      className={`overflow-hidden border border-white/14 bg-gradient-to-br from-sage-900 via-sage-800 to-teal-900 text-white shadow-xl dark:border-white/12 dark:from-moss-bg dark:via-moss-surface dark:to-moss-bg dark:shadow-2xl ${
+      className={`app-fade-rise overflow-hidden border border-white/14 bg-gradient-to-br from-sage-900 via-sage-800 to-teal-900 text-white shadow-xl dark:border-white/12 dark:from-moss-bg dark:via-moss-surface dark:to-moss-bg dark:shadow-2xl ${
         preview ? 'rounded-xl' : 'rounded-[1.75rem]'
       }`}
     >
@@ -272,7 +274,7 @@ export function DashboardOverview({
               : 'mt-3 text-center font-display text-[2.125rem] font-semibold leading-[1.1] tracking-tight sm:text-[2.5rem]'
           }
         >
-          Financial snapshot
+          {dashboardCopy.snapshotTitle}
         </h2>
         <p
           className={
@@ -281,57 +283,49 @@ export function DashboardOverview({
               : 'mx-auto mt-4 max-w-lg text-center text-sm leading-relaxed text-sage-100/95'
           }
         >
-          {preview ? (
-            <>Tap a metric for definitions. Planned vs posted pay for {mk}.</>
-          ) : (
-            <>
-              Hover or Tab a metric for definitions (tap <span className="font-semibold">i</span> on touch). Planned amounts follow{' '}
-              <span className="font-medium text-white underline decoration-teal-300/75 underline-offset-2">
-                Income & recurring expenses
-              </span>
-              {' · '}posted pay follows deposits you record this month.
-            </>
-          )}
+          {preview ? dashboardCopy.snapshotIntroPreview : dashboardCopy.snapshotIntro}
         </p>
 
         <div className={`mx-auto grid min-w-0 w-full max-w-5xl gap-4 ${gridCols} ${preview ? 'mt-6' : 'mt-10'}`}>
           <MetricWithTip tip={dashboardIncomeTip()} preview={preview}>
             <MetricCard className="text-sage-900 dark:text-moss-fg" preview={preview}>
               <p className="text-xs font-semibold uppercase tracking-wide text-sage-700 dark:text-moss-muted">
-                Combined monthly income (planned)
+                {dashboardCopy.plannedIncomeLabel}
               </p>
               <p className={`mt-2 text-sage-950 dark:text-moss-fg ${METRIC_HERO_SIZE}`}>{formatMoney(income)}</p>
               <p className="mt-3 text-xs leading-snug text-sage-700 dark:text-moss-subtle">
-                Husband + wife pay plus any other consistent monthly sources from Your numbers. One-off cash is logged
-                separately on the Dashboard.
+                {dashboardCopy.plannedIncomeHelper}
               </p>
-              <div className="mt-4 rounded-xl border border-sage-200/80 bg-sage-50/70 px-4 py-3 dark:border-moss-border dark:bg-moss-bg/40">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-sage-600 dark:text-moss-muted">
-                  Pocket left so far (deposits − counted spend due so far; carry shown below)
-                </p>
-                <p
-                  className={`mt-1 ${
-                    pocketLeft >= 0
-                      ? 'text-sage-950 dark:text-moss-fg'
-                      : 'text-rose-700 dark:text-rose-300/90'
-                  } ${METRIC_SUBHERO_SIZE}`}
-                >
-                  {formatMoney(pocketLeft)}
-                </p>
-                {carriedOver > 0 ? (
-                  <p className="mt-2 text-[11px] leading-snug text-teal-800 dark:text-teal-200/90">
-                    Carried over from last month:{' '}
-                    <span className="font-semibold tabular-nums">{formatMoney(carriedOver)}</span>
-                    {' · '}not counted in deposits or pocket above — spend it down as you pay bills
+              <HoverTip content={dashboardLeftFromDepositsTip()} interaction="auto" layout="corner" className="mt-4 block w-full">
+                <div className="rounded-xl border border-sage-200/80 bg-sage-50/70 px-4 py-3 dark:border-moss-border dark:bg-moss-bg/40">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-sage-600 dark:text-moss-muted">
+                    {dashboardCopy.leftFromDepositsLabel}
                   </p>
-                ) : null}
-              </div>
+                  <p
+                    className={`mt-1 ${
+                      pocketLeft >= 0
+                        ? 'text-sage-950 dark:text-moss-fg'
+                        : 'text-rose-700 dark:text-rose-300/90'
+                    } ${METRIC_SUBHERO_SIZE}`}
+                  >
+                    {formatMoney(pocketLeft)}
+                  </p>
+                  <p className="mt-2 text-[11px] leading-snug text-sage-600 dark:text-moss-muted">
+                    {dashboardCopy.leftFromDepositsHelper}
+                  </p>
+                  {carriedOver > 0 ? (
+                    <p className="mt-2 text-[11px] leading-snug text-teal-800 dark:text-teal-200/90">
+                      {dashboardCopy.carryOverLine(formatMoney(carriedOver))}
+                    </p>
+                  ) : null}
+                </div>
+              </HoverTip>
             </MetricCard>
           </MetricWithTip>
           <MetricWithTip tip={dashboardIncomeLoggedVsPlannedTip(income, loggedPay)} preview={preview}>
             <MetricCard className="text-sage-900 dark:text-moss-fg" preview={preview}>
               <p className="text-xs font-semibold uppercase tracking-wide text-sage-700 dark:text-moss-muted">
-                Deposits recorded ({mk})
+                {dashboardCopy.depositsLabel(mk)}
               </p>
               <p className={`mt-2 text-sage-950 dark:text-moss-fg ${METRIC_HERO_SIZE}`}>{formatMoney(loggedPay)}</p>
               <p className="mt-3 text-xs leading-snug text-sage-700 dark:text-moss-subtle">
@@ -348,7 +342,7 @@ export function DashboardOverview({
                   }
                   className="mt-3 text-left text-xs font-semibold text-sage-800 underline decoration-sage-400 decoration-2 underline-offset-2 hover:text-sage-950 dark:text-moss-tip dark:decoration-moss-muted dark:hover:text-moss-fg"
                 >
-                  {loggedPay > 0 ? 'Show paycheque rows for this month' : 'Add pay deposits — opens log below'}
+                  {loggedPay > 0 ? dashboardCopy.showPaychequeRowsCta : dashboardCopy.logPaychequeCta}
                 </button>
               ) : null}
             </MetricCard>
@@ -382,14 +376,13 @@ export function DashboardOverview({
                 </div>
                 <div className={`min-w-0 ${preview ? 'pt-1' : 'sm:pl-2'}`}>
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-sage-600 dark:text-moss-muted">
-                    Actual this month · marked bills + surprises
+                    {dashboardCopy.actualExpenseLabel}
                   </p>
                   <p className={`mt-2 text-teal-950 dark:text-moss-tip ${METRIC_SUBHERO_SIZE}`}>
                     {formatMoney(actualExpenseMonth)}
                   </p>
                   <p className="mt-3 text-[12px] leading-snug text-sage-700 dark:text-moss-subtle">
-                    Bill calendar rows due in {mk} you checked off (with actual-paid when entered), plus one-off shocks logged here for
-                    the same month — same bucket as the amber cashflow card.
+                    {dashboardCopy.actualExpenseHelper(mk)}
                   </p>
                 </div>
               </div>
@@ -433,14 +426,13 @@ export function DashboardOverview({
               {backlogOverdue && (
                 <div className="mb-3 rounded-lg border border-red-200/90 bg-red-50 px-3 py-2 dark:border-red-800/40 dark:bg-red-950/40">
                   <p className="text-center text-[10px] font-bold uppercase tracking-wide text-red-800 dark:text-red-300/95">
-                    Warning · overdue backlog
+                    Overdue backlog
                   </p>
                   <p className="mt-1.5 text-center text-xs font-semibold text-red-950 dark:text-red-100">
                     {backlogOverdue.name} · {formatTimelineDateLabel(backlogOverdue.due)} · {formatMoney(backlogOverdue.amount)}
                   </p>
                   <p className="mt-1 text-center text-[11px] leading-snug text-red-900/90 dark:text-red-200/85">
-                    Still unchecked from an earlier month — open <strong>Bill calendar &amp; checkmarks</strong> and mark handled, or
-                    the same line keeps surfacing.
+                    {dashboardCopy.backlogMessage}
                   </p>
                 </div>
               )}
@@ -527,7 +519,7 @@ export function DashboardOverview({
                   </p>
                 </div>
                 <p className="mt-4 text-[11px] leading-snug text-sage-600 dark:text-moss-muted sm:col-span-2 sm:mt-2">
-                  We don’t auto-link pay deposits to savings — bump the rainy‑day figure when money actually lands in that saver.
+                  {dashboardCopy.savingsRingsNote}
                 </p>
               </MetricCard>
             </MetricWithTip>
@@ -535,7 +527,7 @@ export function DashboardOverview({
         </div>
 
         <p className="mx-auto mt-4 max-w-2xl text-center text-[11px] leading-relaxed text-teal-200/85 dark:text-moss-muted">
-          *Straight-line projections from current plan inputs and balances; illustrative only—not lender or bank forecasts.
+          {dashboardCopy.projectionDisclaimer}
         </p>
 
         <div

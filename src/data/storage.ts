@@ -194,6 +194,15 @@ const deepMerge = (base: FinanceState, partial: Partial<FinanceState>): FinanceS
     }
     return out;
   })(),
+  billOverdueReminderSentAt: (() => {
+    const b = { ...(base.billOverdueReminderSentAt ?? {}) };
+    if (partial.billOverdueReminderSentAt === undefined) return b;
+    const out: NonNullable<FinanceState['billOverdueReminderSentAt']> = { ...b };
+    for (const [id, m] of Object.entries(partial.billOverdueReminderSentAt)) {
+      out[id] = { ...(b[id] ?? {}), ...m };
+    }
+    return out;
+  })(),
 });
 
 /**

@@ -2,20 +2,19 @@ import type { ReactNode } from 'react';
 import { formatCalendarMonthHeading, HISTORY_TRACKING_STARTED_MONTH_KEY } from '../data/defaults';
 import { formatMoney } from '../utils/format';
 
-/** Hover “Details” explanations for dashboard & sections */
-/** Compare logged deposits vs the Household monthly plan — shown on dashboard & Paycheque log. */
 export function dashboardIncomeLoggedVsPlannedTip(planned: number, logged: number): ReactNode {
   return (
     <>
-      <strong className="text-sage-900 dark:text-moss-tip">Planned monthly</strong> is husband + wife totals in Household data — a
-      whole month’s picture. <strong className="text-sage-900 dark:text-moss-tip">Logged pay</strong> is only what you typed in the
-      Paycheque log this calendar month — it can be lower mid-month because not every deposit has happened yet, or because the
-      month really is lighter — that is not an error. Different from <strong>Extra cash</strong> (odd bonuses, gifts outside normal
-      pay).
+      <strong className="text-sage-900 dark:text-moss-tip">Planned monthly income</strong> is the husband and wife
+      totals in Household data. <strong className="text-sage-900 dark:text-moss-tip">Deposits this month</strong> are
+      only what you enter in the Paycheque log. They can be lower mid-month before every cheque arrives. That is
+      normal. <strong className="text-sage-900 dark:text-moss-tip">Extra cash</strong> is for bonuses and gifts
+      outside regular pay.
       {logged > 0 && (
         <>
           {' '}
-          Right now logged = <strong>{formatMoney(logged)}</strong>, plan = <strong>{formatMoney(planned)}</strong>.
+          Right now: logged <strong>{formatMoney(logged)}</strong>, planned{' '}
+          <strong>{formatMoney(planned)}</strong>.
         </>
       )}
     </>
@@ -25,12 +24,10 @@ export function dashboardIncomeLoggedVsPlannedTip(planned: number, logged: numbe
 export function incomeLogTip(): ReactNode {
   return (
     <>
-      Each row is a deposit date and amount. We total them for the{' '}
-      <strong className="text-sage-900 dark:text-moss-tip">calendar month</strong> and show that next to your usual monthly plan from Household data.{' '}
-      Current month is logged under <strong className="text-sage-900 dark:text-moss-tip">Dashboard</strong>; archived months copy the rows for whichever month you pick under <strong className="text-sage-900 dark:text-moss-tip">Past months</strong> — pick the matching block so totals line up with what you expect.
-      If you set pay rhythm (weekly / biweekly / monthly) and optional “usual amount per cheque,” we also estimate how much of each deposit looks like{' '}
-      <strong>OT or extra on that pay</strong> versus your baseline — different from the Extra cash box, which is for bonuses, gifts, etc.
-      This does <em>not</em> change sliders or allocation math. Tag “joint” for shared deposits; husband/wife drive the baseline math.
+      Each row is a deposit date and amount. We total them for the calendar month and show that beside your plan
+      from Household data. The current month lives on the Dashboard. Past months use the matching block under Past
+      months. If you set pay rhythm and a usual amount per cheque, we estimate variable pay on each deposit. That
+      is separate from Extra cash. Tag Joint for shared deposits. Husband and Wife drive the baseline math.
     </>
   );
 }
@@ -38,9 +35,9 @@ export function incomeLogTip(): ReactNode {
 export function dashboardIncomeTip(): ReactNode {
   return (
     <>
-      <strong className="text-sage-900 dark:text-moss-tip">Planned</strong> usual pay: husband + wife monthly fields in{' '}
-      <strong>Household data</strong>. Surprise bumps go in <strong>Extra cash</strong>; actual cheques vs this plan go in the{' '}
-      <strong>Paycheque log</strong> (see deposit total on the dashboard when you start logging).
+      <strong className="text-sage-900 dark:text-moss-tip">Planned</strong> pay comes from husband and wife monthly
+      fields in Household data. Put surprise income in <strong>Extra cash</strong>. Log real cheques in the{' '}
+      <strong>Paycheque log</strong> to update Deposits this month on the snapshot.
     </>
   );
 }
@@ -48,8 +45,9 @@ export function dashboardIncomeTip(): ReactNode {
 export function dashboardVariablePayTip(): ReactNode {
   return (
     <>
-      We compare each logged <strong className="text-sage-900 dark:text-moss-tip">husband / wife</strong> deposit to the usual cheque
-      implied by Household (pay rhythm and optional per-pay override). The gap is an <strong className="text-sage-900 dark:text-moss-tip">estimate of variable pay</strong> — it does not roll into allocation until you reflect it (Extra cash, savings balance, or bigger card payments you type by hand).
+      We compare each logged husband or wife deposit to the usual cheque from Household data. The gap is an estimate
+      of variable pay. It does not change allocation until you reflect it in Extra cash, savings, or bill amounts
+      you enter yourself.
     </>
   );
 }
@@ -57,10 +55,9 @@ export function dashboardVariablePayTip(): ReactNode {
 export function dashboardEarnerSplitTip(): ReactNode {
   return (
     <>
-      Takes the <strong className="text-sage-900 dark:text-moss-tip">dollar plan</strong> from essentials, groceries, debts, savings
-      %, and personal % — then pretends that bucket is covered <strong className="text-sage-900 dark:text-moss-tip">in proportion to
-      each spouse’s planned salary</strong>. What’s left per person always adds up to the household “unallocated” remainder. It is a
-      lens, not automatic bank logic.
+      Uses dollar amounts from essentials, groceries, debts, savings, and personal. It splits that bucket in proportion
+      to each spouse&apos;s planned salary. What is left per person matches the household unallocated remainder. This
+      is a view only, not automatic bank logic.
     </>
   );
 }
@@ -68,10 +65,8 @@ export function dashboardEarnerSplitTip(): ReactNode {
 export function dashboardEmergencyTip(): ReactNode {
   return (
     <>
-      This number is <strong className="text-sage-900 dark:text-moss-tip">whatever you say is in your real savings</strong> —
-      for example the balance in a joint Westpac savings account you both use for emergencies. The app{' '}
-      <strong>never</strong> connects to your bank or sees transfers. When you move money in or out (or check the account), come
-      here and type the new total so the dashboard and rings stay truthful.
+      This is the balance you say is in your real savings, for example a joint emergency account. The app never
+      connects to your bank. When you move money in or out, update this number so the dashboard stays accurate.
     </>
   );
 }
@@ -79,9 +74,9 @@ export function dashboardEmergencyTip(): ReactNode {
 export function dashboardDebtTip(): ReactNode {
   return (
     <>
-      Rough total still owed across cards, loans, and personal lines in your Household table — including estimates for HP/car
-      when balance is blank. <strong className="text-sage-900 dark:text-moss-tip">Interest is never added automatically</strong> — type
-      the balance from each statement when you reconcile. Useful for morale, not a legal payoff quote.
+      Rough total still owed across cards, loans, and HP lines in Household data. Interest is never added
+      automatically. Type balances from statements when you reconcile. Useful for direction, not a legal payoff
+      quote.
     </>
   );
 }
@@ -89,9 +84,8 @@ export function dashboardDebtTip(): ReactNode {
 export function debtBalancesPanelTip(): ReactNode {
   return (
     <>
-      One-place view of each row&apos;s <strong className="text-sage-900 dark:text-moss-tip">effective balance</strong> (typed
-      statement balance, or installment estimate when blank). APR is optional — if you enter it under Household debts, ~interest/mo
-      is roughly balance × APR ÷ 12 (simplified); it still does <strong>not</strong> roll into what you owe in the spreadsheet.
+      Shows each row&apos;s effective balance (typed statement balance, or an installment estimate when blank).
+      Optional APR gives a rough monthly interest hint. It does not change the balance we store.
     </>
   );
 }
@@ -99,9 +93,8 @@ export function debtBalancesPanelTip(): ReactNode {
 export function dashboardNextBillTip(): ReactNode {
   return (
     <>
-      The next <strong className="text-sage-900 dark:text-moss-tip">unchecked</strong> line that is still <strong className="text-sage-900 dark:text-moss-tip">due today or later</strong>{' '}
-      on your checklist. Older unpaid rows stay at the top of the Bill calendar until you mark them — they show separately here as a
-      backlog alert when needed. Marking handled updates this card without reloading.
+      The next unchecked bill that is due today or later. Older unpaid rows stay on the Bill calendar until you mark
+      them as paid. We show a backlog alert here when needed. Marking as paid updates this card without reloading.
     </>
   );
 }
@@ -109,8 +102,8 @@ export function dashboardNextBillTip(): ReactNode {
 export function dashboardSafeSpendTip(): ReactNode {
   return (
     <>
-      Approximate leftover per week after essentials, groceries, debt payments, and savings (from sliders), with a gentle
-      haircut if big bills bunch up soon. Rough estimate only — not spending permission or denial.
+      Approximate leftover per week after essentials, groceries, debt payments, and savings from your plan, with a
+      gentle haircut if big bills bunch up soon. A rough estimate only, not permission to spend or a limit.
     </>
   );
 }
@@ -118,8 +111,8 @@ export function dashboardSafeSpendTip(): ReactNode {
 export function dashboardBillsTickedTip(): ReactNode {
   return (
     <>
-      How many <strong className="text-sage-900 dark:text-moss-tip">individual rows</strong> with a due date in this calendar month you
-      marked handled. Weekly lines (like groceries) are <strong className="text-sage-900 dark:text-moss-tip">each week separately</strong> — checking one Saturday does not check the whole month. Debts usually use one mark per calendar month.
+      How many bill rows with a due date this month you marked as paid. Weekly groceries are one row per week.
+      Marking one Saturday does not mark the whole month. Debts usually use one mark per calendar month.
     </>
   );
 }
@@ -127,8 +120,8 @@ export function dashboardBillsTickedTip(): ReactNode {
 export function dashboardDebtFreeMonthsTip(): ReactNode {
   return (
     <>
-      Divides estimated debt remaining by monthly payments — very rough. Useful directionally; ignores interest, lump sums,
-      snowball redirects, etc.
+      Divides estimated debt remaining by monthly payments. Very rough. Useful for direction. Ignores interest, lump
+      sums, and snowball choices.
     </>
   );
 }
@@ -136,10 +129,9 @@ export function dashboardDebtFreeMonthsTip(): ReactNode {
 export function dashboardSavingsSliderTip(): ReactNode {
   return (
     <>
-      <strong className="text-sage-900 dark:text-moss-tip">Intent:</strong> your <strong>planned monthly savings dollars</strong>{' '}
-      from Plan &amp; bills → monthly split (not a % anymore).{' '}
-      <strong className="text-sage-900 dark:text-moss-tip">Achieved:</strong> the typed backup / emergency balance (same numbers as
-      the Emergency fund metric above and under Plan → Rainy‑day savings).
+      <strong className="text-sage-900 dark:text-moss-tip">Intent:</strong> planned monthly savings dollars from
+      Plan and bills. <strong className="text-sage-900 dark:text-moss-tip">Achieved:</strong> the typed emergency
+      balance (same as the Emergency fund metric and Rainy-day savings under Plan).
     </>
   );
 }
@@ -147,14 +139,23 @@ export function dashboardSavingsSliderTip(): ReactNode {
 export function dashboardPlannedVsActualExpensesTip(): ReactNode {
   return (
     <>
-      <strong className="text-sage-900 dark:text-moss-tip">Planned</strong> sums what you typed in Household + Plan: essentials
-      (monthly + weekly at 4×/mo), groceries row, all loan/HP <strong>payments</strong>, plus planned savings and personal dollars —
-      same wedge math as the allocation card.{' '}
-      <strong className="text-sage-900 dark:text-moss-tip">Actual</strong> counts only what the workbook already captures for{' '}
-      <strong>this calendar month</strong>:
-      for cashflow: bill lines with a due date in this calendar month that you <strong>marked handled</strong> (using actual paid
-      when you entered it), plus <strong>Unexpected expenses</strong> dated this month. It is not a bank feed; unmarked bills do not
-      add here.
+      <strong className="text-sage-900 dark:text-moss-tip">Planned</strong> sums Household and Plan: essentials,
+      groceries, debt payments, plus planned savings and personal.{' '}
+      <strong className="text-sage-900 dark:text-moss-tip">Actual</strong> counts bills due this month that you
+      marked as paid (using actual paid when entered), plus unexpected expenses dated this month. Unmarked bills
+      do not count. Not a bank feed.
+    </>
+  );
+}
+
+export function dashboardLeftFromDepositsTip(): ReactNode {
+  return (
+    <>
+      <strong className="text-sage-900 dark:text-moss-tip">Left from deposits</strong> is pay logged this month minus
+      bills marked as paid that are due on or before today. <strong className="text-sage-900 dark:text-moss-tip">
+        Carry-over
+      </strong>{' '}
+      from last month is separate and shown below. Savings goal balances are not subtracted here.
     </>
   );
 }
@@ -162,8 +163,8 @@ export function dashboardPlannedVsActualExpensesTip(): ReactNode {
 export function ringFirst1kTip(): ReactNode {
   return (
     <>
-      A classic starter cushion milestone ($1,000). The ring fills as your typed emergency fund approaches that amount —
-      customizable goal in Emergency fund tracker.
+      A starter cushion milestone at $1,000. The ring fills as your typed emergency fund approaches that amount. You
+      can adjust the goal in the emergency tracker.
     </>
   );
 }
@@ -171,14 +172,10 @@ export function ringFirst1kTip(): ReactNode {
 export function ringThreeMonthTip(currentTarget: number, suggested3: number): ReactNode {
   return (
     <>
-      <strong className="text-sage-900 dark:text-moss-tip">
-        Why does it say “{formatMoney(currentTarget)}”?
-      </strong>{' '}
-      That dollar amount is your <strong>chosen savings goal</strong> for a bigger rainy-day cushion — often described as “about
-      three months of living costs,” but only you decide what counts as living costs.
-      The template picked <strong>{formatMoney(suggested3)}</strong> (~3× essentials + debt payments from Household data); you may
-      have changed it. It is <strong className="text-sage-900 dark:text-moss-tip">editable</strong> under Emergency fund → “3‑month
-      target.” The ring simply compares what you&apos;ve saved so far to <em>your</em> target — not a demand from the app.
+      <strong className="text-sage-900 dark:text-moss-tip">Target {formatMoney(currentTarget)}</strong> is your chosen
+      savings goal, often about three months of living costs. The template suggested{' '}
+      <strong>{formatMoney(suggested3)}</strong> from essentials and debt payments. You can change it under Emergency
+      fund. The ring compares saved so far to your target, not a demand from the app.
     </>
   );
 }
@@ -186,10 +183,8 @@ export function ringThreeMonthTip(currentTarget: number, suggested3: number): Re
 export function allocationSectionTip(): ReactNode {
   return (
     <>
-      The <strong className="text-sage-900 dark:text-moss-tip">donut</strong> is built from <strong>typed dollars only</strong>:
-      essentials (minus groceries row), groceries, and debt payments from Household;{' '}
-      <strong>savings</strong> and <strong>personal</strong> from the two amount fields above the chart — not allocation % sliders.{' '}
-      <strong>Unallocated</strong> appears when planned pay exceeds all of those wedges.
+      The chart uses typed dollars only: essentials (minus groceries), groceries, debt payments, plus savings and
+      personal from the fields above the chart. Unallocated appears when planned pay exceeds those wedges.
     </>
   );
 }
@@ -198,11 +193,10 @@ export function billsTimelineTip(): ReactNode {
   const since = formatCalendarMonthHeading(HISTORY_TRACKING_STARTED_MONTH_KEY);
   return (
     <>
-      The checklist starts at <strong className="text-sage-900 dark:text-moss-tip">{since}</strong> — nothing before then appears as
-      due or overdue (April and earlier stay in Past months only as a quiet placeholder). Built from Household data. Weekly
-      essentials (groceries, etc.) appear once per <strong className="text-sage-900 dark:text-moss-tip">Saturday</strong> in that month — mark handled on each row separately. Labels like “Needs a look” are reminders, not grades. Debts marked{' '}
-      <strong className="text-sage-900 dark:text-moss-tip">Auto deduction</strong> switch to handled automatically after their due date passes this month — unless someone tapped{' '}
-      <strong>Undo paid</strong>; then we remember not to flip them back on every visit. Manual bills stay manual.
+      The checklist starts at <strong className="text-sage-900 dark:text-moss-tip">{since}</strong>. Earlier months
+      appear under Past months only. Weekly essentials appear once per Saturday. Mark each row separately. Debts
+      with <strong className="text-sage-900 dark:text-moss-tip">Auto deduction</strong> can mark as paid after the due
+      date unless you tap Undo paid for that month.
     </>
   );
 }
@@ -210,9 +204,8 @@ export function billsTimelineTip(): ReactNode {
 export function walletsTip(): ReactNode {
   return (
     <>
-      Two optional lanes for splitting the allocation <strong className="text-sage-900 dark:text-moss-tip">Personal</strong> slice into whose fun money is
-      whose — not bank accounts. Husband budget + wife budget is your chosen split; compare the sum to the Personal dollars in allocation if you want them
-      to line up. Spent taps are informal; month resets wipe spent only.
+      Optional split of the Personal slice into his and hers fun money, not bank accounts. Spent taps are informal.
+      Month reset clears spent only.
     </>
   );
 }
@@ -220,9 +213,8 @@ export function walletsTip(): ReactNode {
 export function snowballTip(): ReactNode {
   return (
     <>
-      Smallest remaining balance first — a visual order, not a mandate. The chart and the grey strip under each row both scale
-      lengths to <strong className="text-sage-900 dark:text-moss-tip">remaining balance</strong> vs the largest balance on this list
-      (including HP-style estimates when balance is empty). Your real bank rules still win.
+      Smallest remaining balance first for motivation. Bar lengths scale to remaining balance. Your real payoff
+      order still applies.
     </>
   );
 }
@@ -230,9 +222,9 @@ export function snowballTip(): ReactNode {
 export function lifeThisMonthTip(): ReactNode {
   return (
     <>
-      <strong className="text-sage-900 dark:text-moss-tip">Extra cash</strong>: bonuses, rebates, gifts, side income — logged
-      here. <strong className="text-sage-900 dark:text-moss-tip">Unexpected bills</strong> now live below the Dashboard in their
-      own band for visibility. Rows are bookkeeping only unless you reconcile elsewhere.
+      <strong className="text-sage-900 dark:text-moss-tip">Extra cash</strong> is for bonuses, rebates, and gifts.{' '}
+      <strong className="text-sage-900 dark:text-moss-tip">Unexpected expenses</strong> sit in their own section
+      below the Dashboard. Rows are workbook only unless you reconcile elsewhere.
     </>
   );
 }
@@ -240,8 +232,8 @@ export function lifeThisMonthTip(): ReactNode {
 export function upcomingStripTip(): ReactNode {
   return (
     <>
-      The next few unpaid items from the same bill list — higher contrast so nothing sneaks up on you. Amounts match Household
-      rows. “Full timeline” scrolls to check things off. Auto-deduction lines can show handled on their own after the due date unless you undid that for the month.
+      The next unpaid items from your bill list. Amounts match Household rows. Full timeline scrolls to the
+      calendar. Auto-deduction lines may mark as paid after the due date unless you undid that for the month.
     </>
   );
 }
@@ -249,10 +241,8 @@ export function upcomingStripTip(): ReactNode {
 export function emergencySectionTip(): ReactNode {
   return (
     <>
-      This is a <strong className="text-sage-900 dark:text-moss-tip">manual tracker</strong>: type the balance from the account
-      where you actually park emergency money (joint saver, etc.). No bank link — you update it when you deposit, withdraw, or
-      read your statement. The sliders and “savings %” elsewhere are the <em>plan</em>; this box is the{' '}
-      <em>balance you choose to record</em>.
+      Type the balance from the account where you keep emergency money. No bank link. Update when you deposit,
+      withdraw, or read a statement. Sliders elsewhere are the plan. This box is the balance you choose to record.
     </>
   );
 }
@@ -260,8 +250,8 @@ export function emergencySectionTip(): ReactNode {
 export function allocRowEssentialsTip(): ReactNode {
   return (
     <>
-      Rent, internet, power, etc. Pulled from Household essentials (excluding the groceries line). The matching slider is only a
-      mental picture — dollars use the table.
+      Rent, internet, power, and similar rows from Household essentials, excluding groceries. Dollars use the table,
+      not the slider alone.
     </>
   );
 }
@@ -269,7 +259,7 @@ export function allocRowEssentialsTip(): ReactNode {
 export function allocRowGroceriesTip(): ReactNode {
   return (
     <>
-      From your Groceries row: weekly × 4 weeks → monthly, or a straight monthly number. Does not follow the grocery slider for
+      From your Groceries row: weekly times four weeks, or a monthly amount. Does not follow the grocery slider for
       dollar math.
     </>
   );
@@ -278,7 +268,7 @@ export function allocRowGroceriesTip(): ReactNode {
 export function allocRowDebtTip(): ReactNode {
   return (
     <>
-      Sum of every “Payment” column in your debt table — what actually leaves your account each month for those items.
+      Sum of monthly payment amounts in your debt table.
     </>
   );
 }
@@ -286,9 +276,8 @@ export function allocRowDebtTip(): ReactNode {
 export function allocRowSavingsTip(): ReactNode {
   return (
     <>
-      Husband+wife planned income × your savings slider %. That is your <strong className="text-sage-900 dark:text-moss-tip">intent</strong>{' '}
-      in this budget —not a bank withdrawal. Type what actually sits in Westpac / your saver under <strong>Rainy‑day savings</strong>; update
-      that balance (+/− buttons or edit) whenever you transfer in or pull money out.
+      Planned income times your savings share. That is intent in the budget, not a bank withdrawal. Type what sits in
+      your saver under Rainy-day savings when you transfer money.
     </>
   );
 }
@@ -296,9 +285,8 @@ export function allocRowSavingsTip(): ReactNode {
 export function allocRowPersonalTip(): ReactNode {
   return (
     <>
-      Income × personal slider %. That dollar amount is the <strong className="text-sage-900 dark:text-moss-tip">combined</strong> discretionary lane
-      in the monthly plan — <strong>not</strong> automatically split husband vs wife. Next section (Personal wallets) lets you divide that idea into two
-      budgets and tap light “spent” tracking; set each budget yourselves so his + hers matches how you actually run money.
+      Income times personal share. That is combined discretionary money in the plan, not auto-split by spouse. Personal
+      wallets below let you set his and hers budgets and light spent tracking.
     </>
   );
 }
@@ -306,8 +294,8 @@ export function allocRowPersonalTip(): ReactNode {
 export function monthlyReportTip(): ReactNode {
   return (
     <>
-      Open a readable summary for the selected calendar month plus CSV. Tweaking older deposits or extras updates this recap as soon
-      as you save — Household data still drives today’s dashboard sliders. Nothing is bank-synced.
+      Summary and CSV for the month you select. Edits to older deposits update the recap when you save. Nothing is
+      bank-synced.
     </>
   );
 }
@@ -315,10 +303,9 @@ export function monthlyReportTip(): ReactNode {
 export function pastMonthInsightsTip(): ReactNode {
   return (
     <>
-      <strong className="text-sage-900 dark:text-moss-tip">Handled / missed</strong> compares scheduled bill lines that month against your
-      checklist keys (weekly groceries still one row per week). You can tick missed lines here even after the month ends. Extra cash &
-      surprise costs can be <strong className="text-sage-900 dark:text-moss-tip">added for this month</strong> with the forms in the recap (date must stay in the month you picked) or edited / removed below
-      that. Paycheque deposits use the separate table under this card. The History picker only lists past months; the live month stays on the Dashboard.
+      <strong className="text-sage-900 dark:text-moss-tip">Paid vs missed</strong> compares scheduled bills to your
+      checklist. You can mark missed lines here after the month ends. Extra cash and surprises can be added for that
+      month. Paycheque deposits use the table on this card. The live month stays on the Dashboard.
     </>
   );
 }
@@ -326,10 +313,19 @@ export function pastMonthInsightsTip(): ReactNode {
 export function householdDataTip(): ReactNode {
   return (
     <>
-      Source of truth for <strong className="text-sage-900 dark:text-moss-tip">planned</strong> income, bills, and loans. Everything else reads from here.
-      Debt <strong className="text-sage-900 dark:text-moss-tip">balances are manual</strong> (statement amount); optionally add APR % for an interest heads-up — balances do not compound in the background.
-      Actual deposits vs that plan belong in the <strong>Paycheque log</strong>. Toggle <strong>Auto deduction</strong> where money leaves automatically so handled checkmarks can follow the calendar.
-      Add rows when life changes — no need to perfect it on day one.
+      Source of truth for planned income, bills, and loans. Debt balances are manual. Optional APR is a hint only.
+      Log actual pay in the Paycheque log. Turn on Auto deduction where money leaves automatically so rows can mark
+      as paid on schedule.
+    </>
+  );
+}
+
+export function incomeVsSpendTip(): ReactNode {
+  return (
+    <>
+      <strong className="text-sage-900 dark:text-moss-tip">Primary</strong> is husband&apos;s logged pay.{' '}
+      <strong className="text-sage-900 dark:text-moss-tip">Partner</strong> is wife&apos;s. Dark shading is bills and
+      surprises attributed to that person when they mark as paid. Red means spent more than logged pay for that person.
     </>
   );
 }

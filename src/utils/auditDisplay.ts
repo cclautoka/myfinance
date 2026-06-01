@@ -114,11 +114,11 @@ export function formatDigestItemForEmail(item: DigestListItem): DigestListItem {
   const body = h.body ?? '';
   const meta = h.meta ?? '';
 
-  if (title === 'Marked as handled' && body) {
-    return { title: `${body} marked as handled`, body: meta || undefined };
+  if (title === 'Marked as paid' && body) {
+    return { title: `${body} marked as paid`, body: meta || undefined };
   }
-  if (title === 'Unmarked as handled' && body) {
-    return { title: `${body} unmarked (not handled)`, body: meta || undefined };
+  if (title === 'Unmarked as paid' && body) {
+    return { title: `${body} unmarked as paid`, body: meta || undefined };
   }
   if (title === 'Actual paid amount') {
     if (meta) return { title: `Paid amount recorded for ${body}`, body: meta };
@@ -126,7 +126,7 @@ export function formatDigestItemForEmail(item: DigestListItem): DigestListItem {
   }
   if (title === 'Bill handled status' || title === 'Bill checkmarks') {
     return {
-      title: body ? `Bill updates for ${body}` : 'Bill handled status changed',
+      title: body ? `Bill updates for ${body}` : 'Bill payment status changed',
       body: meta || undefined,
     };
   }

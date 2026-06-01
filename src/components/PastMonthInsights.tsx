@@ -19,6 +19,7 @@ import { incomeLogOvertimeMonthTotal } from '../utils/expectedPaycheque';
 import { incomeLogMonthTotal } from '../utils/incomeLog';
 import { formatMoney, formatShortDate } from '../utils/format';
 import { defaultSurprisePaidByRole, SURPRISE_PAID_BY_OPTIONS } from '../utils/surprisePaidBy';
+import { panels } from '../copy/panels';
 import { Card } from './ui/Card';
 import { EXTRA_INCOME_CATEGORY_OPTIONS, SURPRISE_CATEGORY_OPTIONS } from '../data/selectOptions';
 import { BillPaymentMarkControls } from './BillPaymentMarkControls';
@@ -404,11 +405,11 @@ export function PastMonthInsights({
       <div>
         <Card
           title={`${formatCalendarMonthHeading(monthKey)} · recap`}
-          subtitle="Bill checklist (mark handled), paycheque log below, extra cash & surprise costs — all scoped to this picker month. Current month uses the Dashboard instead."
+          subtitle={panels.pastMonth.subtitle}
         >
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-xl border border-sage-200/80 bg-sage-50/50 p-3 dark:border-moss-border dark:bg-moss-surface/80">
-              <p className="text-xs text-sage-600 dark:text-moss-muted">Bill lines marked handled</p>
+              <p className="text-xs text-sage-600 dark:text-moss-muted">{panels.pastMonth.markedRatio}</p>
               <p className="mt-1 font-display text-xl font-semibold text-sage-900 dark:text-moss-fg">
                 {billStats.handled} / {billStats.total}
               </p>
@@ -449,7 +450,7 @@ export function PastMonthInsights({
           {billStats.missed.length > 0 && (
             <div className="mt-6 border-t border-sage-200/70 pt-4 dark:border-moss-border">
               <p className="text-sm font-semibold text-sage-900 dark:text-moss-fg">
-                Not marked handled (by due date this month){' '}
+                {panels.pastMonth.notMarked}{' '}
                 <span className="font-normal text-sage-600 dark:text-moss-muted">— catch up anytime</span>
               </p>
               <ul className="mt-3 space-y-2">

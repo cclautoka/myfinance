@@ -4,6 +4,7 @@ import { allocationSectionTip } from '../copy/tooltips';
 import { WEEKS_IN_MONTHLY_PLAN } from '../utils/calculations';
 import { allocationBreakdown } from '../utils/allocation';
 import { formatMoney } from '../utils/format';
+import { panels } from '../copy/panels';
 import { Card } from './ui/Card';
 import { HoverTip } from './ui/HoverTip';
 import { NumericAmountInput } from './ui/NumericInputs';
@@ -72,8 +73,8 @@ export function AllocationPanel({
 
   return (
     <Card
-      title="Monthly money split"
-      subtitle="Type savings and personal as monthly dollars — the donut sizes wedges from Household rows plus those amounts (not legacy % sliders)."
+      title={panels.allocation.title}
+      subtitle={panels.allocation.subtitle}
     >
       <HoverTip content={allocationSectionTip()}>
         <p className="mb-6 cursor-default rounded-xl border border-dashed border-sage-400/70 px-3 py-2 text-xs font-semibold leading-relaxed text-sage-700 dark:border-moss-border dark:text-moss-muted">

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { BillsPaidTogglePayload, BillsTogglePayload } from '../utils/billsTimeline';
 import { formatMoney } from '../utils/format';
 import { readHouseholdSession } from '../utils/householdSession';
+import { bills as billsCopy } from '../copy/bills';
 import { BillMarkHandledConfirmDialog } from './BillMarkHandledConfirmDialog';
 
 function parseAmountDraft(draft: string, fallback: number): number {
@@ -49,9 +50,11 @@ export function BillPaymentMarkControls({
     return (
       <div className="flex w-full min-w-0 flex-col gap-2">
         <p className="min-w-0 text-xs leading-relaxed text-sage-600 dark:text-moss-muted">
-          Plan <span className="font-semibold text-sage-800 dark:text-moss-subtle">{formatMoney(plannedAmount)}</span>
+          {billsCopy.markControls.planLabel}{' '}
+          <span className="font-semibold text-sage-800 dark:text-moss-subtle">{formatMoney(plannedAmount)}</span>
           <span className="mx-1">·</span>
-          Paid <span className="font-semibold text-sage-800 dark:text-moss-subtle">{formatMoney(displayPaidAmount)}</span>
+          {billsCopy.markControls.paidLabel}{' '}
+          <span className="font-semibold text-sage-800 dark:text-moss-subtle">{formatMoney(displayPaidAmount)}</span>
           {planDiff && (
             <span className="ml-1 font-medium text-amber-800 dark:text-amber-300/90">
               ({delta >= 0 ? '+' : ''}
@@ -60,7 +63,7 @@ export function BillPaymentMarkControls({
           )}
         </p>
         <button type="button" className={btn} onClick={() => onToggle(toggleTarget)}>
-          Undo paid
+          {billsCopy.markControls.undoPaid}
         </button>
       </div>
     );
@@ -69,7 +72,7 @@ export function BillPaymentMarkControls({
   return (
     <div className="flex w-full min-w-0 flex-col gap-2">
       <label className="flex w-full min-w-0 flex-col gap-1">
-        <span className="text-xs font-medium text-sage-700 dark:text-moss-muted">Actual paid</span>
+        <span className="text-xs font-medium text-sage-700 dark:text-moss-muted">{billsCopy.markControls.actualPaidLabel}</span>
         <input
           aria-label={`Actual paid amount for ${occurrenceKey}`}
           type="text"
@@ -85,7 +88,7 @@ export function BillPaymentMarkControls({
         className={btn}
         onClick={() => setConfirmOpen(true)}
       >
-        Mark handled
+        {billsCopy.markControls.markAsPaid}
       </button>
       <BillMarkHandledConfirmDialog
         open={confirmOpen}

@@ -2,6 +2,7 @@ import type { FinanceState, SavingsGoal } from '../types/finance';
 import { emergencySectionTip, ringFirst1kTip } from '../copy/tooltips';
 import { allocationBreakdown } from '../utils/allocation';
 import { formatMoney } from '../utils/format';
+import { panels } from '../copy/panels';
 import { Card } from './ui/Card';
 import { HoverTip } from './ui/HoverTip';
 import { ProgressRing } from './ui/ProgressRing';
@@ -41,8 +42,8 @@ export function EmergencyFund({
 
   return (
     <Card
-      title="Backup (emergency) account"
-      subtitle="Type whatever is really sitting in your joint saver — the app never reads the bank."
+      title={panels.emergency.title}
+      subtitle={panels.emergency.subtitle}
     >
       <div className="mb-6 rounded-xl border-2 border-sage-300/60 bg-sage-50 px-4 py-3 text-sm font-medium leading-snug text-sage-900 dark:border-moss-border dark:bg-moss-surface/90 dark:text-moss-subtle">
         <p>

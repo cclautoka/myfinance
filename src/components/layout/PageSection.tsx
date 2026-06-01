@@ -70,7 +70,7 @@ export function PageSection({
     );
 
   return (
-    <section id={id} data-tour={dataTour} className={`scroll-mt-40 sm:scroll-mt-36 ${shell}`}>
+    <section id={id} data-tour={dataTour} className={`app-page-enter scroll-mt-40 sm:scroll-mt-36 ${shell}`}>
       {variant !== 'plain' && palette ? (
         <>
           <header

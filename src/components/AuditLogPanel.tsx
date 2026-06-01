@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { panels } from '../copy/panels';
 import type { DigestListItem, DigestSection } from '../utils/financeStateDiff';
 import { fetchAuditLog, type AuditLogEntry } from '../utils/auditApi';
 import {
@@ -83,7 +84,7 @@ export function AuditLogPanel() {
         <h3 className="font-display text-base font-bold text-sage-900 dark:text-moss-fg">Activity log</h3>
         <p className="mt-1 max-w-3xl text-sm font-medium leading-relaxed text-sage-700 dark:text-moss-subtle">
           A plain-language history of saves to your household workbook: who changed what, from web or the phone app, and
-          when. Marking a bill handled, editing amounts, or logging a paycheque each create a row after sync.
+          {panels.audit.intro}
         </p>
       </div>
 

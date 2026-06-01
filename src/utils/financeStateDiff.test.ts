@@ -31,7 +31,7 @@ describe('computeFinanceStateDiff', () => {
     };
     const { sections } = computeFinanceStateDiff(from, to);
     const flat = sections.flatMap((s) => s.items ?? []);
-    expect(flat.some((i) => i.title === 'Marked as handled' && i.body?.includes('Internet'))).toBe(true);
+    expect(flat.some((i) => i.title === 'Marked as paid' && i.body?.includes('Internet'))).toBe(true);
   });
 
   it('returns neutral message when states are identical', () => {

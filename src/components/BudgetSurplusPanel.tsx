@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { FinanceState } from '../types/finance';
 import { HoverTip } from './ui/HoverTip';
+import { panels } from '../copy/panels';
 import { Card } from './ui/Card';
 import { NumericAmountInput } from './ui/NumericInputs';
 import { currentMonthKey } from '../data/defaults';
@@ -61,7 +62,7 @@ export function BudgetSurplusPanel({
       <strong className="text-sage-900 dark:text-moss-tip">extra cash</strong>, minus{' '}
       <strong className="text-sage-900 dark:text-moss-tip">marked-paid bills</strong> +{' '}
       <strong className="text-sage-900 dark:text-moss-tip">surprises</strong>. Optionally add{' '}
-      <strong className="text-sage-900 dark:text-moss-tip">carry-in</strong> when you&apos;re spending money that
+      <strong className="text-sage-900 dark:text-moss-tip">carry-over</strong> when you&apos;re spending money that
       sat around from earlier months — it doesn&apos;t replace logging real paycheques later.
     </>
   );
@@ -78,8 +79,8 @@ export function BudgetSurplusPanel({
       <div>
         <Card
           accent="amber"
-          title="Cash left this month → emergency savings"
-          subtitle="Real flows: paycheck log + extras + optional prior-month cushion, minus what you marked paid (+ surprises)."
+          title={panels.budgetSurplus.title}
+          subtitle={panels.budgetSurplus.subtitle}
         >
           <div className="mb-4 rounded-xl border border-teal-200/70 bg-teal-50/50 p-4 text-sm dark:border-teal-800/40 dark:bg-teal-950/25">
             <label className="block text-xs font-semibold text-sage-900 dark:text-moss-fg">
@@ -113,7 +114,7 @@ export function BudgetSurplusPanel({
                 <strong className="tabular-nums">{formatMoney(incomeLogged)}</strong>
               </li>
               <li>
-                Carry-in (typed above):{' '}
+                Carry-over (typed above):{' '}
                 <strong className="tabular-nums">{formatMoney(carryStored)}</strong>
               </li>
               <li>
@@ -162,7 +163,7 @@ export function BudgetSurplusPanel({
                 </p>
                 {incomeBreakdown.length === 0 ? (
                   <p className="text-xs italic">
-                    Nothing here yet — log pay/extra cash or enter carry-in above for prior cushion.
+                    Nothing here yet — log pay/extra cash or enter carry-over above for prior cushion.
                   </p>
                 ) : (
                   <ul className="space-y-1.5">
@@ -173,7 +174,7 @@ export function BudgetSurplusPanel({
                       >
                         <span className="min-w-0 break-words">
                           <span className="text-sage-600 dark:text-moss-muted">
-                            {row.source === 'carry' ? 'Carry-in' : row.source === 'paycheque' ? 'Pay log' : 'Extra cash'}
+                            {row.source === 'carry' ? 'Carry-over' : row.source === 'paycheque' ? 'Pay log' : 'Extra cash'}
                           </span>{' '}
                           · {row.label}{' '}
                           <span className="text-xs text-sage-500 dark:text-moss-muted">
@@ -245,7 +246,7 @@ export function BudgetSurplusPanel({
             <p className="mb-4 text-sm leading-relaxed text-sage-700 dark:text-moss-subtle">
               Sweeps apply when{' '}
               <strong className="text-sage-900 dark:text-moss-fg">net incl. carry</strong> stays positive — adjust
-              carry-in honestly so it reflects real cushion, not phantom money.
+              carry-over honestly so it reflects real cushion, not phantom money.
             </p>
           )}
 

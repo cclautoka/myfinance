@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { bills as billsCopy } from '../copy/bills';
 import { formatMoney, formatShortDate } from '../utils/format';
 import { zLayers } from '../ui/zLayers';
 
@@ -29,6 +30,7 @@ export function BillMarkHandledConfirmDialog({
   const confirmBtnRef = useRef<HTMLButtonElement>(null);
   const [mounted, setMounted] = useState(open);
   const [visible, setVisible] = useState(false);
+  const c = billsCopy.confirmDialog;
 
   useEffect(() => {
     if (open) {
@@ -85,6 +87,7 @@ export function BillMarkHandledConfirmDialog({
   const planDiff = Math.abs(delta) > 0.005;
   const backdropAnim = visible ? 'bill-confirm-backdrop-in' : 'bill-confirm-backdrop-out';
   const panelAnim = visible ? 'bill-confirm-panel-in' : 'bill-confirm-panel-out';
+  const monthKey = due.toISOString().slice(0, 7);
 
   return createPortal(
     <div
@@ -94,7 +97,7 @@ export function BillMarkHandledConfirmDialog({
       <button
         type="button"
         className={`absolute inset-0 bg-sage-950/65 backdrop-blur-md dark:bg-black/78 ${backdropAnim}`}
-        aria-label="Cancel"
+        aria-label={c.cancel}
         onClick={() => dismiss('cancel')}
       />
       <div
@@ -113,18 +116,12 @@ export function BillMarkHandledConfirmDialog({
               backgroundSize: '220% 100%',
             }}
           >
-            <div
-              className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-white/10 blur-2xl"
-              aria-hidden
-            />
-            <div
-              className="pointer-events-none absolute -bottom-12 -left-6 h-28 w-28 rounded-full bg-teal-300/20 blur-xl"
-              aria-hidden
-            />
+            <div className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-white/10 blur-2xl" aria-hidden />
+            <div className="pointer-events-none absolute -bottom-12 -left-6 h-28 w-28 rounded-full bg-teal-300/20 blur-xl" aria-hidden />
 
             <div className="relative flex gap-4">
               <div
-                className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25 backdrop-blur-sm bill-confirm-icon-pop`}
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25 backdrop-blur-sm bill-confirm-icon-pop"
                 aria-hidden
               >
                 <svg viewBox="0 0 24 24" className="h-6 w-6 text-white" fill="none" stroke="currentColor" strokeWidth="2">
@@ -136,9 +133,9 @@ export function BillMarkHandledConfirmDialog({
                 </svg>
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-teal-100/90">Confirm payment</p>
+                <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-teal-100/90">{c.eyebrow}</p>
                 <h2 id={titleId} className="mt-1 font-display text-xl font-semibold leading-snug">
-                  Mark as handled?
+                  {c.title}
                 </h2>
                 <p className="mt-2 truncate text-sm font-medium text-teal-50/95">{billName}</p>
                 <p className="mt-0.5 text-xs text-teal-100/75">Due {formatShortDate(due)}</p>
@@ -171,19 +168,18 @@ export function BillMarkHandledConfirmDialog({
             </div>
 
             <p className="bill-confirm-stagger-2 mt-4 text-sm leading-relaxed text-sage-700 dark:text-moss-subtle">
-              Counts as <strong className="text-sage-900 dark:text-moss-fg">paid</strong> for{' '}
-              {due.toISOString().slice(0, 7)} on your workbook timeline.
+              {c.countsAsPaid(monthKey)}
             </p>
 
             <div
               className={`bill-confirm-stagger-3 mt-3 inline-flex items-center gap-2 rounded-full border border-teal-200/90 bg-teal-50/90 px-3 py-1.5 text-xs font-semibold text-teal-900 dark:border-teal-800/50 dark:bg-teal-950/40 dark:text-teal-100/95 bill-confirm-chip-glow`}
             >
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-teal-500 motion-safe:animate-pulse" />
-              Income vs spend → {attributedAsLabel}
+              {c.incomeVsSpendChip(attributedAsLabel)}
             </div>
 
             <p className="bill-confirm-stagger-3 mt-2 text-[11px] leading-snug text-sage-500 dark:text-moss-muted">
-              Based on who is signed in now. Bookkeeping only — not a bank transfer.
+              {c.signedInNote} {c.disclaimer}
             </p>
 
             <div className="bill-confirm-stagger-4 mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
@@ -192,7 +188,7 @@ export function BillMarkHandledConfirmDialog({
                 className="btn-secondary w-full transition-transform duration-200 active:scale-[0.98] sm:w-auto"
                 onClick={() => dismiss('cancel')}
               >
-                Cancel
+                {c.cancel}
               </button>
               <button
                 ref={confirmBtnRef}
@@ -200,7 +196,7 @@ export function BillMarkHandledConfirmDialog({
                 className="btn-primary w-full transition-transform duration-200 active:scale-[0.98] sm:w-auto"
                 onClick={() => dismiss('confirm')}
               >
-                Mark handled
+                {c.confirm}
               </button>
             </div>
           </div>

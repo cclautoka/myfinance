@@ -1,16 +1,19 @@
 import { readSnapshot } from './snapshots.mjs';
-import { getDbEnabled, initDbIfNeeded, readState } from './db.mjs';
+import { getDbEnabled, initDbIfNeeded, readState, writeState } from './db.mjs';
 import { normalizeRecipientList, notifyToRecipients, sendMail } from './mail.mjs';
 import {
   notifyEmailsToRecipientList,
   resolveNotifyEmailsForHousehold,
 } from './notifyEmails.mjs';
-import { computeReminderEmailPayload } from './reminders.mjs';
 import {
-  buildReminderEmailTemplate,
-  renderEmailHtml,
-  renderEmailText,
-} from './templates.mjs';
+  computeDailyPushReminderPayload,
+  computeDueTodayEmailPayload,
+  computeOverdueCadenceEmailPayload,
+  patchOverdueReminderSentLog,
+  pruneOverdueReminderSentLog,
+} from './reminders.mjs';
+import { buildReminderEmailTemplate, renderEmailHtml, renderEmailText } from './templates.mjs';
+import { glossary } from './copy/glossary.mjs';
 import { sendBillReminderPush } from './pushSend.mjs';
 
 /** Reminder recipients: body.to → snapshot → DB member emails → NOTIFY_TO. */
@@ -40,7 +43,7 @@ export async function loadHouseholdReminderState(householdId, log) {
 }
 
 /**
- * Send due/overdue/horizon reminder email for one household.
+ * Send due-today + overdue-cadence email; daily push summary unchanged.
  * @returns {{ ok: true, skipped?: boolean, counts?, provider?, to? } | { ok: false, error: string, code?: string }}
  */
 export async function sendRemindersForHousehold(householdId, { log, body = {} } = {}) {
@@ -49,19 +52,28 @@ export async function sendRemindersForHousehold(householdId, { log, body = {} } 
     return { ok: false, error: 'No snapshot or stored state found for id.', code: 'NOT_FOUND' };
   }
 
-  const { monthKey: mk, dueSoon, overdue, horizon, counts } = computeReminderEmailPayload(
-    stateData,
-    new Date(),
+  const ref = new Date();
+  const pruned = pruneOverdueReminderSentLog(stateData);
+  const { monthKey: mk, dueToday } = computeDueTodayEmailPayload(pruned, ref);
+  const { overdueCadence } = computeOverdueCadenceEmailPayload(
+    pruned,
+    ref,
+    pruned.billOverdueReminderSentAt,
   );
-  if (counts.dueSoon === 0 && counts.overdue === 0 && counts.horizon === 0) {
-    return { ok: true, skipped: true, counts, householdId: id };
+
+  const pushPayload = computeDailyPushReminderPayload(pruned, ref);
+  const push = await sendBillReminderPush(id, { monthKey: pushPayload.monthKey, counts: pushPayload.counts }, log, pruned);
+
+  const emailCounts = { dueToday: dueToday.length, overdueCadence: overdueCadence.length };
+  if (emailCounts.dueToday === 0 && emailCounts.overdueCadence === 0) {
+    return { ok: true, skipped: true, counts: { ...pushPayload.counts, ...emailCounts }, householdId: id, push };
   }
 
-  const template = buildReminderEmailTemplate({ monthKey: mk, dueSoon, overdue, horizon });
+  const template = buildReminderEmailTemplate({ monthKey: mk, dueToday, overdueCadence });
   const footerHint =
-    counts.overdue > 0
-      ? 'Overdue items are past your grace window. Open the app and mark handled to keep reminders quiet.'
-      : 'Open the app to mark bills paid and keep reminders quiet.';
+    emailCounts.overdueCadence > 0
+      ? `These bills are past your grace window. Open the app and ${glossary.markAsPaid.toLowerCase()} when paid. ${glossary.workbookOnly}`
+      : `Bills due today—${glossary.markAsPaid.toLowerCase()} in the app when paid. ${glossary.workbookOnly}`;
   const html = renderEmailHtml({
     title: template.title,
     preheader: template.preheader,
@@ -75,12 +87,10 @@ export async function sendRemindersForHousehold(householdId, { log, body = {} } 
     footerHint,
   });
 
-  const push = await sendBillReminderPush(id, { monthKey: mk, counts }, log, stateData);
-
-  const to = await pickReminderRecipientsAsync(id, body, stateData);
+  const to = await pickReminderRecipientsAsync(id, body, pruned);
   if (!to.length) {
     if (push.ok && !push.skipped && (push.sent ?? 0) > 0) {
-      return { ok: true, pushOnly: true, push, counts, householdId: id };
+      return { ok: true, pushOnly: true, push, counts: { ...pushPayload.counts, ...emailCounts }, householdId: id };
     }
     return {
       ok: false,
@@ -93,7 +103,21 @@ export async function sendRemindersForHousehold(householdId, { log, body = {} } 
 
   try {
     const result = await sendMail({ to, subject: template.subject.slice(0, 200), text, html });
-    return { ok: true, ...result, counts, to, householdId: id, push };
+
+    if (overdueCadence.length > 0 && getDbEnabled()) {
+      await initDbIfNeeded(log);
+      const patched = patchOverdueReminderSentLog(pruned, overdueCadence, ref);
+      await writeState(id, patched).catch((e) => log?.warn?.(e, 'Failed to persist billOverdueReminderSentAt'));
+    }
+
+    return {
+      ok: true,
+      ...result,
+      counts: { ...pushPayload.counts, ...emailCounts },
+      to,
+      householdId: id,
+      push,
+    };
   } catch (e) {
     log?.error?.(e, 'sendRemindersForHousehold failed');
     return { ok: false, error: 'Failed to send email', code: 'SEND_FAILED', householdId: id };

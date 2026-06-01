@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { sections } from '../copy/sections';
 import type { ThemePreference } from '../types/finance';
 import { clearHouseholdSession } from '../utils/householdSession';
 import { zLayers } from '../ui/zLayers';
@@ -43,7 +44,7 @@ export function Header({
           </p>
           <h1 className="mt-1 font-display text-[1.35rem] font-bold leading-tight tracking-tight text-slate-950 dark:text-moss-fg sm:text-[2.1rem]">
             <span className="sm:hidden">Our Finance</span>
-            <span className="hidden sm:inline">Household workspace</span>
+            <span className="hidden sm:inline">{sections.header.workspaceTitle}</span>
           </h1>
           <p className="mt-1 hidden max-w-2xl text-sm font-medium leading-relaxed text-slate-600 dark:text-moss-subtle sm:block">
             Dashboard for this month — Workspace to edit history and plan — Tools for relay, sign-in, and reset.

@@ -1,0 +1,28 @@
+export const monthOpening = {
+  gateLabel: 'Month not opened yet',
+  title: (monthHeading: string) => `Set ${monthHeading} before continuing`,
+  intro: (prevHeading: string, monthHeading: string) =>
+    `Leftover from ${prevHeading} can go to your emergency pool and savings goals, or roll into ${monthHeading} as carry-over. Leave every field blank to put everything into carry-over.`,
+  tourNote: 'First time this month? After you unlock, you can run the short guided tour. Tools has replay too.',
+  leftoverTitle: (prevHeading: string) => `Leftover from ${prevHeading}`,
+  leftoverDetail:
+    'Prior-month carry plus deposits, minus bills marked as paid and emergency sweeps already taken. Not your bank balance.',
+  dueSoonTitle: (monthHeading: string) => `Due soon (first ~10 days of ${monthHeading})`,
+  dueSoonEmpty: 'No bills dated in that window.',
+  dueSoonPaidSuffix: ' · paid',
+  savingsSectionTitle: 'Move from leftover into savings (optional)',
+  emergencyFieldLabel: 'Emergency / $1k pool',
+  emergencyFieldHelp:
+    'Adds to your rainy-day balance on the Dashboard. Separate from carry-over for daily spending.',
+  emergencyPlaceholder: '0.00 — blank for none',
+  goalPlaceholder: '0.00 — blank for none',
+  capNote: (slack: string) =>
+    `Total directed to savings cannot exceed ${slack}. The rest rolls into carry-over.`,
+  slackFlatNote:
+    'Leftover is flat or negative. Carry-over stays $0 unless you adjust it later on the cashflow card.',
+  carryPreviewTitle: 'Roll into this month (carry-over preview)',
+  carryPreviewFormula: (slack: string, allocated: string) =>
+    `${slack} leftover minus ${allocated} to savings`,
+  saveUnlock: (monthHeading: string) => `Save & unlock ${monthHeading}`,
+  saveUnlockTour: 'Save & unlock — then start guided tour',
+} as const;

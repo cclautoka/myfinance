@@ -73,8 +73,8 @@ export function buildBillsHeadsUpSections(state: FinanceState, ref = new Date())
   horizon.sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
 
   return [
-    { heading: 'Due soon (includes grace window)', items: dueSoon },
+    { heading: 'Due soon (includes grace)', items: dueSoon },
     { heading: 'Overdue', items: overdue },
-    { heading: `On the horizon (next ${SAVE_EMAIL_BILL_HORIZON_CALENDAR_DAYS} days, unpaid)`, items: horizon },
+    { heading: `Coming up (next ${SAVE_EMAIL_BILL_HORIZON_CALENDAR_DAYS} days)`, items: horizon },
   ];
 }

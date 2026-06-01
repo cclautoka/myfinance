@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import type { FinanceState } from '../types/finance';
+import { bills as billsCopy } from '../copy/bills';
 import { upcomingStripTip } from '../copy/tooltips';
 import {
   billIsInGraceAfterDue,
@@ -83,10 +84,10 @@ export function UpcomingBillsStrip({
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-sage-200/80 pb-3 dark:border-moss-border">
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-sage-800 dark:text-moss-muted">
-              Next bills
+              {billsCopy.upcomingTitle}
             </p>
             <p className="mt-0.5 text-sm font-semibold text-sage-800 dark:text-moss-subtle">
-              Skips anything you already marked paid. Tap <span className="font-bold">i</span> for timing rules.
+              {billsCopy.upcomingHint} Tap <span className="font-bold">i</span> for timing rules.
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -95,7 +96,7 @@ export function UpcomingBillsStrip({
             </HoverTip>
             {onOpenTimeline && (
               <button type="button" onClick={onOpenTimeline} className="btn-primary px-4 py-2 text-xs">
-                Full timeline
+                {billsCopy.fullTimeline}
               </button>
             )}
           </div>

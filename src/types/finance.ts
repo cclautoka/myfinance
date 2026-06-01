@@ -241,6 +241,11 @@ export interface FinanceState {
   billUpcomingLeadBusinessDays?: number;
   /** Household-wide app push preferences (synced with server state). */
   pushNotificationPrefs?: PushNotificationPrefs;
+  /**
+   * Last local calendar day (YYYY-MM-DD) an overdue-cadence reminder email was sent per bill occurrence.
+   * Server-maintained; synced with household state.
+   */
+  billOverdueReminderSentAt?: Record<string, Record<string, string>>;
 }
 
 export interface TimelineBill {

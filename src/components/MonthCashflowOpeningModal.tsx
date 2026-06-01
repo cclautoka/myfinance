@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { FinanceState } from '../types/finance';
 import { currentMonthKey, formatCalendarMonthHeading, previousCalendarMonthKey } from '../data/defaults';
 import { formatMoney, formatShortDate } from '../utils/format';
+import { monthOpening as monthOpeningCopy } from '../copy/monthOpening';
 import { billsDueInFirstDaysOfMonth } from '../utils/monthOpening';
 import {
   monthPocketSlackForRollover,
@@ -41,6 +42,9 @@ export function MonthCashflowOpeningModal({
 }) {
   const mk = currentMonthKey();
   const prev = previousCalendarMonthKey(mk);
+  const mo = monthOpeningCopy;
+  const monthHeading = formatCalendarMonthHeading(mk);
+  const prevHeading = formatCalendarMonthHeading(prev);
   const slack = useMemo(() => monthPocketSlackForRollover(state, prev), [state, prev]);
   const earlyBills = useMemo(() => billsDueInFirstDaysOfMonth(state, mk, 10), [state, mk]);
   const goalRows = state.savingsGoals ?? [];
@@ -99,48 +103,40 @@ export function MonthCashflowOpeningModal({
 
   return (
     <div
-      className="scrollbar-app fixed inset-0 overflow-y-auto bg-sage-950/75 p-4 backdrop-blur-md dark:bg-black/78"
+      className="bill-confirm-backdrop-in scrollbar-app fixed inset-0 overflow-y-auto bg-sage-950/75 p-4 backdrop-blur-md dark:bg-black/78"
       style={{ zIndex: zLayers.monthGate }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="month-opening-title"
     >
-      <div className="mx-auto my-10 w-full max-w-lg rounded-[1.75rem] border-2 border-amber-600/65 bg-white p-6 shadow-2xl dark:border-amber-500/35 dark:bg-moss-elevated sm:p-8">
+      <div className="bill-confirm-panel-in mx-auto my-10 w-full max-w-lg rounded-[1.75rem] border-2 border-amber-600/65 bg-white p-6 shadow-2xl dark:border-amber-500/35 dark:bg-moss-elevated sm:p-8">
         <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-800 dark:text-amber-200/90">
-          Month not opened yet
+          {mo.gateLabel}
         </p>
         <h2 id="month-opening-title" className="mt-2 font-display text-2xl font-bold text-sage-950 dark:text-moss-fg">
-          Set {formatCalendarMonthHeading(mk)} before continuing
+          {mo.title(monthHeading)}
         </h2>
         <p className="mt-3 text-sm leading-relaxed text-sage-700 dark:text-moss-subtle">
-          Leftover from <strong className="text-sage-900 dark:text-moss-fg">{formatCalendarMonthHeading(prev)}</strong>{' '}
-          can go to your emergency pool and savings goals — or roll into this month&apos;s{' '}
-          <strong className="text-sage-900 dark:text-moss-fg">carry‑in</strong>. Leave every field blank to put{' '}
-          <strong className="text-sage-900 dark:text-moss-fg">everything</strong> into carry (same as typing $0 in each
-          box).
+          {mo.intro(prevHeading, monthHeading)}
         </p>
         <p className="mt-3 rounded-xl border border-teal-200/70 bg-teal-50/60 px-3 py-2 text-[13px] leading-snug text-sage-800 dark:border-teal-900/40 dark:bg-teal-950/25 dark:text-teal-100/90">
-          First time this month? After you unlock, you can run the short guided tour (Tools has replay too).
+          {mo.tourNote}
         </p>
 
         <div className="mt-5 rounded-xl border border-sage-200/90 bg-sage-50/90 p-4 text-sm dark:border-moss-border dark:bg-moss-surface/70">
-          <p className="font-semibold text-sage-900 dark:text-moss-fg">
-            Leftover from {formatCalendarMonthHeading(prev)}
-          </p>
+          <p className="font-semibold text-sage-900 dark:text-moss-fg">{mo.leftoverTitle(prevHeading)}</p>
           <p className="mt-2 font-display text-2xl font-bold tabular-nums text-sage-900 dark:text-moss-fg">
             {formatMoney(slack)}
           </p>
-          <p className="mt-2 text-[12px] leading-snug text-sage-700 dark:text-moss-muted">
-            Prior-month carry + deposits − counted spend − emergency sweeps already taken — not bank balance proof.
-          </p>
+          <p className="mt-2 text-[12px] leading-snug text-sage-700 dark:text-moss-muted">{mo.leftoverDetail}</p>
         </div>
 
         <div className="mt-5">
           <p className="text-xs font-semibold uppercase tracking-wide text-sage-700 dark:text-moss-muted">
-            Payments due soon (first ~10 days of {formatCalendarMonthHeading(mk)})
+            {mo.dueSoonTitle(monthHeading)}
           </p>
           {earlyBills.length === 0 ? (
-            <p className="mt-2 text-sm italic text-sage-600 dark:text-moss-muted">No checklist lines dated that window.</p>
+            <p className="mt-2 text-sm italic text-sage-600 dark:text-moss-muted">{mo.dueSoonEmpty}</p>
           ) : (
             <ul className="mt-2 max-h-40 space-y-1.5 overflow-y-auto text-[13px]">
               {earlyBills.map((b) => {
@@ -154,7 +150,7 @@ export function MonthCashflowOpeningModal({
                       {b.name}{' '}
                       <span className="text-sage-600 dark:text-moss-muted">
                         · {formatShortDate(b.due)}
-                        {paid ? ' · paid' : ''}
+                        {paid ? mo.dueSoonPaidSuffix : ''}
                       </span>
                     </span>
                     <span className="shrink-0 tabular-nums font-medium text-sage-900 dark:text-moss-fg">
@@ -169,20 +165,18 @@ export function MonthCashflowOpeningModal({
 
         <div className="mt-6 space-y-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-sage-700 dark:text-moss-muted">
-            Move from leftover into savings (optional)
+            {mo.savingsSectionTitle}
           </p>
 
           <label className="block text-sm font-semibold text-sage-900 dark:text-moss-fg" htmlFor="month-opening-emergency">
-            Emergency / $1k pool
-            <FieldHelp label="Emergency pool">
-              Adds to your rainy-day balance on the Dashboard — not the same as carry-in for daily spending.
-            </FieldHelp>
+            {mo.emergencyFieldLabel}
+            <FieldHelp label="Emergency pool">{mo.emergencyFieldHelp}</FieldHelp>
             <input
               id="month-opening-emergency"
               type="text"
               inputMode="decimal"
               autoComplete="off"
-              placeholder="0.00 — blank = none"
+              placeholder={mo.emergencyPlaceholder}
               value={drafts[EMERGENCY_FIELD] ?? ''}
               aria-invalid={parsedByField[EMERGENCY_FIELD] && !parsedByField[EMERGENCY_FIELD].ok}
               aria-describedby={
@@ -217,7 +211,7 @@ export function MonthCashflowOpeningModal({
                   type="text"
                   inputMode="decimal"
                   autoComplete="off"
-                  placeholder="0.00 — blank = none"
+                  placeholder={mo.goalPlaceholder}
                   value={drafts[g.id] ?? ''}
                   aria-invalid={p && !p.ok}
                   aria-describedby={p && !p.ok ? fieldErrorId(`month-goal-${g.id}`) : undefined}
@@ -231,25 +225,22 @@ export function MonthCashflowOpeningModal({
         </div>
 
         <p className="mt-3 text-[12px] text-sage-700 dark:text-moss-muted">
-          Total directed to savings cannot exceed {formatMoney(slack)}. Whatever you do not assign below rolls into
-          carry‑in.
+          {mo.capNote(formatMoney(slack))}
           {slack <= 0 && (
             <>
               {' '}
-              <strong className="text-sage-900 dark:text-moss-fg">Leftover is flat or negative —</strong> carry‑in
-              stays $0 unless you bump it later on the cashflow card.
+              <strong className="text-sage-900 dark:text-moss-fg">{mo.slackFlatNote}</strong>
             </>
           )}
         </p>
 
         <div className="mt-5 rounded-xl border border-teal-200/80 bg-teal-50/50 p-4 text-sm dark:border-teal-800/40 dark:bg-teal-950/20">
-          <p className="font-semibold text-sage-900 dark:text-moss-fg">Roll into this month (carry‑in preview)</p>
+          <p className="font-semibold text-sage-900 dark:text-moss-fg">{mo.carryPreviewTitle}</p>
           <p className="mt-2 font-display text-xl font-bold tabular-nums text-teal-950 dark:text-teal-100/95">
             {formatMoney(carryPreview)}
           </p>
           <p className="mt-2 text-[12px] text-sage-800 dark:text-moss-muted">
-            = {formatMoney(slack)} leftover − <span className="tabular-nums">{formatMoney(allocatedTotal)}</span> to
-            savings
+            {mo.carryPreviewFormula(formatMoney(slack), formatMoney(allocatedTotal))}
           </p>
         </div>
 
@@ -259,7 +250,7 @@ export function MonthCashflowOpeningModal({
           disabled={!allParsedOk}
           onClick={submit}
         >
-          Save & unlock {formatCalendarMonthHeading(mk)}
+          {mo.saveUnlock(monthHeading)}
         </button>
         {onStartTourAfterUnlock ? (
           <button
@@ -271,7 +262,7 @@ export function MonthCashflowOpeningModal({
               onStartTourAfterUnlock();
             }}
           >
-            Save & unlock — then start guided tour
+            {mo.saveUnlockTour}
           </button>
         ) : null}
       </div>

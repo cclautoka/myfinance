@@ -15,6 +15,7 @@ import {
   ESSENTIAL_CADENCE_OPTIONS,
   WEEKLY_ESSENTIAL_DAY_OPTIONS,
 } from '../data/selectOptions';
+import { panels } from '../copy/panels';
 import { Card } from './ui/Card';
 import { SegmentedToggle } from './ui/SegmentedToggle';
 import { ConfirmDialog } from './ui/ConfirmDialog';
@@ -180,8 +181,8 @@ export function DataEditor({
         />
       )}
     <Card
-      title="Line-by-line edits"
-      subtitle="Everything upstairs reads these rows — paychecks first, bills next, debts last."
+      title={panels.dataEditor.title}
+      subtitle={panels.dataEditor.subtitle}
     >
       <HoverTip content={householdDataTip()}>
         <p className="mb-6 cursor-default rounded-xl border-2 border-dashed border-sage-400/70 px-3 py-2 text-xs font-semibold text-sage-700 dark:border-moss-border dark:text-moss-muted">

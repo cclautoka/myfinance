@@ -430,6 +430,60 @@
     }
   }
 
+  /* App-wide motion (respect reduced-motion below) */
+  @keyframes app-fade-rise {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes app-page-enter {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .app-page-enter {
+    animation: app-page-enter 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .app-fade-rise {
+    animation: app-fade-rise 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .app-scroll-reveal {
+    opacity: 0;
+    transform: translateY(16px);
+    transition:
+      opacity 520ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 520ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .app-scroll-reveal.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .app-stagger-1 {
+    animation-delay: 60ms;
+  }
+  .app-stagger-2 {
+    animation-delay: 120ms;
+  }
+  .app-stagger-3 {
+    animation-delay: 180ms;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .demo-slide-in-from-right,
     .demo-slide-in-from-left,
@@ -448,8 +502,15 @@
     .bill-confirm-stagger-3,
     .bill-confirm-stagger-4,
     .bill-confirm-icon-pop,
-    .bill-confirm-chip-glow {
+    .bill-confirm-chip-glow,
+    .app-page-enter,
+    .app-fade-rise {
       animation: none !important;
+    }
+    .app-scroll-reveal {
+      opacity: 1;
+      transform: none;
+      transition: none;
     }
   }
 }

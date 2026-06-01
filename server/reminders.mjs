@@ -198,7 +198,96 @@ function formatDueIso(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-export function computeReminderEmailPayload(snapshotData, ref = new Date()) {
+/** Days since the bill left the grace window (1 = first calendar day truly overdue). */
+export function daysSinceGraceEnded(ref, due, graceDays) {
+  const afterDue = calendarDaysAfterDue(ref, due);
+  if (afterDue <= graceDays) return 0;
+  return afterDue - graceDays;
+}
+
+/** Overdue email cadence: day 3, day 7, then every 7 days from day 14 onward. */
+export function isOverdueCadenceDay(daysSince) {
+  if (daysSince === 3 || daysSince === 7) return true;
+  if (daysSince >= 14 && daysSince % 7 === 0) return true;
+  return false;
+}
+
+function rowMeta(state, b, ref, extra = []) {
+  const bits = [];
+  bits.push(b.category === 'debt' ? 'Debt' : 'Essential');
+  if (b.autoDeduction) bits.push('Auto');
+  bits.push(...extra);
+  return bits.join(' · ');
+}
+
+function toReminderRow(state, b, ref, extraMeta = []) {
+  return {
+    billId: b.billId,
+    paymentKey: billPaymentKey(state, b),
+    name: b.name,
+    amount: Number(b.amount ?? 0),
+    dueDate: formatDueIso(b.due),
+    note: rowMeta(state, b, ref, extraMeta),
+  };
+}
+
+/** Unpaid bills due on `ref`’s calendar day (email at 7am). */
+export function computeDueTodayEmailPayload(snapshotData, ref = new Date()) {
+  const state = snapshotData ?? {};
+  const items = buildTimeline(state, 2, ref);
+  const startToday = startOfLocalDay(ref).getTime();
+  const dueToday = [];
+
+  for (const b of items) {
+    if (billOccurrenceIsPaid(state, b)) continue;
+    const dueT = startOfLocalDay(b.due).getTime();
+    if (dueT !== startToday) continue;
+    dueToday.push(toReminderRow(state, b, ref, ['Due today']));
+  }
+
+  dueToday.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  const cap = (arr) => (arr.length > MAX_REMINDER_ROWS ? arr.slice(0, MAX_REMINDER_ROWS) : arr);
+  return { monthKey: dateToMonthKey(ref), dueToday: cap(dueToday) };
+}
+
+/**
+ * Overdue past grace on cadence days (3, 7, 14, 21…). Excludes due-today rows (those use due-today email).
+ * @param {Record<string, Record<string, string>>|undefined} sentLog billId -> paymentKey -> YYYY-MM-DD last sent
+ */
+export function computeOverdueCadenceEmailPayload(snapshotData, ref = new Date(), sentLog = {}) {
+  const state = snapshotData ?? {};
+  const { overdueGraceDays } = billReminderPrefs(state);
+  const items = buildTimeline(state, 2, ref);
+  const startToday = startOfLocalDay(ref).getTime();
+  const todayKey = dueDateLocalKey(ref);
+  const overdueCadence = [];
+
+  for (const b of items) {
+    if (billOccurrenceIsPaid(state, b)) continue;
+    const status = billVisualStatus(state, b, ref);
+    if (status !== 'overdue') continue;
+    const dueT = startOfLocalDay(b.due).getTime();
+    if (dueT === startToday) continue;
+
+    const daysSince = daysSinceGraceEnded(ref, b.due, overdueGraceDays);
+    if (!isOverdueCadenceDay(daysSince)) continue;
+
+    const payKey = billPaymentKey(state, b);
+    const lastSent = sentLog?.[b.billId]?.[payKey];
+    if (lastSent === todayKey) continue;
+
+    overdueCadence.push(
+      toReminderRow(state, b, ref, [`${daysSince} day${daysSince === 1 ? '' : 's'} past grace`]),
+    );
+  }
+
+  overdueCadence.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  const cap = (arr) => (arr.length > MAX_REMINDER_ROWS ? arr.slice(0, MAX_REMINDER_ROWS) : arr);
+  return { monthKey: dateToMonthKey(ref), overdueCadence: cap(overdueCadence) };
+}
+
+/** Daily push + widget buckets (due soon, overdue, horizon). */
+export function computeDailyPushReminderPayload(snapshotData, ref = new Date()) {
   const state = snapshotData ?? {};
   const items = buildTimeline(state, 2, ref);
   const startToday = startOfLocalDay(ref).getTime();
@@ -281,5 +370,42 @@ export function computeReminderEmailPayload(snapshotData, ref = new Date()) {
   };
 
   return { monthKey, dueSoon: dueSoonC, overdue: overdueC, horizon: horizonC, counts };
+}
+
+/** @deprecated Use {@link computeDailyPushReminderPayload} */
+export const computeReminderEmailPayload = computeDailyPushReminderPayload;
+
+/**
+ * Merge overdue-cadence send markers into state (local calendar day per bill occurrence).
+ * @returns {object} patched state
+ */
+export function patchOverdueReminderSentLog(state, rows, ref = new Date()) {
+  const todayKey = dueDateLocalKey(ref);
+  const next = { ...(state ?? {}) };
+  const log = { ...(next.billOverdueReminderSentAt ?? {}) };
+  for (const row of rows) {
+    if (!row.billId || !row.paymentKey) continue;
+    if (!log[row.billId]) log[row.billId] = {};
+    log[row.billId] = { ...log[row.billId], [row.paymentKey]: todayKey };
+  }
+  next.billOverdueReminderSentAt = log;
+  return next;
+}
+
+/** Drop send-log keys for bills that are now marked paid. */
+export function pruneOverdueReminderSentLog(state) {
+  const log = state?.billOverdueReminderSentAt;
+  if (!log || typeof log !== 'object') return state;
+  const paid = state.billsPaid ?? {};
+  const pruned = {};
+  for (const [billId, byKey] of Object.entries(log)) {
+    const paidKeys = new Set(paid[billId] ?? []);
+    const kept = {};
+    for (const [k, v] of Object.entries(byKey ?? {})) {
+      if (!paidKeys.has(k)) kept[k] = v;
+    }
+    if (Object.keys(kept).length) pruned[billId] = kept;
+  }
+  return { ...state, billOverdueReminderSentAt: pruned };
 }
 

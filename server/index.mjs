@@ -1937,15 +1937,12 @@ fastify.get('/preview/email', async (request, reply) => {
   } else if (kind === 'reminder') {
     tpl = buildReminderEmailTemplate({
       monthKey,
-      dueSoon: [
-        { name: 'Internet', amount: 114, dueDate: '2026-05-14', note: 'Essential · Past due (grace)' },
-        { name: 'Rent', amount: 400, dueDate: '2026-05-22', note: 'Essential' },
+      dueToday: [
+        { name: 'Power bill', amount: 89, dueDate: '2026-05-13', note: 'Essential · Due today' },
       ],
-      overdue: [
+      overdueCadence: [
         { name: 'Car loan', amount: 224, dueDate: '2026-05-05', note: 'Debt · Auto' },
-        { name: 'Power bill', amount: 89, dueDate: '2026-05-13', dueToday: true, note: 'Essential · Due today' },
       ],
-      horizon: [{ name: 'Water', amount: 45, dueDate: '2026-05-18', note: 'Essential · Due in ≤14d' }],
     });
   } else if (kind === 'digest') {
     tpl = buildSaveEmailTemplate({

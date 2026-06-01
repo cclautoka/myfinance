@@ -4,6 +4,7 @@ import { snowballTip } from '../copy/tooltips';
 import { formatMoney } from '../utils/format';
 import { snowballOrder } from '../utils/snowball';
 import { HoverTip } from './ui/HoverTip';
+import { panels } from '../copy/panels';
 import { Card } from './ui/Card';
 import {
   Bar,
@@ -34,12 +35,8 @@ export function DebtSnowball({ state, compact }: { state: FinanceState; compact?
       <div>
         <Card
           accent="violet"
-          title={compact ? 'Debt payoff snapshot' : 'Payoff order cheer chart'}
-          subtitle={
-            compact
-              ? 'Smallest balance first (same as Plan). Chart bar length = remaining; grey strip under each row uses the same scale (widest = largest balance here).'
-              : 'Smallest balances first — morale only. Chart and row strips scale to the largest remaining balance on this list; hover the card for detail.'
-          }
+          title={compact ? panels.debtSnowball.titleCompact : panels.debtSnowball.title}
+          subtitle={compact ? panels.debtSnowball.subtitleCompact : panels.debtSnowball.subtitle}
         >
           <div className={`mb-6 w-full min-w-0 ${compact ? 'h-52' : 'h-64'}`}>
             <ResponsiveContainer

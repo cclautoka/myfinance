@@ -4,6 +4,7 @@ import { debtBalancesPanelTip } from '../copy/tooltips';
 import { effectiveDebtBalance } from '../utils/calculations';
 import { estimatedMonthlyInterestFromApr } from '../utils/debtInterest';
 import { formatMoney } from '../utils/format';
+import { panels } from '../copy/panels';
 import { Card } from './ui/Card';
 import { HoverTip } from './ui/HoverTip';
 
@@ -52,8 +53,8 @@ export function DebtBalancesPanel({ state }: { state: FinanceState }) {
       <HoverTip content={debtBalancesPanelTip()}>
         <div>
           <Card
-            title="What you owe — snapshot"
-            subtitle="Copied from the loan rows under Your income & regular bills. You refresh balances; APR is optional for a rough interest hint only."
+            title={panels.debtBalances.title}
+            subtitle={panels.debtBalances.subtitle}
           >
             <div className="overflow-x-auto">
               <table className="w-full min-w-[720px] text-left text-sm">

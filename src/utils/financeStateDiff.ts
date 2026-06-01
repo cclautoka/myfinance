@@ -152,10 +152,10 @@ function diffBillsPaid(from: FinanceState, to: FinanceState, items: DigestListIt
     const bSet = new Set(to.billsPaid?.[id] ?? []);
     const name = billLabel(to, id);
     for (const k of bSet) {
-      if (!aSet.has(k)) pushItem(items, 'Marked as handled', `${name} (${formatPeriodKey(k)})`);
+      if (!aSet.has(k)) pushItem(items, 'Marked as paid', `${name} (${formatPeriodKey(k)})`);
     }
     for (const k of aSet) {
-      if (!bSet.has(k)) pushItem(items, 'Unmarked as handled', `${name} (${formatPeriodKey(k)})`);
+      if (!bSet.has(k)) pushItem(items, 'Unmarked as paid', `${name} (${formatPeriodKey(k)})`);
     }
   }
 }
@@ -284,7 +284,7 @@ export function computeFinanceStateDiff(from: FinanceState, to: FinanceState): {
   if (carryFrom !== carryTo) {
     pushItem(
       items,
-      'Spendable carry-in',
+      'Carry-over (this month)',
       mk,
       `${carryFrom === undefined ? '—' : money(Number(carryFrom))} → ${carryTo === undefined ? '—' : money(Number(carryTo))}`,
     );

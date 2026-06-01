@@ -55,15 +55,20 @@ After a quiet period following edits, the SPA may POST **`digest`** (`version: 1
 
 Preview HTML locally: **`GET /preview/email?kind=digest`** (also `kind=change` and `kind=reminder`).
 
-## Reminder email
+## Reminder email vs push
 
-**`POST /v1/reminders/send`** uses the stored snapshot and includes **due soon** (including grace), **overdue**, and **on the horizon** (unpaid bills due within the next 14 calendar days). The email is skipped when all three buckets are empty.
+**Daily cron (default 7:00, `REMINDER_CRON_TIMEZONE`, usually `Pacific/Fiji`):**
 
-Keep **`REMINDER_EMAIL_HORIZON_CALENDAR_DAYS`** in `server/reminders.mjs` aligned with **`SAVE_EMAIL_BILL_HORIZON_CALENDAR_DAYS`** in `src/utils/reminderEmailPayloadClient.ts` when changing the horizon window.
+| Channel | When it sends | Content |
+|---------|----------------|---------|
+| **Email** | Only if there is something to say | **Due today** (unpaid bills due on that calendar day) plus **overdue reminders** on a cadence: 3 days after grace ends, then 7, then every 7 days (14, 21, …). |
+| **App push** (if enabled) | Every cron run with any heads-up | Full daily summary: due soon (incl. grace), overdue, and coming up (14-day horizon). Wording only; schedule unchanged. |
 
-**Due soon vs lead days:** “Closing in” / reminder **Due soon** counts **weekdays from tomorrow** through the bill’s due date (inclusive of the due date), up to your **Bill upcoming lead (business days)** setting in the app (default 3). **Due today** is classified as **overdue** for reminders and the bill strip.
+Email is skipped when both **due today** and **overdue cadence** buckets are empty. Push still sends when any daily bucket is non-empty.
 
-**Cron / “today”:** `/v1/reminders/send` uses the server’s **`new Date()`** (the host’s local timezone). If your household is in another zone, “today” in the email may differ from your wall clock until you add a dedicated timezone (future enhancement).
+Keep **`REMINDER_EMAIL_HORIZON_CALENDAR_DAYS`** in `server/reminders.mjs` aligned with **`SAVE_EMAIL_BILL_HORIZON_CALENDAR_DAYS`** in `src/utils/reminderEmailPayloadClient.ts` for push/widget horizons.
+
+**Cron / “today”:** due-today email uses the cron timezone’s calendar date (`REMINDER_CRON_TIMEZONE`).
 
 ## Automatic daily reminders (hosted default)
 

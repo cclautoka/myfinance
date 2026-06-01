@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {
   buildAuthActionEmail,
   buildPasswordChangedEmail,
+  buildReminderEmailTemplate,
+  buildSaveEmailTemplate,
   renderEmailHtml,
   renderEmailText,
 } from '../templates.mjs';
@@ -73,6 +75,33 @@ describe('buildAuthActionEmail', () => {
       primaryCta: tpl.primaryCta,
     });
     assert.match(text, /Verify email: https:\/\/finance\.solofi\.cloud/);
+  });
+});
+
+describe('buildSaveEmailTemplate', () => {
+  it('uses left from deposits wording', () => {
+    const tpl = buildSaveEmailTemplate({
+      version: 1,
+      monthKey: '2026-06',
+      pocketLeft: 100,
+      plannedIncomeCombined: 5000,
+      sections: [{ heading: 'What changed', items: [{ title: 'Income', body: 'husbandMonthly → 2500' }] }],
+    });
+    assert.match(tpl.preheader, /Left from deposits/);
+    assert.doesNotMatch(tpl.preheader, /Pocket left/i);
+  });
+});
+
+describe('buildReminderEmailTemplate', () => {
+  it('sections are due today and overdue reminders only', () => {
+    const tpl = buildReminderEmailTemplate({
+      monthKey: '2026-06',
+      dueToday: [{ name: 'Rent', amount: 400, dueDate: '2026-06-13', note: '' }],
+      overdueCadence: [{ name: 'Net', amount: 114, dueDate: '2026-06-01', note: '' }],
+    });
+    assert.equal(tpl.sections.length, 2);
+    assert.equal(tpl.sections[0].heading, 'Due today');
+    assert.equal(tpl.sections[1].heading, 'Overdue reminders');
   });
 });
 

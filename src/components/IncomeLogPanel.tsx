@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { FinanceState, IncomeEarner, IncomeLogEntry } from '../types/finance';
 import { formatCalendarMonthHeading } from '../data/defaults';
 import { INCOME_EARNER_OPTIONS_SHORT } from '../data/selectOptions';
+import { panels } from '../copy/panels';
 import { payLoggedVersusPlannedLine } from '../copy/payVsPlannedNotes';
 import { incomeLogTip } from '../copy/tooltips';
 import { expectedPaychequeForLoggedEarner, incomeLogOvertimeMonthTotal, overtimeOnIncomeLogRow } from '../utils/expectedPaycheque';
@@ -105,14 +106,13 @@ export function IncomeLogPanel({
     variant === 'dashboard' ? 'income-log-this-month' : 'income-log-past-month';
   const labelInputId =
     variant === 'dashboard' ? 'income-log-this-month-label' : 'income-log-past-month-label';
+  const monthHeading = formatCalendarMonthHeading(monthKey);
   const title =
-    variant === 'dashboard'
-      ? 'Paycheque log — this calendar month'
-      : 'Paycheque log — chosen past month';
+    variant === 'dashboard' ? panels.incomeLog.dashboardTitle : panels.incomeLog.pastMonthTitle;
   const subtitle =
     variant === 'dashboard'
-      ? `Rows dated in ${formatCalendarMonthHeading(monthKey)} feed the Dashboard card “Deposits recorded (${monthKey})” above — same running total here. Planned income still comes from Household.`
-      : `You’re editing deposits dated in ${formatCalendarMonthHeading(monthKey)} (${monthKey}) because that’s what the Past months picker chose. Current-month logging lives on the Dashboard — scroll back up — not here.`;
+      ? panels.incomeLog.dashboardSubtitle(monthHeading, monthKey)
+      : panels.incomeLog.pastMonthSubtitle(monthHeading, monthKey);
 
   return (
     <div id={wrapperId}>
@@ -120,11 +120,9 @@ export function IncomeLogPanel({
         <div>
             <Card accent={variant === 'dashboard' ? 'emerald' : 'rose'} title={title} subtitle={subtitle}>
             <div className="mb-4 rounded-xl border-2 border-sage-400/40 bg-sage-50 px-3 py-2.5 text-xs font-semibold leading-snug text-sage-900 dark:border-moss-border dark:bg-moss-surface/80 dark:text-moss-subtle">
-              <strong className="dark:text-moss-fg">Nothing auto-imports.</strong>{' '}
-              {variant === 'dashboard'
-                ? 'Everything you add here shows on the row list below immediately — totals also update the Dashboard snapshot.'
-                : "Past bucket only — new rows dated in another month disappear from this table when they leave this month's bucket."}{' '}
-              Change deposit date anytime to move a row between months.
+              <strong className="dark:text-moss-fg">{panels.incomeLog.nothingAutoLead}</strong>{' '}
+              {variant === 'dashboard' ? panels.incomeLog.nothingAutoDashboard : panels.incomeLog.nothingAutoPast}{' '}
+              {panels.incomeLog.changeDateHint}
             </div>
             <div className="rounded-2xl border border-sage-200/90 bg-white/80 p-4 dark:border-moss-border dark:bg-moss-surface/80">
               <div className="flex flex-wrap gap-6">

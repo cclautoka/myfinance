@@ -1,8 +1,9 @@
 import { useCallback, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { FinanceState } from '../types/finance';
-import { currentMonthKey, formatCalendarMonthHeading } from '../data/defaults';
+import { currentMonthKey } from '../data/defaults';
 import { formatMoney } from '../utils/format';
+import { panels } from '../copy/panels';
 import { monthIncomeSpendSummary, type IncomeSpendRow } from '../utils/householdIncomeSpend';
 import { Card } from './ui/Card';
 
@@ -45,7 +46,7 @@ function IncomeSpendBreakdown({ row }: { row: IncomeSpendRow }) {
       </p>
       {row.bills.length > 0 ? (
         <div className="mt-2">
-          <p className="font-semibold text-slate-700 dark:text-moss-subtle">Bills marked</p>
+          <p className="font-semibold text-slate-700 dark:text-moss-subtle">Bills marked as paid</p>
           <ul className="mt-1 space-y-0.5 text-slate-600 dark:text-moss-muted">
             {row.bills.map((b) => (
               <li key={`${b.label}-${b.amount}`}>
@@ -72,7 +73,10 @@ function IncomeSpendBreakdown({ row }: { row: IncomeSpendRow }) {
       <p className="mt-2 border-t border-slate-200/80 pt-2 dark:border-moss-border">
         Spent: <strong>{formatMoney(row.spent)}</strong>
         {row.overspend > 0 ? (
-          <span className="text-red-700 dark:text-red-300"> ({formatMoney(row.overspend)} over pay)</span>
+          <span className="text-red-700 dark:text-red-300">
+            {' '}
+            ({formatMoney(row.overspend)} {panels.incomeSpend.overLoggedPay})
+          </span>
         ) : null}
       </p>
       <p className="mt-1 text-teal-800 dark:text-teal-200">
@@ -143,7 +147,7 @@ function IncomeSpendBarRow({
           <div
             className={`absolute inset-y-1 rounded-md ${styles.overspend}`}
             style={{ left: `${incomePct}%`, width: `${overspendPct}%` }}
-            title={`Over pay ${formatMoney(row.overspend)}`}
+            title={`${formatMoney(row.overspend)} ${panels.incomeSpend.overLoggedPay}`}
           />
         ) : null}
         {/* Left-from-pay hint inside bar (desktop only, avoids mobile overlap) */}
@@ -235,7 +239,6 @@ export function HouseholdContributionPanel({ state }: { state: FinanceState }) {
     [summary.rows],
   );
 
-  const monthLabel = formatCalendarMonthHeading(monthKey);
   const anyIncome = summary.rows.some((r) => r.incomeLogged > 0);
   const anyActivity = anyIncome || summary.rows.some((r) => r.spent > 0) || summary.unassigned.billsTotal > 0;
 
@@ -252,13 +255,13 @@ export function HouseholdContributionPanel({ state }: { state: FinanceState }) {
   return (
     <Card
       accent="emerald"
-      title="Income vs spend this month"
-      subtitle={`${monthLabel} — light band is logged pay; darker shading is what they marked paid plus their surprise costs; red is over pay.`}
+      title={panels.incomeSpend.title}
+      subtitle={panels.incomeSpend.subtitle}
       className="!overflow-visible"
     >
       {!anyActivity ? (
         <p className="text-sm font-medium text-sage-600 dark:text-moss-muted">
-          Log pay in the Paycheque log, then mark bills or add surprise costs to see Primary vs Partner bars.
+          {panels.incomeSpend.empty}
         </p>
       ) : (
         <div id={panelId} className="space-y-4 overflow-visible">
@@ -283,9 +286,10 @@ export function HouseholdContributionPanel({ state }: { state: FinanceState }) {
 
           {summary.unassigned.billsTotal > 0 ? (
             <p className="rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-xs leading-relaxed text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
-              <strong>{formatMoney(summary.unassigned.billsTotal)}</strong> in marked bills are not tied to Primary or
-              Partner yet ({summary.unassigned.bills.length} item
-              {summary.unassigned.bills.length === 1 ? '' : 's'}).
+              {panels.incomeSpend.unassigned(
+                formatMoney(summary.unassigned.billsTotal),
+                summary.unassigned.bills.length,
+              )}
             </p>
           ) : null}
         </div>

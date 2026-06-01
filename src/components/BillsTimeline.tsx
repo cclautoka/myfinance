@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import type { FinanceState, TimelineBill } from '../types/finance';
+import { bills as billsCopy } from '../copy/bills';
 import { billsTimelineTip } from '../copy/tooltips';
 import type { BillsPaidTogglePayload } from '../utils/billsTimeline';
 import {
@@ -46,14 +47,14 @@ const rowWrap = (status: ReturnType<typeof billVisualStatus>, inGrace: boolean) 
 };
 
 function chipLabel(state: FinanceState, b: TimelineBill, status: ReturnType<typeof billVisualStatus>): string {
-  if (status === 'paid') return 'Checked off';
-  if (status === 'overdue') return 'WARNING · Overdue';
+  if (status === 'paid') return billsCopy.statusPaid;
+  if (status === 'overdue') return billsCopy.statusOverdue;
   if (status === 'soon') {
-    if (billIsInGraceAfterDue(state, b)) return 'Delay window · not red yet';
+    if (billIsInGraceAfterDue(state, b)) return billsCopy.statusGrace;
     const n = businessWeekdaysFromTomorrowThroughDueInclusive(new Date(), b.due);
-    return `Closing in · ${n} business day${n === 1 ? '' : 's'}`;
+    return billsCopy.statusDueSoon(n);
   }
-  return 'Upcoming';
+  return billsCopy.statusUpcoming;
 }
 
 export function BillsTimeline({
@@ -83,8 +84,8 @@ export function BillsTimeline({
         <Card
           accent="teal"
           className="min-w-0"
-          title="Bill calendar & checkmarks"
-          subtitle="Mark handled with the real amount paid — we keep plan vs actual on each line. Bookkeeping only, not auto-pay."
+          title={billsCopy.calendarTitle}
+          subtitle={billsCopy.calendarSubtitle}
           titleAside={
             <HoverTip content={billsTimelineTip()} interaction="tap" layout="inline-end" className="w-auto max-w-[min(100%,18rem)]">
               <span className="sr-only">About this bill calendar</span>
@@ -96,19 +97,16 @@ export function BillsTimeline({
                 role="alert"
                 className="mb-4 min-w-0 max-w-full break-words rounded-xl border-2 border-red-600 bg-red-600 px-4 py-4 text-white shadow-lg dark:border-red-500 dark:bg-red-700"
               >
-                <p className="text-[11px] font-extrabold uppercase tracking-[0.2em]">Warning</p>
+                <p className="text-[11px] font-extrabold uppercase tracking-[0.2em]">Overdue</p>
                 <p className="mt-2 text-sm font-semibold leading-snug">
-                  {overdueCount} payment line{overdueCount === 1 ? '' : 's'}{' '}
-                  {overdueCount === 1 ? 'is' : 'are'} overdue (after any delay you set under Your income & regular bills). Mark
-                  handled or fix dates — this is bookkeeping, not a charge.
+                  {billsCopy.overdueBanner(overdueCount)} Check dates under Your income &amp; regular bills if something looks wrong.
                 </p>
               </div>
             )}
 
             {tight && (
               <div className="mb-4 min-w-0 max-w-full break-words rounded-xl border border-sage-200/90 bg-sage-50/90 p-4 text-sm text-sage-800 dark:border-moss-border dark:bg-moss-surface dark:text-moss-subtle">
-                In the next ten days, about {formatMoney(upcoming10)} lines up with bills. A rough cushion in the plan looks like{' '}
-                {formatMoney(hint)} — a moment to glance together, not to panic.
+                {billsCopy.cushionTight(formatMoney(upcoming10), formatMoney(hint))}
               </div>
             )}
 
