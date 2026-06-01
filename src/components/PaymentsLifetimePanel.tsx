@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import type { FinanceState } from '../types/finance';
 import { formatCalendarMonthHeading, HISTORY_TRACKING_STARTED_MONTH_KEY } from '../data/defaults';
 import { formatMoney } from '../utils/format';
@@ -6,7 +6,6 @@ import { lifetimeLifeSpendRows, type LifeSpendKind } from '../utils/paymentHisto
 import { useInView } from '../hooks/useInView';
 import { panels } from '../copy/panels';
 import { Card } from './ui/Card';
-import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 const BILL_FILL = '#0f766e';
 const SURPRISE_FILL = '#d97706';
@@ -24,106 +23,121 @@ function fillForKind(kind: LifeSpendKind): string {
   return kind === 'surprise' ? SURPRISE_FILL : BILL_FILL;
 }
 
-function tooltipIndexFromChartState(state: unknown): number | null {
-  if (!state || typeof state !== 'object') return null;
-  const idx = (state as { activeTooltipIndex?: unknown }).activeTooltipIndex;
-  return typeof idx === 'number' && idx >= 0 ? idx : null;
-}
-
-function LifetimeSpendTooltip({
-  active,
-  payload,
-}: {
-  active?: boolean;
-  payload?: ReadonlyArray<{ payload?: ChartRow }>;
-}) {
-  if (!active || !payload?.length) return null;
-  const p = payload[0]?.payload;
-  if (!p) return null;
-
-  const kindLabel = p.kind === 'surprise' ? 'Unexpected expense' : 'Total paid';
+function LifetimeSpendDetailCard({ row }: { row: ChartRow }) {
+  const kindLabel = row.kind === 'surprise' ? 'Unexpected expense' : 'Total paid';
   const occurrenceLine =
-    p.kind === 'bill'
-      ? `${p.paidOccurrences}× marked as paid`
-      : p.paidOccurrences > 1
-        ? `${p.paidOccurrences}× logged`
+    row.kind === 'bill'
+      ? `${row.paidOccurrences}× marked as paid`
+      : row.paidOccurrences > 1
+        ? `${row.paidOccurrences}× logged`
         : null;
 
   return (
-    <div className="pointer-events-none rounded-xl border border-sage-200/90 bg-white px-3 py-2.5 text-xs shadow-lg dark:border-moss-border dark:bg-moss-elevated">
-      <p className="font-semibold text-sage-900 dark:text-moss-fg">{p.name}</p>
+    <div
+      className="pointer-events-none z-30 w-[min(16rem,calc(100vw-2rem))] rounded-xl border border-sage-200/90 bg-white px-3 py-2.5 text-xs shadow-xl dark:border-moss-border dark:bg-moss-elevated"
+      role="tooltip"
+    >
+      <p className="font-semibold text-sage-900 dark:text-moss-fg">{row.name}</p>
       <p className="mt-1 font-display text-sm font-semibold tabular-nums text-teal-800 dark:text-teal-200">
-        {formatMoney(p.total)}
+        {formatMoney(row.total)}
       </p>
       <p className="mt-1 text-sage-600 dark:text-moss-subtle">{kindLabel}</p>
       {occurrenceLine ? (
         <p className="mt-0.5 text-sage-500 dark:text-moss-muted">{occurrenceLine}</p>
       ) : null}
-      {p.lastPaidDate ? (
-        <p className="mt-0.5 text-sage-500 dark:text-moss-muted">Last: {p.lastPaidDate}</p>
+      {row.lastPaidDate ? (
+        <p className="mt-0.5 text-sage-500 dark:text-moss-muted">Last: {row.lastPaidDate}</p>
       ) : null}
     </div>
   );
 }
 
-function LifetimeChart({ chartData, chartHeight, inView }: { chartData: ChartRow[]; chartHeight: number; inView: boolean }) {
-  const [activeIndex, setActiveIndex] = useState<number | null>(null);
-
-  const clearActive = useCallback(() => setActiveIndex(null), []);
+function LifetimeSpendBarRow({
+  row,
+  maxTotal,
+  inView,
+  isHovered,
+  onHover,
+  onLeave,
+  staggerMs,
+}: {
+  row: ChartRow;
+  maxTotal: number;
+  inView: boolean;
+  isHovered: boolean;
+  onHover: () => void;
+  onLeave: () => void;
+  staggerMs: number;
+}) {
+  const widthPct = maxTotal > 0 ? (row.total / maxTotal) * 100 : 0;
+  const kindLabel = row.kind === 'surprise' ? 'Unexpected expense' : 'Total paid';
 
   return (
     <div
-      className="lifetime-chart w-full min-w-0 select-none"
-      style={{ height: chartHeight }}
-      onMouseLeave={clearActive}
-      onBlur={clearActive}
+      className={`relative grid grid-cols-[minmax(7rem,9rem)_minmax(0,1fr)_5.5rem] items-center gap-2 sm:grid-cols-[minmax(8rem,10rem)_minmax(0,1fr)_6.25rem] sm:gap-3 ${
+        isHovered ? 'rounded-lg ring-2 ring-teal-500/40 dark:ring-teal-400/30' : ''
+      }`}
+      onMouseEnter={onHover}
+      onMouseLeave={onLeave}
+      onPointerEnter={onHover}
+      onPointerLeave={onLeave}
+      aria-label={`${row.name}: ${formatMoney(row.total)}, ${kindLabel}`}
     >
-      <ResponsiveContainer
-        width="100%"
-        height="100%"
-        className="[&_.recharts-cartesian-axis-tick_text]:fill-sage-600 dark:[&_.recharts-cartesian-axis-tick_text]:fill-moss-muted"
-      >
-        <BarChart
-          data={chartData}
-          layout="vertical"
-          margin={{ left: 4, right: 12, top: 4, bottom: 4 }}
-          onMouseMove={(state) => setActiveIndex(tooltipIndexFromChartState(state))}
-          onMouseLeave={clearActive}
-          onClick={(state) => setActiveIndex(tooltipIndexFromChartState(state))}
-          style={{ outline: 'none' }}
-        >
-          <XAxis type="number" tickFormatter={(v) => formatMoney(Number(v))} tick={{ fontSize: 11 }} />
-          <YAxis type="category" dataKey="name" width={132} tick={{ fontSize: 11 }} interval={0} />
-          <Tooltip
-            cursor={false}
-            wrapperStyle={{ outline: 'none', zIndex: 20 }}
-            content={() =>
-              activeIndex != null && chartData[activeIndex] ? (
-                <LifetimeSpendTooltip active payload={[{ payload: chartData[activeIndex] }]} />
-              ) : null
-            }
-          />
-          <Bar
-            dataKey="total"
-            radius={[0, 8, 8, 0]}
-            className="opacity-90 dark:opacity-85"
-            isAnimationActive={inView}
-            animationDuration={900}
-            animationBegin={0}
-            animationEasing="ease-out"
-            activeBar={{ fillOpacity: 1, stroke: 'none' }}
-          >
-            {chartData.map((entry, i) => (
-              <Cell
-                key={`${entry.name}-${entry.kind}`}
-                fill={fillForKind(entry.kind)}
-                fillOpacity={activeIndex === i ? 1 : 0.88}
-                style={inView ? { animationDelay: `${i * 60}ms` } : undefined}
-              />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+      {isHovered ? (
+        <div className="pointer-events-none absolute bottom-full left-28 right-16 z-30 mb-2 flex justify-center sm:left-32 sm:right-[6.5rem]">
+          <LifetimeSpendDetailCard row={row} />
+        </div>
+      ) : null}
+
+      <span className="truncate text-xs font-semibold text-sage-800 dark:text-moss-subtle" title={row.name}>
+        {row.name}
+      </span>
+
+      <div className="income-bar-track relative h-8 min-w-0 rounded-lg bg-slate-200/50 dark:bg-moss-bg/80 sm:h-9">
+        <div
+          className={`income-bar-fill absolute inset-y-1 left-0 rounded-md transition-[filter] duration-200 ${
+            isHovered ? 'brightness-110' : ''
+          }`}
+          style={{
+            width: inView ? `${widthPct}%` : '0%',
+            backgroundColor: fillForKind(row.kind),
+            transitionDelay: inView ? `${staggerMs}ms` : '0ms',
+          }}
+        />
+      </div>
+
+      <span className="text-right text-xs font-semibold tabular-nums text-sage-900 dark:text-moss-fg">
+        {formatMoney(row.total)}
+      </span>
+    </div>
+  );
+}
+
+function LifetimeSpendBarList({ chartData, inView }: { chartData: ChartRow[]; inView: boolean }) {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const maxTotal = useMemo(() => Math.max(...chartData.map((r) => r.total), 1), [chartData]);
+
+  return (
+    <div
+      className="lifetime-spend-chart w-full min-w-0 space-y-2 sm:space-y-2.5"
+      onMouseLeave={() => setHoveredIndex(null)}
+    >
+      {chartData.map((row, i) => (
+        <LifetimeSpendBarRow
+          key={`${row.name}-${row.kind}`}
+          row={row}
+          maxTotal={maxTotal}
+          inView={inView}
+          isHovered={hoveredIndex === i}
+          onHover={() => setHoveredIndex(i)}
+          onLeave={() => setHoveredIndex((prev) => (prev === i ? null : prev))}
+          staggerMs={i * 60}
+        />
+      ))}
+      <div className="flex justify-between pt-1 text-[10px] font-medium tabular-nums text-sage-500 dark:text-moss-muted">
+        <span>{formatMoney(0)}</span>
+        <span>{formatMoney(maxTotal)}</span>
+      </div>
     </div>
   );
 }
@@ -150,7 +164,7 @@ function PaymentsLifetimePanelInner({ state }: { state: FinanceState }) {
   });
 
   const sinceLabel = formatCalendarMonthHeading(HISTORY_TRACKING_STARTED_MONTH_KEY);
-  const chartHeight = Math.min(520, Math.max(180, chartData.length * 34 + 80));
+  const skeletonHeight = Math.min(520, Math.max(180, chartData.length * 40 + 48));
 
   return (
     <Card
@@ -181,11 +195,11 @@ function PaymentsLifetimePanelInner({ state }: { state: FinanceState }) {
           </div>
           <div ref={chartAnchorRef} className="min-h-0 w-full min-w-0">
             {inView ? (
-              <LifetimeChart chartData={chartData} chartHeight={chartHeight} inView={inView} />
+              <LifetimeSpendBarList chartData={chartData} inView={inView} />
             ) : (
               <div
                 className="w-full animate-pulse rounded-xl bg-sage-200/60 dark:bg-moss-bg/80"
-                style={{ height: chartHeight }}
+                style={{ minHeight: skeletonHeight }}
                 aria-hidden
               />
             )}

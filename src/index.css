@@ -692,25 +692,6 @@
     transform: scale(0.96);
   }
 
-  .lifetime-chart .recharts-wrapper,
-  .lifetime-chart .recharts-surface,
-  .lifetime-chart .recharts-wrapper:focus,
-  .lifetime-chart .recharts-wrapper:focus-visible {
-    outline: none !important;
-  }
-
-  .lifetime-chart .recharts-tooltip-cursor,
-  .lifetime-chart .recharts-rectangle.recharts-tooltip-cursor {
-    display: none !important;
-    fill: transparent !important;
-    stroke: none !important;
-  }
-
-  .lifetime-chart .recharts-active-shape {
-    stroke: none !important;
-    outline: none !important;
-  }
-
   @keyframes app-tab-enter {
     from {
       opacity: 0;
