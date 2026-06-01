@@ -37,6 +37,7 @@ import { computeSafeSpend } from '../utils/safeSpend';
 import { dashboard as dashboardCopy } from '../copy/dashboard';
 import { payLoggedVersusPlannedLine } from '../copy/payVsPlannedNotes';
 import { currentMonthKey } from '../data/defaults';
+import { HintWithInfo } from './ui/HintWithInfo';
 import { HoverTip } from './ui/HoverTip';
 import { ProgressRing } from './ui/ProgressRing';
 import { NumericAmountInput } from './ui/NumericInputs';
@@ -276,17 +277,17 @@ export function DashboardOverview({
         >
           {dashboardCopy.snapshotTitle}
         </h2>
-        <p
-          className={
-            preview
-              ? 'mx-auto mt-3 max-w-lg line-clamp-2 text-center text-xs leading-relaxed text-sage-100/95'
-              : 'mx-auto mt-4 max-w-lg text-center text-sm leading-relaxed text-sage-100/95'
-          }
-        >
-          {preview ? dashboardCopy.snapshotIntroPreview : dashboardCopy.snapshotIntro}
-        </p>
+        {preview ? (
+          <p className="mx-auto mt-3 max-w-lg line-clamp-2 text-center text-xs leading-relaxed text-sage-100/95">
+            {dashboardCopy.snapshotIntroPreview}
+          </p>
+        ) : (
+          <HintWithInfo className="mx-auto mt-4 max-w-lg">{dashboardCopy.snapshotIntro}</HintWithInfo>
+        )}
 
-        <div className={`mx-auto grid min-w-0 w-full max-w-5xl gap-4 ${gridCols} ${preview ? 'mt-6' : 'mt-10'}`}>
+        <div
+          className={`app-metric-grid mx-auto grid min-w-0 w-full max-w-5xl gap-4 ${gridCols} ${preview ? 'mt-6' : 'mt-10'}`}
+        >
           <MetricWithTip tip={dashboardIncomeTip()} preview={preview}>
             <MetricCard className="text-sage-900 dark:text-moss-fg" preview={preview}>
               <p className="text-xs font-semibold uppercase tracking-wide text-sage-700 dark:text-moss-muted">
@@ -382,7 +383,7 @@ export function DashboardOverview({
                     {formatMoney(actualExpenseMonth)}
                   </p>
                   <p className="mt-3 text-[12px] leading-snug text-sage-700 dark:text-moss-subtle">
-                    {dashboardCopy.actualExpenseHelper(mk)}
+                    {dashboardCopy.actualExpenseHelper()}
                   </p>
                 </div>
               </div>

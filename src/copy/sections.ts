@@ -4,8 +4,7 @@ export const sections = {
   dashboard: {
     title: 'Dashboard',
     eyebrow: 'Live month',
-    subtitle:
-      'This month at a glance: snapshot and pay log in the centre, bills on the sides, and more under “More this month”.',
+    subtitle: 'Snapshot, pay log, and bills for this month.',
   },
   workspace: {
     title: 'Workspace',
@@ -17,8 +16,7 @@ export const sections = {
   },
   header: {
     workspaceTitle: 'Household workspace',
-    workspaceSubtitle:
-      'Dashboard for this month. Workspace for history and your plan. Tools for alerts and account settings.',
+    workspaceSubtitle: 'Dashboard · Workspace · Tools',
   },
   moreThisMonth: {
     summary: 'More this month',

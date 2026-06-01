@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { InfoIcon } from './InfoIcon';
 
 const LEAVE_CLOSE_MS = 160;
 const OPEN_DELAY_MS_FINE = 220;
@@ -78,27 +79,30 @@ function InfoTrigger({
   open,
   triggerRef,
   onClick,
+  compact = false,
 }: {
   open: boolean;
   triggerRef: React.RefObject<HTMLButtonElement | null>;
   onClick: () => void;
+  compact?: boolean;
 }) {
+  const sizeClass = compact
+    ? 'h-8 w-8 min-h-8 min-w-8'
+    : 'h-11 min-h-[44px] w-11 min-w-[44px]';
   return (
     <button
       ref={triggerRef}
       type="button"
-      className="inline-flex h-11 min-h-[44px] w-11 min-w-[44px] shrink-0 items-center justify-center rounded-full border border-sage-300/90 bg-white text-sm font-bold text-sage-700 shadow-sm transition-colors hover:border-teal-500/60 hover:bg-teal-50/80 hover:text-teal-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2 dark:border-moss-border dark:bg-moss-surface dark:text-moss-tip dark:hover:border-teal-500/40 dark:hover:bg-teal-950/30 dark:focus-visible:ring-teal-400 dark:focus-visible:ring-offset-moss-bg"
+      className={`inline-flex ${sizeClass} shrink-0 items-center justify-center rounded-full border border-sage-300/90 bg-white text-teal-800 shadow-sm transition-all duration-200 hover:scale-105 hover:border-teal-500/60 hover:bg-teal-50/80 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2 dark:border-moss-border dark:bg-moss-surface dark:text-teal-200 dark:hover:border-teal-500/40 dark:hover:bg-teal-950/30 dark:focus-visible:ring-teal-400 dark:focus-visible:ring-offset-moss-bg`}
       aria-expanded={open}
-      aria-label="Definitions and tips"
+      aria-label="More info"
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
         onClick();
       }}
     >
-      <span aria-hidden className="select-none font-display text-base leading-none">
-        i
-      </span>
+      <InfoIcon className={compact ? 'h-4 w-4' : 'h-5 w-5'} />
     </button>
   );
 }
@@ -114,12 +118,15 @@ export function HoverTip({
   className = '',
   interaction = 'auto',
   layout = 'wrap',
+  compactTrigger = false,
 }: {
   content: ReactNode;
   children: ReactNode;
   className?: string;
   interaction?: HoverTipInteraction;
   layout?: HoverTipLayout;
+  /** Smaller info button for metric cards (corner layout). */
+  compactTrigger?: boolean;
 }) {
   const fineHover = usePrefersFineHover();
   const useHoverOpen = interaction === 'tap' ? false : fineHover;
@@ -299,7 +306,7 @@ export function HoverTip({
     );
 
   const triggerBtn = showTrigger ? (
-    <InfoTrigger open={open} triggerRef={triggerRef} onClick={toggleTrigger} />
+    <InfoTrigger open={open} triggerRef={triggerRef} onClick={toggleTrigger} compact={compactTrigger || layout === 'corner'} />
   ) : null;
 
   const body = (
@@ -334,8 +341,10 @@ export function HoverTip({
       </div>
     ) : layout === 'corner' ? (
       <div ref={anchorRef} className={`relative min-w-0 outline-none ${className}`}>
-        {triggerBtn ? <div className="pointer-events-auto absolute right-1 top-1 z-10 sm:right-2 sm:top-2">{triggerBtn}</div> : null}
-        {body}
+        {triggerBtn ? (
+          <div className="pointer-events-auto absolute right-1 top-1 z-10 sm:right-1.5 sm:top-1.5">{triggerBtn}</div>
+        ) : null}
+        <div className={triggerBtn ? 'min-w-0 pr-10 pt-0.5' : 'min-w-0'}>{body}</div>
       </div>
     ) : (
       <div

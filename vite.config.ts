@@ -18,6 +18,34 @@ const pkgVersion = (() => {
   }
 })();
 
+function gitShortSha(): string {
+  try {
+    return execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString('utf8')
+      .trim();
+  } catch {
+    return 'dev';
+  }
+}
+
+function gitCommitCount(): string {
+  try {
+    return execSync('git rev-list --count HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString('utf8')
+      .trim();
+  } catch {
+    return '';
+  }
+}
+
+const buildSha = process.env.DOKPLOY_GIT_SHA?.slice(0, 7) ?? process.env.GITHUB_SHA?.slice(0, 7) ?? gitShortSha();
+const buildNumber =
+  process.env.DOKPLOY_BUILD_NUMBER ??
+  process.env.GITHUB_RUN_NUMBER ??
+  process.env.GITHUB_RUN_ID ??
+  process.env.CI_PIPELINE_IID ??
+  (gitCommitCount() || '0');
+
 export default defineConfig({
   base: isCapacitorBuild ? './' : '/',
   plugins: [react(), tailwindcss()],
@@ -38,27 +66,9 @@ export default defineConfig({
     },
   },
   define: {
-    __BUILD_SHA__: JSON.stringify(
-      process.env.DOKPLOY_GIT_SHA ??
-        process.env.GITHUB_SHA ??
-        (() => {
-          try {
-            return execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
-              .toString('utf8')
-              .trim();
-          } catch {
-            return 'dev';
-          }
-        })(),
-    ),
+    __BUILD_SHA__: JSON.stringify(buildSha),
     __BUILD_TIME_ISO__: JSON.stringify(new Date().toISOString()),
-    __BUILD_NUMBER__: JSON.stringify(
-      process.env.DOKPLOY_BUILD_NUMBER ??
-        process.env.GITHUB_RUN_NUMBER ??
-        process.env.GITHUB_RUN_ID ??
-        process.env.CI_PIPELINE_IID ??
-        '0',
-    ),
+    __BUILD_NUMBER__: JSON.stringify(buildNumber),
     __APP_VERSION__: JSON.stringify(process.env.APP_VERSION ?? pkgVersion),
     __ANDROID_PUSH_READY__: JSON.stringify(
       existsSync('android/app/google-services.json'),

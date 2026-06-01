@@ -87,7 +87,7 @@ export function UpcomingBillsStrip({
               {billsCopy.upcomingTitle}
             </p>
             <p className="mt-0.5 text-sm font-semibold text-sage-800 dark:text-moss-subtle">
-              {billsCopy.upcomingHint} Tap <span className="font-bold">i</span> for timing rules.
+              {billsCopy.upcomingHint}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">

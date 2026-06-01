@@ -37,6 +37,26 @@ function rowStyle(key: string) {
   return ROW_STYLES[key] ?? ROW_STYLES.extra;
 }
 
+function emptyChartRow(key: 'owner' | 'partner', label: string): IncomeSpendRow {
+  return {
+    key,
+    label,
+    incomeLogged: 0,
+    spent: 0,
+    remaining: 0,
+    overspend: 0,
+    bills: [],
+    surprises: [],
+    billsTotal: 0,
+    surprisesTotal: 0,
+  };
+}
+
+const EMPTY_CHART_ROWS: IncomeSpendRow[] = [
+  emptyChartRow('owner', 'Primary'),
+  emptyChartRow('partner', 'Partner'),
+];
+
 function IncomeSpendBreakdown({ row }: { row: IncomeSpendRow }) {
   return (
     <div className="max-h-[min(70vh,320px)] overflow-y-auto overscroll-contain pr-1 text-xs">
@@ -234,13 +254,18 @@ export function HouseholdContributionPanel({ state }: { state: FinanceState }) {
     leaveTimer.current = window.setTimeout(() => setHovered(null), 150);
   }, [cancelLeave]);
 
-  const displayRows = useMemo(
-    () => summary.rows.filter((r) => r.key === 'owner' || r.key === 'partner' || r.incomeLogged > 0 || r.spent > 0),
+  const displayRows = useMemo(() => {
+    const active = summary.rows.filter(
+      (r) => r.key === 'owner' || r.key === 'partner' || r.incomeLogged > 0 || r.spent > 0,
+    );
+    if (active.length > 0) return active;
+    return EMPTY_CHART_ROWS;
+  }, [summary.rows]);
+
+  const chartIsEmpty = useMemo(
+    () => !summary.rows.some((r) => r.incomeLogged > 0 || r.spent > 0),
     [summary.rows],
   );
-
-  const anyIncome = summary.rows.some((r) => r.incomeLogged > 0);
-  const anyActivity = anyIncome || summary.rows.some((r) => r.spent > 0) || summary.unassigned.billsTotal > 0;
 
   const onHover = useCallback(
     (row: IncomeSpendRow, el: HTMLElement) => {
@@ -259,41 +284,42 @@ export function HouseholdContributionPanel({ state }: { state: FinanceState }) {
       subtitle={panels.incomeSpend.subtitle}
       className="!overflow-visible"
     >
-      {!anyActivity ? (
-        <p className="text-sm font-medium text-sage-600 dark:text-moss-muted">
-          {panels.incomeSpend.empty}
-        </p>
-      ) : (
-        <div id={panelId} className="space-y-4 overflow-visible">
-          {displayRows.map((row) => (
+      <div id={panelId} className="space-y-4 overflow-visible">
+        {displayRows.map((row, i) => (
+          <div key={row.key} className={`app-fade-rise app-stagger-${Math.min(i + 1, 3)}`}>
             <IncomeSpendBarRow
-              key={row.key}
               row={row}
               onHover={onHover}
               onLeave={onLeave}
               isActive={hovered?.row.key === row.key}
             />
-          ))}
+          </div>
+        ))}
 
-          {hovered ? (
-            <FloatingBreakdown
-              row={hovered.row}
-              anchorRect={hovered.rect}
-              onEnter={cancelLeave}
-              onLeave={scheduleLeave}
-            />
-          ) : null}
+        {chartIsEmpty ? (
+          <p className="text-center text-xs font-medium text-sage-500 dark:text-moss-muted">
+            {panels.incomeSpend.empty}
+          </p>
+        ) : null}
 
-          {summary.unassigned.billsTotal > 0 ? (
-            <p className="rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-xs leading-relaxed text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
-              {panels.incomeSpend.unassigned(
-                formatMoney(summary.unassigned.billsTotal),
-                summary.unassigned.bills.length,
-              )}
-            </p>
-          ) : null}
-        </div>
-      )}
+        {hovered ? (
+          <FloatingBreakdown
+            row={hovered.row}
+            anchorRect={hovered.rect}
+            onEnter={cancelLeave}
+            onLeave={scheduleLeave}
+          />
+        ) : null}
+
+        {summary.unassigned.billsTotal > 0 ? (
+          <p className="rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-xs leading-relaxed text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+            {panels.incomeSpend.unassigned(
+              formatMoney(summary.unassigned.billsTotal),
+              summary.unassigned.bills.length,
+            )}
+          </p>
+        ) : null}
+      </div>
     </Card>
   );
 }

@@ -3,10 +3,8 @@ import { glossary } from './glossary';
 export const panels = {
   incomeSpend: {
     title: glossary.incomeVsSpend,
-    subtitle:
-      'Primary = husband’s logged pay. Partner = wife’s. Dark bar = bills and surprises attributed to that person. Red = spent more than logged pay.',
-    empty:
-      'Log pay in the Paycheque log, then mark bills as paid or add surprise costs to see Primary vs Partner bars.',
+    subtitle: 'Primary and Partner. Red = over logged pay.',
+    empty: 'Log pay and mark bills to fill the bars.',
     unassigned: (total: string, count: number) =>
       `${total} in marked bills are not tied to Primary or Partner yet (${count} item${count === 1 ? '' : 's'}).`,
     overLoggedPay: glossary.overLoggedPay,

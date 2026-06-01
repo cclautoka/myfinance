@@ -24,13 +24,11 @@ export function Header({
 }) {
   const [buildOpen, setBuildOpen] = useState(false);
   const buildStamp = new Date(__BUILD_TIME_ISO__).toLocaleString();
-  const prodBuild = (() => {
-    const n = String(__BUILD_NUMBER__ ?? '').trim();
-    if (!n || n === '0') return `Build ${__APP_VERSION__} · ${buildStamp}`;
-    return `Build ${__APP_VERSION__}+${n} · ${buildStamp}`;
-  })();
-  const buildLine = import.meta.env.PROD ? prodBuild : `Build dev · ${buildStamp}`;
-  const buildLineExpanded = import.meta.env.PROD ? prodBuild : `${__BUILD_SHA__} · ${buildStamp}`;
+  const sha = String(__BUILD_SHA__ ?? 'dev').trim();
+  const rev = String(__BUILD_NUMBER__ ?? '').trim();
+  const prodBuild = `Build ${__APP_VERSION__} · ${sha}${rev && rev !== '0' ? ` · #${rev}` : ''} · ${buildStamp}`;
+  const buildLine = import.meta.env.PROD ? prodBuild : `Build dev · ${sha} · ${buildStamp}`;
+  const buildLineExpanded = buildLine;
 
   return (
     <header
@@ -47,7 +45,7 @@ export function Header({
             <span className="hidden sm:inline">{sections.header.workspaceTitle}</span>
           </h1>
           <p className="mt-1 hidden max-w-2xl text-sm font-medium leading-relaxed text-slate-600 dark:text-moss-subtle sm:block">
-            Dashboard for this month — Workspace to edit history and plan — Tools for relay, sign-in, and reset.
+            {sections.header.workspaceSubtitle}. Sign-in and alerts in Tools.
             {serverSyncing ? (
               <span className="ml-2 text-teal-700 dark:text-teal-300">Syncing…</span>
             ) : null}

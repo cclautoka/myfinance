@@ -2,11 +2,10 @@ import { glossary } from './glossary';
 
 export const bills = {
   calendarTitle: glossary.billCalendar,
-  calendarSubtitle:
-    'Enter what you actually paid, then mark as paid. We compare plan vs actual on each line. This app does not pay bills for you.',
+  calendarSubtitle: 'Enter what you paid, then mark as paid. This app does not pay bills for you.',
 
   upcomingTitle: 'Next bills',
-  upcomingHint: 'Hides bills you already marked as paid.',
+  upcomingHint: 'Hides paid lines.',
   fullTimeline: 'Full timeline',
 
   cushionTight: (upcoming: string, cushion: string) =>
