@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import type { FinanceState } from '../types/finance';
 import { formatCalendarMonthHeading, HISTORY_TRACKING_STARTED_MONTH_KEY } from '../data/defaults';
 import { formatMoney } from '../utils/format';
@@ -24,6 +24,12 @@ function fillForKind(kind: LifeSpendKind): string {
   return kind === 'surprise' ? SURPRISE_FILL : BILL_FILL;
 }
 
+function tooltipIndexFromChartState(state: unknown): number | null {
+  if (!state || typeof state !== 'object') return null;
+  const idx = (state as { activeTooltipIndex?: unknown }).activeTooltipIndex;
+  return typeof idx === 'number' && idx >= 0 ? idx : null;
+}
+
 function LifetimeSpendTooltip({
   active,
   payload,
@@ -44,7 +50,7 @@ function LifetimeSpendTooltip({
         : null;
 
   return (
-    <div className="rounded-xl border border-sage-200/90 bg-white px-3 py-2.5 text-xs shadow-lg dark:border-moss-border dark:bg-moss-elevated">
+    <div className="pointer-events-none rounded-xl border border-sage-200/90 bg-white px-3 py-2.5 text-xs shadow-lg dark:border-moss-border dark:bg-moss-elevated">
       <p className="font-semibold text-sage-900 dark:text-moss-fg">{p.name}</p>
       <p className="mt-1 font-display text-sm font-semibold tabular-nums text-teal-800 dark:text-teal-200">
         {formatMoney(p.total)}
@@ -61,20 +67,41 @@ function LifetimeSpendTooltip({
 }
 
 function LifetimeChart({ chartData, chartHeight, inView }: { chartData: ChartRow[]; chartHeight: number; inView: boolean }) {
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+
+  const clearActive = useCallback(() => setActiveIndex(null), []);
+
   return (
-    <div className="w-full min-w-0" style={{ height: chartHeight }}>
+    <div
+      className="lifetime-chart w-full min-w-0 select-none"
+      style={{ height: chartHeight }}
+      onMouseLeave={clearActive}
+      onBlur={clearActive}
+    >
       <ResponsiveContainer
         width="100%"
         height="100%"
         className="[&_.recharts-cartesian-axis-tick_text]:fill-sage-600 dark:[&_.recharts-cartesian-axis-tick_text]:fill-moss-muted"
       >
-        <BarChart data={chartData} layout="vertical" margin={{ left: 4, right: 12, top: 4, bottom: 4 }}>
+        <BarChart
+          data={chartData}
+          layout="vertical"
+          margin={{ left: 4, right: 12, top: 4, bottom: 4 }}
+          onMouseMove={(state) => setActiveIndex(tooltipIndexFromChartState(state))}
+          onMouseLeave={clearActive}
+          onClick={(state) => setActiveIndex(tooltipIndexFromChartState(state))}
+          style={{ outline: 'none' }}
+        >
           <XAxis type="number" tickFormatter={(v) => formatMoney(Number(v))} tick={{ fontSize: 11 }} />
           <YAxis type="category" dataKey="name" width={132} tick={{ fontSize: 11 }} interval={0} />
           <Tooltip
-            content={<LifetimeSpendTooltip />}
-            cursor={{ fill: 'rgba(15, 118, 110, 0.12)' }}
-            wrapperStyle={{ pointerEvents: 'none', outline: 'none' }}
+            cursor={false}
+            wrapperStyle={{ outline: 'none', zIndex: 20 }}
+            content={() =>
+              activeIndex != null && chartData[activeIndex] ? (
+                <LifetimeSpendTooltip active payload={[{ payload: chartData[activeIndex] }]} />
+              ) : null
+            }
           />
           <Bar
             dataKey="total"
@@ -84,12 +111,13 @@ function LifetimeChart({ chartData, chartHeight, inView }: { chartData: ChartRow
             animationDuration={900}
             animationBegin={0}
             animationEasing="ease-out"
-            activeBar={{ fillOpacity: 1, stroke: 'rgba(255,255,255,0.35)', strokeWidth: 1 }}
+            activeBar={{ fillOpacity: 1, stroke: 'none' }}
           >
             {chartData.map((entry, i) => (
               <Cell
                 key={`${entry.name}-${entry.kind}`}
                 fill={fillForKind(entry.kind)}
+                fillOpacity={activeIndex === i ? 1 : 0.88}
                 style={inView ? { animationDelay: `${i * 60}ms` } : undefined}
               />
             ))}

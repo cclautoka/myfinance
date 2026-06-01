@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
+import { useInView } from '../hooks/useInView';
 import type { FinanceState } from '../types/finance';
 import {
   dashboardBillsTickedTip,
@@ -128,6 +129,12 @@ export function DashboardOverview({
   onGoToWorkspaceGoals?: () => void;
 }) {
   const preview = variant === 'preview';
+  const { ref: ringsRef, inView: ringsInView } = useInView({
+    rootMargin: '0px 0px -8% 0px',
+    threshold: 0.15,
+    animateOnlyAfterScroll: true,
+  });
+  const ringsAnimate = preview || ringsInView;
   const [manualGoalAdds, setManualGoalAdds] = useState<Record<string, number>>({});
   const [manualGoalSubs, setManualGoalSubs] = useState<Record<string, number>>({});
   const goalManualDefault = useMemo(() => 200, []);
@@ -573,8 +580,11 @@ export function DashboardOverview({
           }
         >
           <div
+            ref={ringsRef}
             id="dashboard-goal-rings"
-            className={`dashboard-rings-enter scroll-mt-24 ${
+            className={`scroll-mt-24 transition-all duration-700 ease-out ${
+              ringsAnimate ? 'dashboard-rings-enter opacity-100' : 'translate-y-6 opacity-0'
+            } ${
               preview
                 ? 'mx-auto flex flex-wrap justify-center gap-6 rounded-2xl bg-white/95 px-4 py-6 shadow-lg dark:bg-moss-elevated/95'
                 : 'mx-auto flex w-full max-w-none flex-wrap justify-center gap-10 rounded-3xl bg-white/95 px-6 py-10 shadow-lg dark:bg-moss-elevated/95 sm:gap-14 sm:px-10'
@@ -584,6 +594,7 @@ export function DashboardOverview({
               <ProgressRing
                 value={fund1k}
                 delayMs={80}
+                playAnimation={ringsAnimate}
                 label={fund1k >= 1 ? '$1k reserve milestone met' : '$1k reserve milestone'}
                 sublabel={`Balance ${formatMoney(state.emergencyFund)}`}
                 tip={ringFirst1kTip()}
@@ -604,6 +615,7 @@ export function DashboardOverview({
                 <ProgressRing
                   value={Math.min(1, g.balance / Math.max(g.targetAmount, 1))}
                   delayMs={160 + i * 120}
+                  playAnimation={ringsAnimate}
                   label={g.name}
                   sublabel={`${formatMoney(g.balance)} of ${formatMoney(g.targetAmount)}`}
                   tip={`Savings goal “${g.name}”. Use Dashboard to allocate; manage goals in Workspace.`}
@@ -633,6 +645,7 @@ export function DashboardOverview({
             {(state.savingsGoals ?? []).length === 0 && state.threeMonthFundTarget > 0 ? (
               <ProgressRing
                 value={fund3}
+                playAnimation={ringsAnimate}
                 label="Extended reserve target"
                 sublabel={`Target ${formatMoney(state.threeMonthFundTarget)}`}
                 tip={ringThreeMonthTip(state.threeMonthFundTarget, suggested3month)}

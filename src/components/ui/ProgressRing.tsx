@@ -9,6 +9,7 @@ export function ProgressRing({
   sublabel,
   tip,
   delayMs = 0,
+  playAnimation = true,
 }: {
   /** 0–1 */
   value: number;
@@ -19,6 +20,8 @@ export function ProgressRing({
   tip?: ReactNode;
   /** Stagger mount animation. */
   delayMs?: number;
+  /** When false, ring stays empty/hidden until set true (e.g. scroll into view). */
+  playAnimation?: boolean;
 }) {
   const gradId = useId().replace(/:/g, '');
   const r = (size - stroke) / 2;
@@ -30,6 +33,12 @@ export function ProgressRing({
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    if (!playAnimation) {
+      setOffset(c);
+      setMounted(false);
+      return;
+    }
+
     const reduced =
       typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (reduced) {
@@ -42,7 +51,7 @@ export function ProgressRing({
       requestAnimationFrame(() => setOffset(targetOffset));
     }, delayMs);
     return () => window.clearTimeout(start);
-  }, [targetOffset, delayMs, c]);
+  }, [targetOffset, delayMs, c, playAnimation]);
 
   const body = (
     <div
