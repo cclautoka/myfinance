@@ -6,7 +6,8 @@ WORKDIR /app
 RUN apk add --no-cache curl
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
-COPY load-env.mjs password.mjs sessionToken.mjs index.mjs staticCache.mjs templates.mjs snapshots.mjs db.mjs financeStateDiff.mjs emptyFinanceState.mjs reminders.mjs ./
+COPY load-env.mjs password.mjs sessionToken.mjs index.mjs staticCache.mjs templates.mjs snapshots.mjs db.mjs financeStateDiff.mjs emptyFinanceState.mjs reminders.mjs reminderSend.mjs pushSend.mjs reminderCron.mjs mail.mjs notifyEmails.mjs ./
+COPY copy ./copy
 COPY scripts/db-migrate.mjs ./scripts/db-migrate.mjs
 ENV NODE_ENV=production
 EXPOSE 8787
