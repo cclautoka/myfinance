@@ -63,8 +63,8 @@ function MetricCard({
 }) {
   return (
     <div
-      className={`min-w-0 w-full max-w-full [container-type:inline-size] rounded-2xl border border-sage-900/12 bg-white shadow-md dark:border-moss-border dark:bg-moss-elevated ${
-        preview ? 'px-4 py-4' : 'px-6 py-5 sm:px-8 sm:py-6'
+      className={`relative min-w-0 w-full max-w-full overflow-hidden rounded-2xl border border-sage-900/12 bg-white shadow-md transition-all duration-300 hover:border-teal-500/25 hover:shadow-lg dark:border-moss-border dark:bg-moss-elevated dark:hover:border-teal-500/30 ${
+        preview ? 'px-4 py-4' : 'px-5 py-5 sm:px-7 sm:py-6'
       } ${className}`}
     >
       {children}
@@ -72,6 +72,7 @@ function MetricCard({
   );
 }
 
+/** Info control sits inside the card top-right; content gets right padding so labels are never covered. */
 function MetricWithTip({
   tip,
   children,
@@ -82,9 +83,35 @@ function MetricWithTip({
   preview?: boolean;
 }) {
   return (
-    <HoverTip content={tip} interaction="auto" layout="corner" className="min-w-0 w-full">
-      <MetricCard preview={preview}>{children}</MetricCard>
-    </HoverTip>
+    <div className="app-metric-tile min-w-0 w-full">
+      <MetricCard preview={preview}>
+        <div className="absolute right-2 top-2 z-10 sm:right-3 sm:top-3">
+          <HoverTip content={tip} interaction="auto" layout="inline-end" className="w-auto">
+            <span className="sr-only">More info</span>
+          </HoverTip>
+        </div>
+        <div className="min-w-0 pr-11 sm:pr-12">{children}</div>
+      </MetricCard>
+    </div>
+  );
+}
+
+function MetricSubBoxWithTip({
+  tip,
+  children,
+}: {
+  tip: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className="relative mt-4 w-full rounded-xl border border-sage-200/80 bg-sage-50/70 px-4 py-3 dark:border-moss-border dark:bg-moss-bg/40">
+      <div className="absolute right-2 top-2 z-10">
+        <HoverTip content={tip} interaction="auto" layout="inline-end" className="w-auto">
+          <span className="sr-only">Left from deposits details</span>
+        </HoverTip>
+      </div>
+      <div className="min-w-0 pr-10">{children}</div>
+    </div>
   );
 }
 
@@ -142,7 +169,8 @@ export function DashboardOverview({
           ? `Other income (month): ${formatMoney(extraIn)}`
           : `One-off expenses (month): ${formatMoney(surprises)}`;
 
-  const gridCols = preview ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2';
+  const gridCols = preview ? 'grid-cols-1' : 'grid-cols-1 @lg/snapshot:grid-cols-2';
+  const metricGridClass = `app-metric-grid grid min-w-0 w-full gap-4 ${gridCols}`;
   const splitCols = preview ? 'grid-cols-1 gap-4' : 'grid-cols-1 gap-8 sm:grid-cols-2';
 
   const DEDUCT_BUTTON_CLASS =
@@ -260,7 +288,7 @@ export function DashboardOverview({
 
   return (
     <section
-      className={`app-fade-rise overflow-hidden border border-white/14 bg-gradient-to-br from-sage-900 via-sage-800 to-teal-900 text-white shadow-xl dark:border-white/12 dark:from-moss-bg dark:via-moss-surface dark:to-moss-bg dark:shadow-2xl ${
+      className={`@container/snapshot dashboard-snapshot-enter overflow-hidden border border-white/14 bg-gradient-to-br from-sage-900 via-sage-800 to-teal-900 text-white shadow-xl dark:border-white/12 dark:from-moss-bg dark:via-moss-surface dark:to-moss-bg dark:shadow-2xl ${
         preview ? 'rounded-xl' : 'rounded-[1.75rem]'
       }`}
     >
@@ -286,7 +314,7 @@ export function DashboardOverview({
         )}
 
         <div
-          className={`app-metric-grid mx-auto grid min-w-0 w-full max-w-5xl gap-4 ${gridCols} ${preview ? 'mt-6' : 'mt-10'}`}
+          className={`app-metric-grid ${metricGridClass} mx-auto max-w-none ${preview ? 'mt-6' : 'mt-10'}`}
         >
           <MetricWithTip tip={dashboardIncomeTip()} preview={preview}>
             <MetricCard className="text-sage-900 dark:text-moss-fg" preview={preview}>
@@ -297,30 +325,28 @@ export function DashboardOverview({
               <p className="mt-3 text-xs leading-snug text-sage-700 dark:text-moss-subtle">
                 {dashboardCopy.plannedIncomeHelper}
               </p>
-              <HoverTip content={dashboardLeftFromDepositsTip()} interaction="auto" layout="corner" className="mt-4 block w-full">
-                <div className="rounded-xl border border-sage-200/80 bg-sage-50/70 px-4 py-3 dark:border-moss-border dark:bg-moss-bg/40">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-sage-600 dark:text-moss-muted">
-                    {dashboardCopy.leftFromDepositsLabel}
+              <MetricSubBoxWithTip tip={dashboardLeftFromDepositsTip()}>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-sage-600 dark:text-moss-muted">
+                  {dashboardCopy.leftFromDepositsLabel}
+                </p>
+                <p
+                  className={`mt-1 ${
+                    pocketLeft >= 0
+                      ? 'text-sage-950 dark:text-moss-fg'
+                      : 'text-rose-700 dark:text-rose-300/90'
+                  } ${METRIC_SUBHERO_SIZE}`}
+                >
+                  {formatMoney(pocketLeft)}
+                </p>
+                <p className="mt-2 text-[11px] leading-snug text-sage-600 dark:text-moss-muted">
+                  {dashboardCopy.leftFromDepositsHelper}
+                </p>
+                {carriedOver > 0 ? (
+                  <p className="mt-2 text-[11px] leading-snug text-teal-800 dark:text-teal-200/90">
+                    {dashboardCopy.carryOverLine(formatMoney(carriedOver))}
                   </p>
-                  <p
-                    className={`mt-1 ${
-                      pocketLeft >= 0
-                        ? 'text-sage-950 dark:text-moss-fg'
-                        : 'text-rose-700 dark:text-rose-300/90'
-                    } ${METRIC_SUBHERO_SIZE}`}
-                  >
-                    {formatMoney(pocketLeft)}
-                  </p>
-                  <p className="mt-2 text-[11px] leading-snug text-sage-600 dark:text-moss-muted">
-                    {dashboardCopy.leftFromDepositsHelper}
-                  </p>
-                  {carriedOver > 0 ? (
-                    <p className="mt-2 text-[11px] leading-snug text-teal-800 dark:text-teal-200/90">
-                      {dashboardCopy.carryOverLine(formatMoney(carriedOver))}
-                    </p>
-                  ) : null}
-                </div>
-              </HoverTip>
+                ) : null}
+              </MetricSubBoxWithTip>
             </MetricCard>
           </MetricWithTip>
           <MetricWithTip tip={dashboardIncomeLoggedVsPlannedTip(income, loggedPay)} preview={preview}>
@@ -395,7 +421,7 @@ export function DashboardOverview({
           <p className="mx-auto mt-8 max-w-xl text-center text-sm font-medium text-teal-100">{extrasLine}</p>
         )}
 
-        <div className={`mx-auto grid min-w-0 w-full max-w-5xl gap-4 text-sage-950 ${gridCols} ${preview ? 'mt-6' : 'mt-10'}`}>
+        <div className={`app-metric-grid ${metricGridClass} mx-auto max-w-none text-sage-950 ${preview ? 'mt-6' : 'mt-10'}`}>
           <MetricWithTip tip={dashboardEmergencyTip()} preview={preview}>
             <MetricCard>
               <p className="text-xs font-semibold uppercase tracking-wide text-sage-700 dark:text-moss-muted">
@@ -475,7 +501,7 @@ export function DashboardOverview({
           </MetricWithTip>
         </div>
 
-        <div className={`mx-auto grid min-w-0 w-full max-w-5xl gap-4 text-sage-950 ${gridCols} ${preview ? 'mt-6' : 'mt-8'}`}>
+        <div className={`app-metric-grid ${metricGridClass} mx-auto max-w-none text-sage-950 ${preview ? 'mt-6' : 'mt-8'}`}>
           <MetricWithTip tip={dashboardBillsTickedTip()} preview={preview}>
             <MetricCard className={preview ? 'text-center' : 'text-center sm:text-left'} preview={preview}>
               <p className="text-xs font-semibold uppercase tracking-wide text-sage-700 dark:text-moss-muted">
@@ -540,15 +566,16 @@ export function DashboardOverview({
         >
           <div
             id="dashboard-goal-rings"
-            className={`scroll-mt-24 ${
+            className={`dashboard-rings-enter scroll-mt-24 ${
               preview
                 ? 'mx-auto flex flex-wrap justify-center gap-6 rounded-2xl bg-white/95 px-4 py-6 shadow-lg dark:bg-moss-elevated/95'
-                : 'mx-auto flex flex-wrap justify-center gap-14 rounded-3xl bg-white/95 px-8 py-10 shadow-lg dark:bg-moss-elevated/95'
+                : 'mx-auto flex w-full max-w-none flex-wrap justify-center gap-10 rounded-3xl bg-white/95 px-6 py-10 shadow-lg dark:bg-moss-elevated/95 sm:gap-14 sm:px-10'
             }`}
           >
-            <div className="flex flex-col items-center gap-2">
+            <div className="app-ring-tile flex flex-col items-center gap-2">
               <ProgressRing
                 value={fund1k}
+                delayMs={80}
                 label={fund1k >= 1 ? '$1k reserve milestone met' : '$1k reserve milestone'}
                 sublabel={`Balance ${formatMoney(state.emergencyFund)}`}
                 tip={ringFirst1kTip()}
@@ -564,10 +591,11 @@ export function DashboardOverview({
               ) : null}
             </div>
 
-            {goalRows.map((g) => (
-              <div key={g.id} className="flex flex-col items-center gap-2">
+            {goalRows.map((g, i) => (
+              <div key={g.id} className="app-ring-tile flex flex-col items-center gap-2">
                 <ProgressRing
                   value={Math.min(1, g.balance / Math.max(g.targetAmount, 1))}
+                  delayMs={160 + i * 120}
                   label={g.name}
                   sublabel={`${formatMoney(g.balance)} of ${formatMoney(g.targetAmount)}`}
                   tip={`Savings goal “${g.name}”. Use Dashboard to allocate; manage goals in Workspace.`}

@@ -444,7 +444,7 @@ export function AuthenticatedFinanceApp() {
               eyebrow="Live month"
             >
               <div className="relative isolate flex min-w-0 flex-col gap-10 lg:block">
-                <div className="order-3 flex min-w-0 flex-col gap-8 lg:order-none lg:ml-[calc((100%-4rem)*3/12+2rem)] lg:mr-[calc((100%-4rem)*3/12+2rem)] lg:w-[calc((100%-4rem)*6/12)]">
+                <div className="order-3 flex min-w-0 flex-col gap-8 lg:order-none lg:ml-[calc((100%-4rem)*3/12+1.5rem)] lg:mr-[calc((100%-4rem)*3/12+1.5rem)] lg:w-[calc((100%-4rem)*6/12+1rem)] lg:max-w-[52rem]">
                   <div data-tour="tour-dashboard-snapshot" className="min-w-0 space-y-8">
                     <DashboardOverview
                       state={state}
