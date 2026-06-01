@@ -1,5 +1,5 @@
 import { useEffect, useId, useState, type ReactNode } from 'react';
-import { HoverTip } from './HoverTip';
+import { InfoTipButton } from './InfoTipButton';
 
 export function ProgressRing({
   value,
@@ -96,9 +96,12 @@ export function ProgressRing({
 
   if (tip) {
     return (
-      <HoverTip content={tip} interaction="auto" layout="inline-end" className="w-auto">
+      <div className="relative">
+        <div className="absolute -right-1 -top-1 z-10 sm:right-0 sm:top-0">
+          <InfoTipButton content={tip} />
+        </div>
         {body}
-      </HoverTip>
+      </div>
     );
   }
 

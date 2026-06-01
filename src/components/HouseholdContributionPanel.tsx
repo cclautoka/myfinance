@@ -1,4 +1,5 @@
-import { useCallback, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useId, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useInView } from '../hooks/useInView';
 import { createPortal } from 'react-dom';
 import type { FinanceState } from '../types/finance';
 import { currentMonthKey } from '../data/defaults';
@@ -106,6 +107,31 @@ function IncomeSpendBreakdown({ row }: { row: IncomeSpendRow }) {
   );
 }
 
+function AnimatedBar({
+  className,
+  widthPct,
+  inView,
+  style,
+  title,
+}: {
+  className: string;
+  widthPct: number;
+  inView: boolean;
+  style?: CSSProperties;
+  title?: string;
+}) {
+  return (
+    <div
+      className={`income-bar-fill absolute inset-y-1 left-0 rounded-md ${className}`}
+      style={{
+        width: inView ? `${widthPct}%` : '0%',
+        ...style,
+      }}
+      title={title}
+    />
+  );
+}
+
 function IncomeSpendBarRow({
   row,
   onHover,
@@ -118,6 +144,7 @@ function IncomeSpendBarRow({
   isActive: boolean;
 }) {
   const styles = rowStyle(row.key);
+  const { ref: trackRef, inView } = useInView({ rootMargin: '0px 0px -8% 0px' });
   const trackMax = Math.max(row.incomeLogged, row.spent, 1);
   const incomePct = (row.incomeLogged / trackMax) * 100;
   const spentPct = (Math.min(row.spent, row.incomeLogged) / trackMax) * 100;
@@ -139,34 +166,34 @@ function IncomeSpendBarRow({
     >
       <span className="text-xs font-semibold text-sage-800 dark:text-moss-subtle">{row.label}</span>
 
-      <div className="relative h-9 min-w-0 overflow-visible rounded-lg bg-slate-200/50 dark:bg-moss-bg/80">
-        {/* Full-income band (light) */}
+      <div
+        ref={trackRef}
+        className="income-bar-track relative h-9 min-w-0 overflow-visible rounded-lg bg-slate-200/50 dark:bg-moss-bg/80"
+      >
         {row.incomeLogged > 0 ? (
-          <div
-            className={`absolute inset-y-1 left-0 rounded-md ${styles.income}`}
-            style={{ width: `${incomePct}%` }}
-          />
+          <AnimatedBar className={styles.income} widthPct={incomePct} inView={inView} />
         ) : null}
-        {/* Spent overlay on top of income portion */}
         {spentWithinIncomePct > 0 && row.incomeLogged > 0 ? (
-          <div
-            className={`absolute inset-y-1 left-0 rounded-md ${styles.spent}`}
-            style={{ width: `${spentPct}%` }}
+          <AnimatedBar
+            className={styles.spent}
+            widthPct={spentPct}
+            inView={inView}
             title={`Spent ${formatMoney(Math.min(row.spent, row.incomeLogged))}`}
           />
         ) : null}
-        {/* Spent with no income — show spent bar only */}
         {row.incomeLogged <= 0 && row.spent > 0 ? (
-          <div
-            className={`absolute inset-y-1 left-0 rounded-md ${styles.spent}`}
-            style={{ width: `${(row.spent / trackMax) * 100}%` }}
+          <AnimatedBar
+            className={styles.spent}
+            widthPct={(row.spent / trackMax) * 100}
+            inView={inView}
           />
         ) : null}
-        {/* Overspend beyond income (red) */}
         {row.overspend > 0 ? (
-          <div
-            className={`absolute inset-y-1 rounded-md ${styles.overspend}`}
-            style={{ left: `${incomePct}%`, width: `${overspendPct}%` }}
+          <AnimatedBar
+            className={styles.overspend}
+            widthPct={overspendPct}
+            inView={inView}
+            style={{ left: inView ? `${incomePct}%` : '0%' }}
             title={`${formatMoney(row.overspend)} ${panels.incomeSpend.overLoggedPay}`}
           />
         ) : null}

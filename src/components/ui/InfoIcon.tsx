@@ -1,17 +1,16 @@
-/** Shared “info” glyph for hints (not the letter “i” in body copy). */
+/** Crisp outlined info glyph (reads clearly at 16–20px). */
 export function InfoIcon({ className = 'h-4 w-4' }: { className?: string }) {
   return (
     <svg
       className={`shrink-0 ${className}`}
-      viewBox="0 0 20 20"
-      fill="currentColor"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
       aria-hidden
     >
-      <path
-        fillRule="evenodd"
-        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 100-2 1 1 0 000 2zM9 9a1 1 0 011-1h.01a1 1 0 110 2H10v6a1 1 0 11-2 0V9z"
-        clipRule="evenodd"
-      />
+      <circle cx="12" cy="12" r="9.25" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="12" cy="7.75" r="1.1" fill="currentColor" stroke="none" />
+      <path d="M12 10.5v5.75" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
     </svg>
   );
 }

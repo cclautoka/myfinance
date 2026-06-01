@@ -16,7 +16,7 @@ import { businessWeekdaysFromTomorrowThroughDueInclusive } from '../utils/busine
 import { formatMoney, formatShortDate } from '../utils/format';
 import { BillPaymentMarkControls } from './BillPaymentMarkControls';
 import { Card } from './ui/Card';
-import { HoverTip } from './ui/HoverTip';
+import { InfoTipButton } from './ui/InfoTipButton';
 
 const chipTone = (
   status: ReturnType<typeof billVisualStatus>,
@@ -87,9 +87,7 @@ export function BillsTimeline({
           title={billsCopy.calendarTitle}
           subtitle={billsCopy.calendarSubtitle}
           titleAside={
-            <HoverTip content={billsTimelineTip()} interaction="tap" layout="inline-end" className="w-auto max-w-[min(100%,18rem)]">
-              <span className="sr-only">About this bill calendar</span>
-            </HoverTip>
+            <InfoTipButton content={billsTimelineTip()} />
           }
         >
             {overdueCount > 0 && (

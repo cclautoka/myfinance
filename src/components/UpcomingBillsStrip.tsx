@@ -9,7 +9,7 @@ import {
   buildTimeline,
 } from '../utils/billsTimeline';
 import { formatMoney, formatShortDate } from '../utils/format';
-import { HoverTip } from './ui/HoverTip';
+import { InfoTipButton } from './ui/InfoTipButton';
 
 function rowClass(st: ReturnType<typeof billVisualStatus>, inGrace: boolean) {
   if (st === 'overdue')
@@ -91,9 +91,7 @@ export function UpcomingBillsStrip({
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <HoverTip content={upcomingStripTip()} interaction="tap" layout="inline-end" className="w-auto">
-              <span className="sr-only">About this strip</span>
-            </HoverTip>
+            <InfoTipButton content={upcomingStripTip()} />
             {onOpenTimeline && (
               <button type="button" onClick={onOpenTimeline} className="btn-primary px-4 py-2 text-xs">
                 {billsCopy.fullTimeline}

@@ -38,7 +38,7 @@ import { dashboard as dashboardCopy } from '../copy/dashboard';
 import { payLoggedVersusPlannedLine } from '../copy/payVsPlannedNotes';
 import { currentMonthKey } from '../data/defaults';
 import { HintWithInfo } from './ui/HintWithInfo';
-import { HoverTip } from './ui/HoverTip';
+import { InfoTipButton } from './ui/InfoTipButton';
 import { ProgressRing } from './ui/ProgressRing';
 import { NumericAmountInput } from './ui/NumericInputs';
 
@@ -63,8 +63,8 @@ function MetricCard({
 }) {
   return (
     <div
-      className={`relative min-w-0 w-full max-w-full overflow-hidden rounded-2xl border border-sage-900/12 bg-white shadow-md transition-all duration-300 hover:border-teal-500/25 hover:shadow-lg dark:border-moss-border dark:bg-moss-elevated dark:hover:border-teal-500/30 ${
-        preview ? 'px-4 py-4' : 'px-5 py-5 sm:px-7 sm:py-6'
+      className={`metric-card-tech relative min-w-0 w-full max-w-full overflow-hidden rounded-2xl border border-sage-900/12 bg-white/95 shadow-md backdrop-blur-sm transition-all duration-300 hover:border-teal-500/30 hover:shadow-xl dark:border-moss-border dark:bg-moss-elevated/95 dark:hover:border-teal-500/35 ${
+        preview ? 'px-4 py-4 pr-11' : 'px-6 py-5 pr-12 sm:px-8 sm:py-6 sm:pr-14'
       } ${className}`}
     >
       {children}
@@ -72,26 +72,16 @@ function MetricCard({
   );
 }
 
-/** Info control sits inside the card top-right; content gets right padding so labels are never covered. */
-function MetricWithTip({
-  tip,
-  children,
-  preview = false,
-}: {
-  tip: ReactNode;
-  children: ReactNode;
-  preview?: boolean;
-}) {
+/** Info control floats top-right; metric content stays full width. */
+function MetricWithTip({ tip, children }: { tip: ReactNode; children: ReactNode; preview?: boolean }) {
   return (
-    <div className="app-metric-tile min-w-0 w-full">
-      <MetricCard preview={preview}>
-        <div className="absolute right-2 top-2 z-10 sm:right-3 sm:top-3">
-          <HoverTip content={tip} interaction="auto" layout="inline-end" className="w-auto">
-            <span className="sr-only">More info</span>
-          </HoverTip>
+    <div className="app-metric-tile relative min-w-0 w-full">
+      <div className="pointer-events-none absolute right-2 top-2 z-20 sm:right-3 sm:top-3">
+        <div className="pointer-events-auto">
+          <InfoTipButton content={tip} />
         </div>
-        <div className="min-w-0 pr-11 sm:pr-12">{children}</div>
-      </MetricCard>
+      </div>
+      {children}
     </div>
   );
 }
@@ -104,13 +94,11 @@ function MetricSubBoxWithTip({
   children: ReactNode;
 }) {
   return (
-    <div className="relative mt-4 w-full rounded-xl border border-sage-200/80 bg-sage-50/70 px-4 py-3 dark:border-moss-border dark:bg-moss-bg/40">
+    <div className="metric-subbox-tech relative mt-4 w-full rounded-xl border border-sage-200/80 px-4 py-3 pr-12 dark:border-moss-border">
       <div className="absolute right-2 top-2 z-10">
-        <HoverTip content={tip} interaction="auto" layout="inline-end" className="w-auto">
-          <span className="sr-only">Left from deposits details</span>
-        </HoverTip>
+        <InfoTipButton content={tip} />
       </div>
-      <div className="min-w-0 pr-10">{children}</div>
+      {children}
     </div>
   );
 }
@@ -169,8 +157,7 @@ export function DashboardOverview({
           ? `Other income (month): ${formatMoney(extraIn)}`
           : `One-off expenses (month): ${formatMoney(surprises)}`;
 
-  const gridCols = preview ? 'grid-cols-1' : 'grid-cols-1 @lg/snapshot:grid-cols-2';
-  const metricGridClass = `app-metric-grid grid min-w-0 w-full gap-4 ${gridCols}`;
+  const metricGridClass = 'app-metric-grid grid min-w-0 w-full grid-cols-1 gap-4 sm:gap-5';
   const splitCols = preview ? 'grid-cols-1 gap-4' : 'grid-cols-1 gap-8 sm:grid-cols-2';
 
   const DEDUCT_BUTTON_CLASS =
@@ -288,11 +275,11 @@ export function DashboardOverview({
 
   return (
     <section
-      className={`@container/snapshot dashboard-snapshot-enter overflow-hidden border border-white/14 bg-gradient-to-br from-sage-900 via-sage-800 to-teal-900 text-white shadow-xl dark:border-white/12 dark:from-moss-bg dark:via-moss-surface dark:to-moss-bg dark:shadow-2xl ${
+      className={`@container/snapshot snapshot-tech-shell dashboard-snapshot-enter overflow-hidden border border-white/14 bg-gradient-to-br from-sage-900 via-sage-800 to-teal-900 text-white shadow-xl dark:border-white/12 dark:from-moss-bg dark:via-moss-surface dark:to-moss-bg dark:shadow-2xl ${
         preview ? 'rounded-xl' : 'rounded-[1.75rem]'
       }`}
     >
-      <div className={preview ? 'relative min-w-0 px-4 pb-6 pt-6' : 'relative min-w-0 px-5 pb-10 pt-10 sm:px-10'}>
+      <div className={preview ? 'relative min-w-0 px-4 pb-6 pt-6' : 'relative min-w-0 px-5 pb-10 pt-10 sm:px-12'}>
         <p className="text-center text-xs font-semibold uppercase tracking-[0.2em] text-teal-200/90 dark:text-teal-300/85">
           Reporting period · {mk}
         </p>
