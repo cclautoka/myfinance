@@ -52,18 +52,29 @@ const METRIC_HERO_SIZE =
 const METRIC_SUBHERO_SIZE =
   'min-w-0 max-w-full font-display font-semibold tabular-nums leading-[1.05] tracking-tight text-[clamp(1.125rem,5.5cqi+0.55rem,1.625rem)]';
 
+type MetricCardVariant = 'income' | 'dues' | 'safety' | 'neutral';
+
+const METRIC_VARIANT_CLASS: Record<MetricCardVariant, string> = {
+  income: 'metric-card-tech',
+  dues: 'metric-card-dues',
+  safety: 'metric-card-safety',
+  neutral: 'metric-card-neutral',
+};
+
 function MetricCard({
   children,
   className = '',
   preview = false,
+  variant = 'income',
 }: {
   children: ReactNode;
   className?: string;
   preview?: boolean;
+  variant?: MetricCardVariant;
 }) {
   return (
     <div
-      className={`metric-card-tech relative min-w-0 w-full max-w-full overflow-hidden rounded-2xl border border-sage-900/12 bg-white/95 shadow-md backdrop-blur-sm transition-all duration-300 hover:border-teal-500/30 hover:shadow-xl dark:border-moss-border dark:bg-moss-elevated/95 dark:hover:border-teal-500/35 ${
+      className={`${METRIC_VARIANT_CLASS[variant]} relative min-w-0 w-full max-w-full overflow-hidden rounded-2xl border border-sage-900/12 bg-white/95 shadow-md backdrop-blur-sm transition-all duration-300 hover:border-teal-500/30 hover:shadow-xl dark:border-moss-border dark:bg-moss-elevated/95 dark:hover:border-teal-500/35 ${
         preview ? 'px-4 py-4 pr-11' : 'px-6 py-5 pr-12 sm:px-8 sm:py-6 sm:pr-14'
       } ${className}`}
     >
@@ -410,7 +421,7 @@ export function DashboardOverview({
 
         <div className={`app-metric-grid ${metricGridClass} mx-auto max-w-none text-sage-950 ${preview ? 'mt-6' : 'mt-10'}`}>
           <MetricWithTip tip={dashboardEmergencyTip()} preview={preview}>
-            <MetricCard>
+            <MetricCard variant="safety">
               <p className="text-xs font-semibold uppercase tracking-wide text-sage-700 dark:text-moss-muted">
                 Emergency fund balance
               </p>
@@ -419,7 +430,7 @@ export function DashboardOverview({
             </MetricCard>
           </MetricWithTip>
           <MetricWithTip tip={dashboardDebtTip()} preview={preview}>
-            <MetricCard>
+            <MetricCard variant="neutral">
               <p className="text-xs font-semibold uppercase tracking-wide text-sage-700 dark:text-moss-muted">
                 Total debt balance (approx.)
               </p>
@@ -429,6 +440,7 @@ export function DashboardOverview({
           </MetricWithTip>
           <MetricWithTip tip={dashboardNextBillTip()} preview={preview}>
             <MetricCard
+              variant="dues"
               className={
                 backlogOverdue
                   ? 'border-2 border-red-600 shadow-md ring-2 ring-red-500/25 dark:border-red-500'
@@ -476,7 +488,7 @@ export function DashboardOverview({
             </MetricCard>
           </MetricWithTip>
           <MetricWithTip tip={dashboardSafeSpendTip()} preview={preview}>
-            <MetricCard>
+            <MetricCard variant="neutral">
               <p className="text-xs font-semibold uppercase tracking-wide text-sage-700 dark:text-moss-muted">
                 Est. weekly discretionary buffer
               </p>
@@ -490,7 +502,11 @@ export function DashboardOverview({
 
         <div className={`app-metric-grid ${metricGridClass} mx-auto max-w-none text-sage-950 ${preview ? 'mt-6' : 'mt-8'}`}>
           <MetricWithTip tip={dashboardBillsTickedTip()} preview={preview}>
-            <MetricCard className={preview ? 'text-center' : 'text-center sm:text-left'} preview={preview}>
+            <MetricCard
+              variant="dues"
+              className={preview ? 'text-center' : 'text-center sm:text-left'}
+              preview={preview}
+            >
               <p className="text-xs font-semibold uppercase tracking-wide text-sage-700 dark:text-moss-muted">
                 Payments marked complete (MTD)
               </p>
@@ -500,7 +516,11 @@ export function DashboardOverview({
             </MetricCard>
           </MetricWithTip>
           <MetricWithTip tip={dashboardDebtFreeMonthsTip()} preview={preview}>
-            <MetricCard className={preview ? 'text-center' : 'text-center sm:text-left'} preview={preview}>
+            <MetricCard
+              variant="neutral"
+              className={preview ? 'text-center' : 'text-center sm:text-left'}
+              preview={preview}
+            >
               <p className="text-xs font-semibold uppercase tracking-wide text-sage-700 dark:text-moss-muted">
                 Est. months to debt-free*
               </p>
@@ -512,6 +532,7 @@ export function DashboardOverview({
           <div className={`min-w-0 w-full ${preview ? '' : 'sm:col-span-2'}`}>
             <MetricWithTip tip={dashboardSavingsSliderTip()} preview={preview}>
               <MetricCard
+                variant="neutral"
                 className={
                   preview ? 'text-center' : 'text-center sm:grid sm:grid-cols-2 sm:gap-x-8 sm:gap-y-4 sm:text-left'
                 }

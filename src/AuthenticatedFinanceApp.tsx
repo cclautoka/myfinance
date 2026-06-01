@@ -459,7 +459,7 @@ export function AuthenticatedFinanceApp() {
                       }}
                     />
                     <Suspense fallback={<ChartPanelSkeleton />}>
-                      <div id="household-income-spend" className="scroll-mt-24">
+                      <div id="household-income-spend" className="dashboard-below-fold scroll-mt-24">
                         <HouseholdContributionPanel state={state} />
                       </div>
                     </Suspense>
@@ -467,7 +467,7 @@ export function AuthenticatedFinanceApp() {
                       <PaymentsLifetimePanel state={state} />
                     </Suspense>
                   </div>
-                  <div data-tour="tour-pay-log" className="min-w-0">
+                  <div data-tour="tour-pay-log" className="dashboard-below-fold min-w-0">
                     <IncomeLogPanel
                       variant="dashboard"
                       state={state}

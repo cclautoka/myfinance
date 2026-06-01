@@ -1,6 +1,15 @@
 # Single Dokploy service: Vite SPA (static) + notify API in one Node process.
 FROM node:22-alpine AS frontend-build
 WORKDIR /web
+# Dokploy / CI: pass commit SHA + build number so the header is not stuck on "DEV".
+ARG DOKPLOY_GIT_SHA=""
+ARG DOKPLOY_BUILD_NUMBER=""
+ARG GITHUB_SHA=""
+ARG GITHUB_RUN_NUMBER=""
+ENV DOKPLOY_GIT_SHA=$DOKPLOY_GIT_SHA \
+    DOKPLOY_BUILD_NUMBER=$DOKPLOY_BUILD_NUMBER \
+    GITHUB_SHA=$GITHUB_SHA \
+    GITHUB_RUN_NUMBER=$GITHUB_RUN_NUMBER
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .

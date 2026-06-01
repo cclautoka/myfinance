@@ -592,6 +592,80 @@
       0 16px 40px -16px rgba(0, 0, 0, 0.55);
   }
 
+  .metric-card-safety {
+    border-left-width: 4px;
+    border-left-color: rgb(245 158 11 / 0.85);
+    background-image: linear-gradient(
+      145deg,
+      rgba(255, 251, 235, 0.98) 0%,
+      rgba(254, 243, 199, 0.55) 45%,
+      rgba(255, 255, 255, 0.96) 100%
+    );
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.75) inset,
+      0 10px 28px -12px rgba(180, 83, 9, 0.2);
+  }
+
+  .dark .metric-card-safety {
+    border-left-color: rgb(251 191 36 / 0.7);
+    background-image: linear-gradient(
+      145deg,
+      rgba(41, 32, 20, 0.98) 0%,
+      rgba(120, 53, 15, 0.25) 50%,
+      rgba(28, 26, 22, 0.98) 100%
+    );
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.05) inset,
+      0 14px 36px -14px rgba(0, 0, 0, 0.5);
+  }
+
+  .metric-card-dues {
+    border-top-width: 3px;
+    border-top-color: rgb(100 116 139 / 0.55);
+    background-image: linear-gradient(
+      180deg,
+      rgba(241, 245, 249, 0.95) 0%,
+      rgba(255, 255, 255, 0.98) 28%,
+      rgba(248, 250, 252, 0.96) 100%
+    );
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.8) inset,
+      0 10px 26px -12px rgba(51, 65, 85, 0.15);
+  }
+
+  .dark .metric-card-dues {
+    border-top-color: rgb(148 163 184 / 0.45);
+    background-image: linear-gradient(
+      180deg,
+      rgba(51, 65, 85, 0.35) 0%,
+      rgba(24, 32, 28, 0.98) 30%,
+      rgba(20, 24, 22, 0.98) 100%
+    );
+  }
+
+  .metric-card-neutral {
+    background-image: linear-gradient(
+      145deg,
+      rgba(248, 250, 252, 0.98) 0%,
+      rgba(241, 245, 249, 0.75) 100%
+    );
+    box-shadow: 0 8px 24px -14px rgba(15, 23, 42, 0.12);
+  }
+
+  .dark .metric-card-neutral {
+    background-image: linear-gradient(
+      145deg,
+      rgba(28, 32, 30, 0.98) 0%,
+      rgba(24, 28, 26, 0.92) 100%
+    );
+    box-shadow: 0 12px 32px -16px rgba(0, 0, 0, 0.45);
+  }
+
+  .dashboard-below-fold {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 280px;
+  }
+
   .metric-subbox-tech {
     background: linear-gradient(135deg, rgba(248, 250, 252, 0.9), rgba(236, 253, 245, 0.65));
   }

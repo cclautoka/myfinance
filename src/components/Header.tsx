@@ -24,10 +24,16 @@ export function Header({
 }) {
   const [buildOpen, setBuildOpen] = useState(false);
   const buildStamp = new Date(__BUILD_TIME_ISO__).toLocaleString();
-  const sha = String(__BUILD_SHA__ ?? 'dev').trim();
+  const shaRaw = String(__BUILD_SHA__ ?? '').trim();
   const rev = String(__BUILD_NUMBER__ ?? '').trim();
-  const prodBuild = `Build ${__APP_VERSION__} · ${sha}${rev && rev !== '0' ? ` · #${rev}` : ''} · ${buildStamp}`;
-  const buildLine = import.meta.env.PROD ? prodBuild : `Build dev · ${sha} · ${buildStamp}`;
+  const shaKnown = shaRaw.length > 0 && shaRaw !== 'dev';
+  const shaForDisplay = import.meta.env.PROD ? (shaKnown ? shaRaw : null) : shaRaw || 'local';
+  const revForDisplay = rev && rev !== '0' ? rev : null;
+
+  const buildParts = import.meta.env.PROD
+    ? [`Build ${__APP_VERSION__}`, shaForDisplay, revForDisplay ? `#${revForDisplay}` : null, buildStamp]
+    : [`Build dev`, shaForDisplay, buildStamp];
+  const buildLine = buildParts.filter(Boolean).join(' · ');
   const buildLineExpanded = buildLine;
 
   return (

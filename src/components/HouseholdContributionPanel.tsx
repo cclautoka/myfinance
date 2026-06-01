@@ -144,7 +144,10 @@ function IncomeSpendBarRow({
   isActive: boolean;
 }) {
   const styles = rowStyle(row.key);
-  const { ref: trackRef, inView } = useInView({ rootMargin: '0px 0px -8% 0px' });
+  const { ref: trackRef, inView } = useInView({
+    rootMargin: '0px 0px -8% 0px',
+    animateOnlyAfterScroll: true,
+  });
   const trackMax = Math.max(row.incomeLogged, row.spent, 1);
   const incomePct = (row.incomeLogged / trackMax) * 100;
   const spentPct = (Math.min(row.spent, row.incomeLogged) / trackMax) * 100;
@@ -309,7 +312,7 @@ export function HouseholdContributionPanel({ state }: { state: FinanceState }) {
       accent="emerald"
       title={panels.incomeSpend.title}
       subtitle={panels.incomeSpend.subtitle}
-      className="!overflow-visible"
+      className="dashboard-below-fold !overflow-visible"
     >
       <div id={panelId} className="space-y-4 overflow-visible">
         {displayRows.map((row, i) => (
