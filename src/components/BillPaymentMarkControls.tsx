@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { BillsPaidTogglePayload, BillsTogglePayload } from '../utils/billsTimeline';
 import { formatMoney } from '../utils/format';
+import { readHouseholdSession } from '../utils/householdSession';
+import { BillMarkHandledConfirmDialog } from './BillMarkHandledConfirmDialog';
 
 function parseAmountDraft(draft: string, fallback: number): number {
   const t = draft.trim().replace(/,/g, '');
@@ -27,6 +29,11 @@ export function BillPaymentMarkControls({
   compact?: boolean;
 }) {
   const [draft, setDraft] = useState(() => String(plannedAmount));
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const billName = toggleTarget.label ?? toggleTarget.billId;
+  const attributedAsLabel =
+    readHouseholdSession()?.role === 'partner' ? 'Partner' : 'Primary';
 
   useEffect(() => {
     setDraft(String(plannedAmount));
@@ -76,13 +83,23 @@ export function BillPaymentMarkControls({
       <button
         type="button"
         className={btn}
-        onClick={() => {
-          const actualPaid = Math.max(0, parseAmountDraft(draft, plannedAmount));
-          onToggle({ ...toggleTarget, actualPaid });
-        }}
+        onClick={() => setConfirmOpen(true)}
       >
         Mark handled
       </button>
+      <BillMarkHandledConfirmDialog
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        billName={billName}
+        due={toggleTarget.due}
+        plannedAmount={plannedAmount}
+        actualPaid={Math.max(0, parseAmountDraft(draft, plannedAmount))}
+        attributedAsLabel={attributedAsLabel}
+        onConfirm={() => {
+          const actualPaid = Math.max(0, parseAmountDraft(draft, plannedAmount));
+          onToggle({ ...toggleTarget, actualPaid });
+        }}
+      />
     </div>
   );
 }
