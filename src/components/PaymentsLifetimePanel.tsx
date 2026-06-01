@@ -116,6 +116,7 @@ function LifetimeSpendBarRow({
 function LifetimeSpendBarList({ chartData, inView }: { chartData: ChartRow[]; inView: boolean }) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const maxTotal = useMemo(() => Math.max(...chartData.map((r) => r.total), 1), [chartData]);
+  const grandTotal = useMemo(() => chartData.reduce((sum, r) => sum + r.total, 0), [chartData]);
 
   return (
     <div
@@ -134,10 +135,12 @@ function LifetimeSpendBarList({ chartData, inView }: { chartData: ChartRow[]; in
           staggerMs={i * 60}
         />
       ))}
-      <div className="flex justify-between pt-1 text-[10px] font-medium tabular-nums text-sage-500 dark:text-moss-muted">
-        <span>{formatMoney(0)}</span>
-        <span>{formatMoney(maxTotal)}</span>
-      </div>
+      <p className="border-t border-sage-200/70 pt-3 text-right text-xs dark:border-moss-border">
+        <span className="font-medium text-sage-600 dark:text-moss-muted">{panels.billsLifetime.grandTotalLabel}</span>
+        <span className="ml-2 font-display text-sm font-semibold tabular-nums text-sage-950 dark:text-moss-fg">
+          {formatMoney(grandTotal)}
+        </span>
+      </p>
     </div>
   );
 }

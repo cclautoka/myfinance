@@ -27,6 +27,7 @@ export const panels = {
     subtitle: (sinceLabel: string) =>
       `Since ${sinceLabel}: bills you marked as paid plus unexpected expenses you logged.`,
     empty: 'No lifetime spends yet. Mark bills as paid on the calendar or log an unexpected expense.',
+    grandTotalLabel: 'Lifetime total',
   },
   budgetSurplus: {
     title: 'Cash left this month → emergency savings',
