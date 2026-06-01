@@ -5,47 +5,18 @@ import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProvider;
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.Bitmap;
-import android.graphics.Canvas;
-import android.graphics.Paint;
-import android.graphics.RectF;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.RemoteViews;
 
 public class GoalsWidgetProvider extends AppWidgetProvider {
-  private static Bitmap drawPie(int size, float pct) {
-    Bitmap b = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
-    Canvas c = new Canvas(b);
-    float stroke = Math.max(8f, size * 0.14f);
-    float inset = stroke / 2f;
-    RectF r = new RectF(inset, inset, size - inset, size - inset);
-
-    Paint track = new Paint(Paint.ANTI_ALIAS_FLAG);
-    track.setStyle(Paint.Style.STROKE);
-    track.setStrokeWidth(stroke);
-    track.setStrokeCap(Paint.Cap.ROUND);
-    // Higher contrast: on dark gradient, low-alpha track reads as "missing".
-    track.setColor(0x66FFFFFF);
-
-    Paint fg = new Paint(Paint.ANTI_ALIAS_FLAG);
-    fg.setStyle(Paint.Style.STROKE);
-    fg.setStrokeWidth(stroke);
-    fg.setStrokeCap(Paint.Cap.ROUND);
-    fg.setColor(0xFFFFFFFF);
-
-    c.drawArc(r, 0, 360f, false, track);
-    c.drawArc(r, -90, 360f * (pct / 100f), false, fg);
-    return b;
-  }
-
   @Override
   public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
     WidgetCache cache = WidgetCache.parse(WidgetBridgePlugin.readCacheJson(context));
 
     for (int id : appWidgetIds) {
       RemoteViews rv = new RemoteViews(context.getPackageName(), R.layout.widget_goals);
-      rv.setTextViewText(R.id.widget_title, "Goals");
+      rv.setTextViewText(R.id.widget_title, "Savings goals");
       int px = 96;
       int rings = 1;
       boolean shortHeight = false;
@@ -79,19 +50,19 @@ public class GoalsWidgetProvider extends AppWidgetProvider {
 
       if (n >= 1) {
         WidgetCache.GoalItem g = cache.goals.get(0);
-        rv.setImageViewBitmap(R.id.widget_goal1_ring, drawPie(px, (float) g.progressPct));
+        rv.setImageViewBitmap(R.id.widget_goal1_ring, WidgetArt.drawGoalRing(px, (float) g.progressPct));
         rv.setTextViewText(R.id.widget_goal1_label, g.name);
         rv.setTextViewText(R.id.widget_goal1_meta, "$" + (int) g.balance + " / $" + (int) g.target);
       }
       if (n >= 2) {
         WidgetCache.GoalItem g = cache.goals.get(1);
-        rv.setImageViewBitmap(R.id.widget_goal2_ring, drawPie(px, (float) g.progressPct));
+        rv.setImageViewBitmap(R.id.widget_goal2_ring, WidgetArt.drawGoalRing(px, (float) g.progressPct));
         rv.setTextViewText(R.id.widget_goal2_label, g.name);
         rv.setTextViewText(R.id.widget_goal2_meta, "$" + (int) g.balance + " / $" + (int) g.target);
       }
       if (n >= 3) {
         WidgetCache.GoalItem g = cache.goals.get(2);
-        rv.setImageViewBitmap(R.id.widget_goal3_ring, drawPie(px, (float) g.progressPct));
+        rv.setImageViewBitmap(R.id.widget_goal3_ring, WidgetArt.drawGoalRing(px, (float) g.progressPct));
         rv.setTextViewText(R.id.widget_goal3_label, g.name);
         rv.setTextViewText(R.id.widget_goal3_meta, "$" + (int) g.balance + " / $" + (int) g.target);
       }

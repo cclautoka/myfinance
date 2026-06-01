@@ -31,7 +31,7 @@ public class IncomeSpendWidgetProvider extends AppWidgetProvider {
     Canvas c = new Canvas(b);
 
     Paint track = new Paint(Paint.ANTI_ALIAS_FLAG);
-    track.setColor(0x22FFFFFF);
+    track.setColor(0x35FFFFFF);
     // Match in-app intent: light band = income, darker overlay = spent.
     Paint incomeOwner = new Paint(Paint.ANTI_ALIAS_FLAG);
     incomeOwner.setColor(0x5914B8A6); // teal 35%
@@ -115,14 +115,14 @@ public class IncomeSpendWidgetProvider extends AppWidgetProvider {
         }
 
         int w = 320;
-        int h = 32;
+        int h = 40;
         try {
           Bundle opts = appWidgetManager.getAppWidgetOptions(id);
           int minWdp = opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 180);
           int minHdp = opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 72);
           float density = context.getResources().getDisplayMetrics().density;
           w = Math.max(220, (int) (minWdp * density));
-          if (minHdp >= 140) h = 44;
+          if (minHdp >= 140) h = 48;
         } catch (Exception e) {
           // ignore
         }
