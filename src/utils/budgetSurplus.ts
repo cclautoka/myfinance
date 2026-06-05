@@ -101,12 +101,29 @@ export function savingsGoalsAllocatedTotal(state: FinanceState): number {
 }
 
 /**
- * Dashboard “pocket left”: paycheck deposits this month − counted spend so far.
- * Carry-in is shown separately; goal ring balances are not subtracted here.
+ * Carry-over still available after bills due on or before `ref` (carry is spent first).
+ */
+export function monthSpendableCarryRemainingSoFar(
+  state: FinanceState,
+  monthKey: string,
+  ref: Date = new Date(),
+): number {
+  const carry = monthSpendableCarry(state, monthKey);
+  const expenses = monthActualExpenseSoFarForPocket(state, monthKey, ref);
+  return round2(Math.max(0, carry - expenses));
+}
+
+/**
+ * Dashboard “pocket left”: paycheck deposits this month minus bills due so far,
+ * after carry-over absorbs spend first. Goal ring balances are not subtracted here.
  */
 export function pocketLeftSoFar(state: FinanceState, monthKey?: string, ref: Date = new Date()): number {
   const mk = monthKey ?? currentMonthKey();
-  return round2(incomeLogMonthTotal(state, mk) - monthActualExpenseSoFarForPocket(state, mk, ref));
+  const deposits = incomeLogMonthTotal(state, mk);
+  const carry = monthSpendableCarry(state, mk);
+  const expenses = monthActualExpenseSoFarForPocket(state, mk, ref);
+  const fromDeposits = Math.max(0, expenses - carry);
+  return round2(deposits - fromDeposits);
 }
 
 /**

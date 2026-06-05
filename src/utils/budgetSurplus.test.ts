@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { FinanceState } from '../types/finance';
 import {
   monthPocketSlackForRollover,
+  monthSpendableCarryRemainingSoFar,
   pocketLeftSoFar,
   totalMonthOpeningAllocation,
 } from './budgetSurplus';
@@ -71,7 +72,7 @@ describe('pocketLeftSoFar', () => {
     expect(pocketLeftSoFar(state, '2026-06', ref)).toBe(0);
   });
 
-  it('subtracts deposits and due-so-far spend', () => {
+  it('subtracts deposits and due-so-far spend after carry is used first', () => {
     const state = baseState({
       incomeLog: [{ id: '1', date: '2026-06-05', amount: 400, earner: 'husband', label: 'Pay' }],
       essentials: [{ id: 'net', name: 'Internet', amount: 120, cadence: 'month' }],
@@ -79,7 +80,20 @@ describe('pocketLeftSoFar', () => {
       billPaidAmounts: { net: { '2026-06': 120 } },
     });
     const ref = new Date('2026-06-15T12:00:00');
-    expect(pocketLeftSoFar(state, '2026-06', ref)).toBe(280);
+    expect(pocketLeftSoFar(state, '2026-06', ref)).toBe(400);
+    expect(monthSpendableCarryRemainingSoFar(state, '2026-06', ref)).toBe(131.21);
+  });
+
+  it('burns carry before deposits go negative', () => {
+    const state = baseState({
+      incomeLog: [{ id: '1', date: '2026-06-05', amount: 1251.21, earner: 'husband', label: 'Pay' }],
+      essentials: [{ id: 'big', name: 'Big bill', amount: 1675.21, cadence: 'month' }],
+      billsPaid: { big: ['2026-06'] },
+      billPaidAmounts: { big: { '2026-06': 1675.21 } },
+    });
+    const ref = new Date('2026-06-15T12:00:00');
+    expect(pocketLeftSoFar(state, '2026-06', ref)).toBe(-172.79);
+    expect(monthSpendableCarryRemainingSoFar(state, '2026-06', ref)).toBe(0);
   });
 });
 

@@ -9,9 +9,9 @@ export const dashboard = {
   plannedIncomeHelper: 'From Household numbers. Log one-off cash on the Dashboard.',
 
   leftFromDepositsLabel: glossary.leftFromDeposits,
-  leftFromDepositsHelper: 'Deposits minus bills due so far. Carry-over is below.',
+  leftFromDepositsHelper: 'Deposits minus bills due so far. Carry-over is used first.',
 
-  carryOverLine: (amount: string) => `${glossary.carryOver} ${amount} from last month.`,
+  carryOverLine: (amount: string) => `${glossary.carryOver} ${amount} remaining.`,
 
   depositsLabel: (monthKey: string) => `${glossary.depositsThisMonth} (${monthKey})`,
   logPaychequeCta: glossary.logPaycheque,

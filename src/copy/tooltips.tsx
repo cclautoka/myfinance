@@ -152,10 +152,9 @@ export function dashboardLeftFromDepositsTip(): ReactNode {
   return (
     <>
       <strong className="text-sage-900 dark:text-moss-tip">Left from deposits</strong> is pay logged this month minus
-      bills marked as paid that are due on or before today. <strong className="text-sage-900 dark:text-moss-tip">
-        Carry-over
-      </strong>{' '}
-      from last month is separate and shown below. Savings goal balances are not subtracted here.
+      bills marked as paid that are due on or before today.{' '}
+      <strong className="text-sage-900 dark:text-moss-tip">Carry-over</strong> from last month is spent first — only
+      what&apos;s left hits your deposits. Savings goal balances are not subtracted here.
     </>
   );
 }

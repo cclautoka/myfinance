@@ -17,7 +17,7 @@ import {
   ringThreeMonthTip,
 } from '../copy/tooltips';
 import { allocationBreakdown } from '../utils/allocation';
-import { monthActualExpenseTotal, monthSpendableCarry, pocketLeftSoFar } from '../utils/budgetSurplus';
+import { monthActualExpenseTotal, monthSpendableCarryRemainingSoFar, pocketLeftSoFar } from '../utils/budgetSurplus';
 import { incomeLogMonthTotal } from '../utils/incomeLog';
 import {
   billIsInGraceAfterDue,
@@ -145,7 +145,7 @@ export function DashboardOverview({
   const extraIn = extraIncomeMonthTotal(state, mk);
   const surprises = surpriseExpensesMonthTotal(state, mk);
   const loggedPay = incomeLogMonthTotal(state, mk);
-  const carriedOver = monthSpendableCarry(state, mk);
+  const carriedOver = monthSpendableCarryRemainingSoFar(state, mk);
   const pocketLeft = pocketLeftSoFar(state, mk);
   const nb = nextBill(state);
   const backlogOverdue = firstOverdueTimelineBill(state);
