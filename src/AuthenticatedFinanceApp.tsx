@@ -73,6 +73,9 @@ const HouseholdContributionPanel = lazy(() =>
   import('./components/HouseholdContributionPanel').then((m) => ({ default: m.HouseholdContributionPanel })),
 );
 const DebtSnowball = lazy(() => import('./components/DebtSnowball').then((m) => ({ default: m.DebtSnowball })));
+const DebtPayoffPathPanel = lazy(() =>
+  import('./components/DebtPayoffPathPanel').then((m) => ({ default: m.DebtPayoffPathPanel })),
+);
 
 function ChartPanelSkeleton() {
   return <div className="h-48 animate-pulse rounded-xl bg-slate-100/90 dark:bg-moss-bg/60" aria-hidden />;
@@ -152,6 +155,7 @@ export function AuthenticatedFinanceApp() {
     setIncome,
     setEssentials,
     setDebts,
+    updateDebtBalance,
     resetAll,
     reloadFromServer,
     serverWorkbookExists,
@@ -496,6 +500,9 @@ export function AuthenticatedFinanceApp() {
                     </summary>
                     <div className="space-y-8 border-t border-slate-200/70 px-3 pb-4 pt-4 dark:border-moss-border">
                       <Suspense fallback={<ChartPanelSkeleton />}>
+                        <DebtPayoffPathPanel state={state} />
+                      </Suspense>
+                      <Suspense fallback={<ChartPanelSkeleton />}>
                         <DebtSnowball state={state} compact />
                       </Suspense>
                       {/* Surplus sweep moved into savings goal allocation on Dashboard. */}
@@ -609,7 +616,7 @@ export function AuthenticatedFinanceApp() {
                         </div>
                       </div>
                     </div>
-                    <DebtBalancesPanel state={state} />
+                    <DebtBalancesPanel state={state} onUpdateDebtBalance={updateDebtBalance} />
                     <div className="rounded-xl border border-sage-200/80 bg-sage-50/50 px-4 py-3 text-sm text-sage-700 dark:border-moss-border dark:bg-moss-bg/50 dark:text-moss-subtle">
                       <strong className="text-sage-900 dark:text-moss-fg">Payoff bar chart</strong> lives on the{' '}
                       <button

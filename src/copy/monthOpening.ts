@@ -25,4 +25,8 @@ export const monthOpening = {
     `${slack} leftover minus ${allocated} to savings`,
   saveUnlock: (monthHeading: string) => `Save & unlock ${monthHeading}`,
   saveUnlockTour: 'Save & unlock — then start guided tour',
+  cardSectionTitle: 'Credit card — available to use (optional)',
+  cardSectionHelp:
+    'Enter the available balance from your bank app (e.g. $0.51 ANZ, $34.44 BSP). We derive owed from credit limit − available. Set limits in Household first. Blank = skip.',
+  cardPlaceholder: 'Available from bank app',
 } as const;

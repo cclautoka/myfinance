@@ -85,7 +85,18 @@ export function debtBalancesPanelTip(): ReactNode {
   return (
     <>
       Shows each row&apos;s effective balance (typed statement balance, or an installment estimate when blank).
-      Optional APR gives a rough monthly interest hint. It does not change the balance we store.
+      Use <strong className="text-sage-900 dark:text-moss-tip">Update available</strong> with your bank app&apos;s
+      available balance — we work out owed from limit − available. Payoff path updates each time.
+    </>
+  );
+}
+
+export function debtPayoffPathTip(): ReactNode {
+  return (
+    <>
+      Projects total debt month by month using your Payment column, card APR, and HP end dates. The scenario slider adds
+      hypothetical card spend so you can see the cost of continuing to swipe. Personal loans with no payment are
+      excluded from the countdown.
     </>
   );
 }
@@ -120,8 +131,8 @@ export function dashboardBillsTickedTip(): ReactNode {
 export function dashboardDebtFreeMonthsTip(): ReactNode {
   return (
     <>
-      Divides estimated debt remaining by monthly payments. Very rough. Useful for direction. Ignores interest, lump
-      sums, and snowball choices.
+      Simulated month-by-month payoff using your Payment column, optional card APR, and HP end dates. Personal loans
+      without a payment are excluded. Update card balances when you spend — not bank-exact.
     </>
   );
 }

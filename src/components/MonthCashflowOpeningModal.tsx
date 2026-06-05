@@ -9,6 +9,7 @@ import {
   totalMonthOpeningAllocation,
   type MonthOpeningAllocationInput,
 } from '../utils/budgetSurplus';
+import { cardAvailableFromOwed } from '../utils/cardCredit';
 import { billOccurrenceIsPaid } from '../utils/billsTimeline';
 import { zLayers } from '../ui/zLayers';
 import { FieldError } from './ui/FieldError';
@@ -27,6 +28,7 @@ function parseAmountDraft(s: string): { ok: true; value: number } | { ok: false;
 }
 
 const EMERGENCY_FIELD = '__emergency__';
+const CARD_FIELD_PREFIX = '__card__';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -48,6 +50,7 @@ export function MonthCashflowOpeningModal({
   const slack = useMemo(() => monthPocketSlackForRollover(state, prev), [state, prev]);
   const earlyBills = useMemo(() => billsDueInFirstDaysOfMonth(state, mk, 10), [state, mk]);
   const goalRows = state.savingsGoals ?? [];
+  const cardRows = useMemo(() => state.debts.filter((d) => d.kind === 'card'), [state.debts]);
 
   const [drafts, setDrafts] = useState<Record<string, string>>({});
 
@@ -57,8 +60,11 @@ export function MonthCashflowOpeningModal({
     for (const g of goalRows) {
       out[g.id] = parseAmountDraft(drafts[g.id] ?? '');
     }
+    for (const c of cardRows) {
+      out[`${CARD_FIELD_PREFIX}${c.id}`] = parseAmountDraft(drafts[`${CARD_FIELD_PREFIX}${c.id}`] ?? '');
+    }
     return out;
-  }, [drafts, goalRows]);
+  }, [drafts, goalRows, cardRows]);
 
   const allParsedOk = Object.values(parsedByField).every((p) => p.ok);
 
@@ -70,8 +76,20 @@ export function MonthCashflowOpeningModal({
       const p = parsedByField[g.id];
       if (p?.ok && p.value > 0) goals[g.id] = p.value;
     }
-    return { emergency, goals };
-  }, [parsedByField, goalRows]);
+    const cardBalances: Record<string, number> = {};
+    for (const c of cardRows) {
+      const key = `${CARD_FIELD_PREFIX}${c.id}`;
+      const raw = (drafts[key] ?? '').trim();
+      if (!raw) continue;
+      const p = parsedByField[key];
+      if (p?.ok) cardBalances[c.id] = p.value;
+    }
+    return {
+      emergency,
+      goals,
+      cardAvailableCredit: Object.keys(cardBalances).length > 0 ? cardBalances : undefined,
+    };
+  }, [parsedByField, goalRows, cardRows, drafts]);
 
   const rawTotal = totalMonthOpeningAllocation(allocationInput);
   const allocatedTotal = Math.min(rawTotal, slack);
@@ -223,6 +241,48 @@ export function MonthCashflowOpeningModal({
             );
           })}
         </div>
+
+        {cardRows.length > 0 ? (
+          <div className="mt-6 space-y-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-sage-700 dark:text-moss-muted">
+              {mo.cardSectionTitle}
+            </p>
+            <p className="text-[12px] leading-snug text-sage-700 dark:text-moss-muted">{mo.cardSectionHelp}</p>
+            {cardRows.map((c) => {
+              const key = `${CARD_FIELD_PREFIX}${c.id}`;
+              const p = parsedByField[key];
+              return (
+                <label
+                  key={c.id}
+                  className="block text-sm font-semibold text-sage-900 dark:text-moss-fg"
+                  htmlFor={`month-opening-card-${c.id}`}
+                >
+                  {c.name}
+                  <span className="ml-2 text-xs font-normal text-sage-600 dark:text-moss-muted">
+                    {cardAvailableFromOwed(c) !== null
+                      ? `now ${formatMoney(cardAvailableFromOwed(c)!)} avail · blank = skip`
+                      : c.creditLimit
+                        ? `limit ${formatMoney(c.creditLimit)} · blank = skip`
+                        : 'set limit in Household · blank = skip'}
+                  </span>
+                  <input
+                    id={`month-opening-card-${c.id}`}
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    placeholder={mo.cardPlaceholder}
+                    value={drafts[key] ?? ''}
+                    aria-invalid={p && !p.ok}
+                    aria-describedby={p && !p.ok ? fieldErrorId(`month-card-${c.id}`) : undefined}
+                    onChange={(e) => setDraft(key, e.target.value)}
+                    className="mt-2 w-full rounded-xl border border-sage-400/80 bg-white px-4 py-3 text-sage-950 dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
+                  />
+                  <FieldError id={fieldErrorId(`month-card-${c.id}`)} message={p && !p.ok ? p.error : null} />
+                </label>
+              );
+            })}
+          </div>
+        ) : null}
 
         <p className="mt-3 text-[12px] text-sage-700 dark:text-moss-muted">
           {mo.capNote(formatMoney(slack))}

@@ -65,6 +65,16 @@ export const panels = {
     subtitleCompact:
       'Smallest balance first. Bar length shows what is left on each debt. Grey strips use the same scale.',
   },
+  debtPayoffPath: {
+    title: 'Path to debt-free',
+    subtitle:
+      'Month-by-month estimate from your payment column, card APR, and HP end dates. Update card balances for an honest line.',
+    chartLabel: 'Total debt trajectory (next ~3 years)',
+    scenarioLabel: 'What if I keep spending on cards?',
+    scenarioHelp: 'Adds the same extra amount to every card each month — see how fast the debt-free date moves.',
+    footnote:
+      'Illustrative only. Personal loans without a payment are excluded from this countdown. Not bank-exact.',
+  },
   monthlyReport: {
     subtitle: 'Open a summary or download CSV for the month you chose—not today’s live Dashboard.',
   },

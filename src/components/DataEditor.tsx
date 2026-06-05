@@ -440,9 +440,12 @@ export function DataEditor({
           </div>
           <p className="mb-3 text-xs leading-relaxed text-sage-700 dark:text-moss-muted">
             <strong className="text-sage-900 dark:text-moss-tip">Balance</strong> is what you type from the bank (we never add
-            interest into it for you). For credit cards, refresh it when the statement drops. Optional <strong className="text-sage-900 dark:text-moss-tip">APR %</strong>{' '}
-            only powers a rough “interest this month” hint on the Card &amp; loan balances card — it does not change stored
-            balances.
+            interest into it for you). For credit cards, set <strong className="text-sage-900 dark:text-moss-tip">Limit</strong>{' '}
+            once, then use <strong className="text-sage-900 dark:text-moss-tip">Update available</strong> with your bank
+            app&apos;s available balance (not amount owed). Optional{' '}
+            <strong className="text-sage-900 dark:text-moss-tip">APR %</strong> powers payoff simulation interest;{' '}
+            <strong className="text-sage-900 dark:text-moss-tip">Due day</strong> is the payment due date on your statement
+            (e.g. ANZ ≈ 1st, BSP ≈ 26th — not the statement close date).
           </p>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[920px] text-left text-sm">
@@ -451,6 +454,7 @@ export function DataEditor({
                   <th className="pb-2 pr-2">Type</th>
                   <th className="pb-2 pr-2">Name</th>
                   <th className="pb-2 pr-2">Balance</th>
+                  <th className="pb-2 pr-2">Limit</th>
                   <th className="pb-2 pr-2">APR %</th>
                   <th className="pb-2 pr-2">Payment</th>
                   <th className="pb-2 pr-2">Due day</th>
@@ -491,6 +495,16 @@ export function DataEditor({
                     <td className="py-2 pr-2">
                       <NumericAmountInput
                         min={0}
+                        className="w-24 rounded border border-sage-300 bg-white px-2 py-1 dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
+                        title={d.kind === 'card' ? 'Credit limit (optional)' : 'Optional limit'}
+                        placeholder="—"
+                        value={d.creditLimit ?? 0}
+                        onValueChange={(n) => patchDebt(d.id, { creditLimit: n > 0 ? n : undefined })}
+                      />
+                    </td>
+                    <td className="py-2 pr-2">
+                      <NumericAmountInput
+                        min={0}
                         max={60}
                         placeholder="—"
                         className="w-20 rounded border border-sage-300 bg-white px-2 py-1 dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
@@ -513,6 +527,11 @@ export function DataEditor({
                         max={31}
                         emptyBlurRestoresCurrent
                         className="w-16 rounded border border-sage-300 bg-white px-2 py-1 tabular-nums dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
+                        title={
+                          d.kind === 'card'
+                            ? 'Payment due day on statement (not statement close)'
+                            : 'Due day of month'
+                        }
                         value={d.dueDay}
                         onValueChange={(n) => patchDebt(d.id, { dueDay: n })}
                       />

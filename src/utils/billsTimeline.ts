@@ -158,6 +158,7 @@ export const buildTimeline = (state: FinanceState, monthsAhead = 3, ref = new Da
     }
 
     for (const d of state.debts) {
+      if (d.monthlyPayment <= 0) continue;
       items.push(...debtInstancesForMonth(d, year, monthIndex));
     }
   }

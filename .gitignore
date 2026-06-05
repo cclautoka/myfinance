@@ -47,4 +47,8 @@ ios/DerivedData/
 *.ntvs*
 *.njsproj
 *.sln
-*.sw?
+# Local bank statements / screenshots (user uploads at repo root)
+/*.jpg
+/Screenshot*.png
+/*_P_C.pdf
+/0-02-07-*.jpg

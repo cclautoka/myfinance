@@ -79,6 +79,10 @@ export interface DebtAccount {
   kind: DebtKind;
   /** Optional annual APR % — used only for a rough “interest this month” hint; 0 / omit = hide. */
   annualInterestApr?: number;
+  /** ISO date (YYYY-MM-DD) when balance was last confirmed from bank app / statement. */
+  balanceUpdatedAt?: string;
+  /** Optional credit limit — for utilization hint on cards. */
+  creditLimit?: number;
 }
 
 export interface AllocationPercents {
@@ -246,6 +250,10 @@ export interface FinanceState {
    * Server-maintained; synced with household state.
    */
   billOverdueReminderSentAt?: Record<string, Record<string, string>>;
+  /**
+   * Snapshot of debt-free projection at month open — for month-over-month delta on payoff path.
+   */
+  debtFreeProjectionByMonth?: Record<string, { months: number | null; totalDebt: number }>;
 }
 
 export interface TimelineBill {

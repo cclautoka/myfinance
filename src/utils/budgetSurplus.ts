@@ -142,6 +142,8 @@ export function monthPocketSlackForRollover(state: FinanceState, monthKey: strin
 export type MonthOpeningAllocationInput = {
   emergency?: number;
   goals?: Record<string, number>;
+  /** Optional card available-credit check-ins keyed by debt id (bank app “available balance”). */
+  cardAvailableCredit?: Record<string, number>;
 };
 
 /** Sum of dollars directed to emergency + savings goals at month open (capped by caller). */

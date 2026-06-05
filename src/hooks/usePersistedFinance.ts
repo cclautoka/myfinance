@@ -33,6 +33,10 @@ import {
   totalMonthOpeningAllocation,
   type MonthOpeningAllocationInput,
 } from '../utils/budgetSurplus';
+import { applyCardAvailableCheckIn } from '../utils/cardCredit';
+import { totalDebtRemaining } from '../utils/calculations';
+import { estimatedDebtFreeMonths, simulateDebtPayoff } from '../utils/debtFree';
+import { formatMoney } from '../utils/format';
 import {
   buildSaveEmailDigest,
   buildSnapshotForReminders,
@@ -510,6 +514,47 @@ export function usePersistedFinance() {
     setState((s) => ({ ...s, debts }));
   }, []);
 
+  const updateDebtBalance = useCallback((debtId: string, availableCredit: number, creditLimit?: number) => {
+    const before = stateRef.current;
+    const beforeMonths = estimatedDebtFreeMonths(before);
+    const today = new Date().toISOString().slice(0, 10);
+    const target = before.debts.find((d) => d.id === debtId);
+    if (!target || target.kind !== 'card') return;
+
+    const patched = applyCardAvailableCheckIn(target, availableCredit, creditLimit);
+    if (!patched) {
+      pushToast({ type: 'error', message: 'Set a credit limit for this card first.' });
+      return;
+    }
+
+    setState((s) => {
+      const debts = s.debts.map((d) =>
+        d.id === debtId ? { ...patched, balanceUpdatedAt: today } : d,
+      );
+      const next = { ...s, debts };
+      stateRef.current = next;
+      void writeWidgetCache(next);
+      return next;
+    });
+
+    const afterDebts = before.debts.map((d) =>
+      d.id === debtId ? { ...patched, balanceUpdatedAt: today } : d,
+    );
+    const afterMonths = estimatedDebtFreeMonths({ ...before, debts: afterDebts });
+    const name = target.name;
+    if (beforeMonths !== null && afterMonths !== null && beforeMonths !== afterMonths) {
+      pushToast({
+        type: 'success',
+        message: `${name} updated · est. debt-free ${beforeMonths} → ${afterMonths} mo`,
+      });
+    } else {
+      pushToast({
+        type: 'success',
+        message: `${name}: ${formatMoney(availableCredit)} available → ${formatMoney(patched.balance)} owed`,
+      });
+    }
+  }, []);
+
   const setAllocation = useCallback((allocation: AllocationPercents) => {
     setState((s) => ({ ...s, allocation }));
   }, []);
@@ -559,6 +604,19 @@ export function usePersistedFinance() {
 
       const billPaidAmounts = { ...(s.billPaidAmounts ?? {}) };
       const inner = { ...(billPaidAmounts[billId] ?? {}) };
+      let paidDelta = 0;
+      const debtRow = s.debts.find((d) => d.id === billId);
+      if (debtRow && row.category === 'debt') {
+        if (wasPaid) {
+          paidDelta = -(inner[payKey] ?? debtRow.monthlyPayment);
+        } else {
+          const amt =
+            typeof actualPaid === 'number' && Number.isFinite(actualPaid) && actualPaid >= 0
+              ? actualPaid
+              : debtRow.monthlyPayment;
+          paidDelta = amt;
+        }
+      }
       if (wasPaid) {
         delete inner[payKey];
       } else {
@@ -585,8 +643,18 @@ export function usePersistedFinance() {
       if (Object.keys(attrInner).length) billPaymentAttribution[billId] = attrInner;
       else delete billPaymentAttribution[billId];
 
+      const debts =
+        paidDelta !== 0 && debtRow
+          ? s.debts.map((d) =>
+              d.id === billId
+                ? { ...d, balance: round2(Math.max(0, (Number(d.balance) || 0) - paidDelta)) }
+                : d,
+            )
+          : s.debts;
+
       const next = {
         ...s,
+        debts,
         billsPaid: { ...s.billsPaid, [billId]: [...cur] },
         billsAutoUnmarked,
         billPaidAmounts,
@@ -761,6 +829,22 @@ export function usePersistedFinance() {
       if (carry <= 0) delete carryMap[mk];
       else carryMap[mk] = carry;
 
+      const cardAvailable = allocations.cardAvailableCredit ?? {};
+      const nextDebts = s.debts.map((d) => {
+        if (d.kind !== 'card') return d;
+        const avail = cardAvailable[d.id];
+        if (avail === undefined) return d;
+        const patched = applyCardAvailableCheckIn(d, avail);
+        if (!patched) return d;
+        return { ...patched, balanceUpdatedAt: today };
+      });
+
+      const sim = simulateDebtPayoff(nextDebts);
+      const debtFreeProjectionByMonth = {
+        ...(s.debtFreeProjectionByMonth ?? {}),
+        [mk]: { months: sim.months, totalDebt: round2(totalDebtRemaining(nextDebts)) },
+      };
+
       const nextGoals = (s.savingsGoals ?? []).map((g) => {
         const add = goalAdds[g.id] ?? 0;
         return add > 0 ? { ...g, balance: round2((Number(g.balance) || 0) + add) } : g;
@@ -773,9 +857,11 @@ export function usePersistedFinance() {
 
       return {
         ...s,
+        debts: nextDebts,
         emergencyFund: round2(s.emergencyFund + emergencyAdd),
         savingsGoals: nextGoals,
         monthSpendableCarryByMonth: carryMap,
+        debtFreeProjectionByMonth,
         monthCashflowOpening: {
           ...(s.monthCashflowOpening ?? {}),
           [mk]: {
@@ -915,6 +1001,7 @@ export function usePersistedFinance() {
     setIncome,
     setEssentials,
     setDebts,
+    updateDebtBalance,
     setAllocation,
     setWallets,
     setEmergency,
