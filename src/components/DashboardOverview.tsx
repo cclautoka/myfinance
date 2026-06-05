@@ -4,6 +4,7 @@ import type { FinanceState } from '../types/finance';
 import {
   dashboardBillsTickedTip,
   dashboardDebtFreeMonthsTip,
+  dashboardDebtFreeMonthsTrendTip,
   dashboardDebtTip,
   dashboardEmergencyTip,
   dashboardIncomeLoggedVsPlannedTip,
@@ -32,7 +33,7 @@ import {
   surpriseExpensesMonthTotal,
   totalDebtRemaining,
 } from '../utils/calculations';
-import { estimatedDebtFreeMonths } from '../utils/debtFree';
+import { estimatedDebtFreeMonths, debtFreeMonthsTrend } from '../utils/debtFree';
 import { formatMoney, formatTimelineDateLabel } from '../utils/format';
 import { computeSafeSpend } from '../utils/safeSpend';
 import { dashboard as dashboardCopy } from '../copy/dashboard';
@@ -42,6 +43,7 @@ import { HintWithInfo } from './ui/HintWithInfo';
 import { InfoTipButton } from './ui/InfoTipButton';
 import { ProgressRing } from './ui/ProgressRing';
 import { NumericAmountInput } from './ui/NumericInputs';
+import { DebtFreeMonthsTrend } from './DebtFreeMonthsTrend';
 
 /**
  * Card-local type scale (`cqi` = 1% of card inline size). Viewport `vw` was wrong here: the snapshot
@@ -152,6 +154,7 @@ export function DashboardOverview({
   const nextBillStatus = nb ? billVisualStatus(state, nb) : null;
   const nextBillGrace = nb ? billIsInGraceAfterDue(state, nb) : false;
   const months = estimatedDebtFreeMonths(state);
+  const debtFreeTrend = useMemo(() => debtFreeMonthsTrend(state), [state]);
   const safe = computeSafeSpend(state);
   const br = allocationBreakdown(state);
   const { savings } = br;
@@ -531,9 +534,24 @@ export function DashboardOverview({
               <p className="text-xs font-semibold uppercase tracking-wide text-sage-700 dark:text-moss-muted">
                 Est. months to debt-free*
               </p>
-              <p className="mt-2 font-display text-4xl font-semibold tabular-nums dark:text-moss-fg">
-                {months === null ? '—' : months === 0 ? '0' : String(months)}
-              </p>
+              <div
+                className={`mt-2 flex items-center gap-2.5 ${preview ? 'justify-center' : 'justify-center sm:justify-start'}`}
+              >
+                <p className="font-display text-4xl font-semibold tabular-nums dark:text-moss-fg">
+                  {months === null ? '—' : months === 0 ? '0' : String(months)}
+                </p>
+                {!preview ? (
+                  <DebtFreeMonthsTrend
+                    kind={debtFreeTrend.kind}
+                    tip={dashboardDebtFreeMonthsTrendTip(
+                      debtFreeTrend.kind,
+                      debtFreeTrend.delta,
+                      debtFreeTrend.priorMonths,
+                      debtFreeTrend.currentMonths,
+                    )}
+                  />
+                ) : null}
+              </div>
             </MetricCard>
           </MetricWithTip>
           <div className={`min-w-0 w-full ${preview ? '' : 'sm:col-span-2'}`}>

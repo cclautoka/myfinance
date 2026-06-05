@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { DebtAccount, FinanceState } from '../types/finance';
 import {
+  debtFreeMonthsTrend,
   debtPayoffScenarioDelta,
   debtsIncludedInPayoffSim,
   estimatedDebtFreeMonths,
@@ -121,5 +122,14 @@ describe('staleCardBalanceDebts', () => {
       }),
     ];
     expect(staleCardBalanceDebts(debts, ref)).toHaveLength(0);
+  });
+});
+
+describe('debtFreeMonthsTrend', () => {
+  it('returns unknown when no prior snapshot exists', () => {
+    const state = {
+      debts: [debt({ id: 'c1', name: 'Card', balance: 1000, kind: 'card', monthlyPayment: 200 })],
+    } as FinanceState;
+    expect(debtFreeMonthsTrend(state).kind).toBe('unknown');
   });
 });

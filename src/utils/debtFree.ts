@@ -1,4 +1,5 @@
 import type { DebtAccount, FinanceState } from '../types/finance';
+import { currentMonthKey, previousCalendarMonthKey } from '../data/defaults';
 import { effectiveDebtBalance } from './calculations';
 import { estimatedMonthlyInterestFromApr } from './debtInterest';
 
@@ -211,4 +212,27 @@ export function staleCardBalanceDebts(debts: DebtAccount[], ref = new Date(), ma
     const t = new Date(d.balanceUpdatedAt).getTime();
     return Number.isNaN(t) || t < cutoff;
   });
+}
+
+export type DebtFreeMonthsTrendKind = 'unknown' | 'worse' | 'better' | 'unchanged';
+
+/** Compare current payoff months to the snapshot taken at this month’s opening. */
+export function debtFreeMonthsTrend(state: FinanceState, ref = new Date()): {
+  kind: DebtFreeMonthsTrendKind;
+  delta: number | null;
+  priorMonths: number | null;
+  currentMonths: number | null;
+} {
+  const currentMonths = estimatedDebtFreeMonths(state, ref);
+  const prevMk = previousCalendarMonthKey(currentMonthKey());
+  const priorMonths = state.debtFreeProjectionByMonth?.[prevMk]?.months ?? null;
+
+  if (priorMonths === null || currentMonths === null) {
+    return { kind: 'unknown', delta: null, priorMonths, currentMonths };
+  }
+
+  const delta = currentMonths - priorMonths;
+  if (delta > 0) return { kind: 'worse', delta, priorMonths, currentMonths };
+  if (delta < 0) return { kind: 'better', delta, priorMonths, currentMonths };
+  return { kind: 'unchanged', delta: 0, priorMonths, currentMonths };
 }
