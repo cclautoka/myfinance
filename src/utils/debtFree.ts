@@ -1,6 +1,6 @@
 import type { DebtAccount, FinanceState } from '../types/finance';
 import { currentMonthKey, previousCalendarMonthKey } from '../data/defaults';
-import { effectiveDebtBalance } from './calculations';
+import { effectiveDebtBalance, effectiveMinPayment } from './calculations';
 import { estimatedMonthlyInterestFromApr } from './debtInterest';
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
@@ -55,7 +55,7 @@ export function debtsIncludedInPayoffSim(
   ref = new Date(),
   state?: FinanceState,
 ): DebtAccount[] {
-  return debts.filter((d) => d.monthlyPayment > 0 && effectiveDebtBalance(d, ref, state) > 0);
+  return debts.filter((d) => effectiveMinPayment(d, ref, state) > 0);
 }
 
 function initSimDebts(debts: DebtAccount[], ref: Date, state?: FinanceState): SimDebt[] {
@@ -64,7 +64,7 @@ function initSimDebts(debts: DebtAccount[], ref: Date, state?: FinanceState): Si
     name: d.name,
     kind: d.kind,
     balance: round2(effectiveDebtBalance(d, ref, state)),
-    payment: round2(d.monthlyPayment),
+    payment: effectiveMinPayment(d, ref, state),
     apr: d.annualInterestApr ?? 0,
     endsOn: debtEndsOnDate(d),
   }));
@@ -79,16 +79,33 @@ function simMonthStillActive(row: SimDebt, ref: Date, monthOffset: number): bool
   return row.balance > 0 || row.payment > 0;
 }
 
+function applySnowballExtra(rows: SimDebt[], pool: number): number {
+  let applied = 0;
+  let remaining = pool;
+  const active = [...rows].filter((r) => r.balance > 0).sort((a, b) => a.balance - b.balance);
+  for (const row of active) {
+    if (remaining <= 0) break;
+    const pay = Math.min(remaining, row.balance);
+    row.balance = round2(Math.max(0, row.balance - pay));
+    remaining = round2(remaining - pay);
+    applied = round2(applied + pay);
+  }
+  return applied;
+}
+
 function applySimMonth(
   rows: SimDebt[],
   ref: Date,
   monthOffset: number,
   extraCardSpendPerMonth: number,
-): number {
+): { totalPayment: number; freedPayment: number } {
   let totalPayment = 0;
+  let freedPayment = 0;
+
   for (const row of rows) {
     if (!simMonthStillActive(row, ref, monthOffset)) {
       row.balance = 0;
+      row.payment = 0;
       continue;
     }
 
@@ -103,7 +120,7 @@ function applySimMonth(
     const pay = Math.min(row.payment, row.balance);
     if (pay > 0) {
       row.balance = round2(Math.max(0, row.balance - pay));
-      totalPayment += pay;
+      totalPayment = round2(totalPayment + pay);
     }
 
     if (row.endsOn) {
@@ -113,8 +130,14 @@ function applySimMonth(
         row.balance = 0;
       }
     }
+
+    if (row.balance <= 0 && row.payment > 0) {
+      freedPayment = round2(freedPayment + row.payment);
+      row.payment = 0;
+    }
   }
-  return round2(totalPayment);
+
+  return { totalPayment, freedPayment };
 }
 
 function totalSimBalance(rows: SimDebt[]): number {
@@ -123,7 +146,7 @@ function totalSimBalance(rows: SimDebt[]): number {
 
 /**
  * Month-by-month payoff simulation — cards accrue APR, installments respect endsOn,
- * only debts with payment > 0 are included.
+ * payments cap at remaining balance, and freed minimums roll into snowball order.
  */
 export function simulateDebtPayoff(
   debts: DebtAccount[],
@@ -137,9 +160,7 @@ export function simulateDebtPayoff(
 
   if (rows.length === 0) {
     const hasOwed = debts.some((d) => effectiveDebtBalance(d, ref, financeState) > 0);
-    const hasPaying = debts.some(
-      (d) => d.monthlyPayment > 0 && effectiveDebtBalance(d, ref, financeState) > 0,
-    );
+    const hasPaying = debts.some((d) => effectiveMinPayment(d, ref, financeState) > 0);
     if (hasOwed && !hasPaying) {
       return { months: null, debtFreeDate: null, schedule: [], includedDebtIds: [] };
     }
@@ -155,9 +176,14 @@ export function simulateDebtPayoff(
     totalPayment: 0,
   });
 
+  let snowballPool = 0;
   let months = 0;
   for (let i = 0; i < maxMonths; i += 1) {
-    const payment = applySimMonth(rows, ref, i, extra);
+    const { totalPayment: mins, freedPayment } = applySimMonth(rows, ref, i, extra);
+    snowballPool = round2(snowballPool + freedPayment);
+    const snowballApplied = applySnowballExtra(rows, snowballPool);
+    snowballPool = round2(Math.max(0, snowballPool - snowballApplied));
+    const payment = round2(mins + snowballApplied);
     months = i + 1;
     const total = totalSimBalance(rows);
     schedule.push({

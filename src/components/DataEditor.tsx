@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type {
   DebtAccount,
   DebtKind,
@@ -8,6 +8,7 @@ import type {
   OtherPlannedIncomeEntry,
   PaySchedule,
 } from '../types/finance';
+import { effectiveDebtBalance } from '../utils/calculations';
 import { SetupOtherIncomeRows } from '../setup/SetupOtherIncomeRows';
 import { sanitizeOtherPlannedIncome } from '../setup/setupSchema';
 import { householdDataTip } from '../copy/tooltips';
@@ -88,12 +89,28 @@ export function DataEditor({
 }) {
   const [dialog, setDialog] = useState<EditorDialogState>(null);
 
+  /** Plan editor only — paid-off rows live under Workspace achievements. */
+  const editorDebts = useMemo(() => {
+    const ref = new Date();
+    return state.debts.filter((d) => effectiveDebtBalance(d, ref, state) > 0);
+  }, [state]);
+
   const patchEssential = (id: string, patch: Partial<EssentialExpense>) => {
     onEssentials(state.essentials.map((x) => (x.id === id ? { ...x, ...patch } : x)));
   };
 
   const patchDebt = (id: string, patch: Partial<DebtAccount>) => {
-    onDebts(state.debts.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+    onDebts(
+      state.debts.map((x) => {
+        if (x.id !== id) return x;
+        const next: DebtAccount = { ...x, ...patch };
+        if (next.kind !== 'card') next.creditLimit = undefined;
+        const unchanged = (Object.keys(patch) as (keyof DebtAccount)[]).every(
+          (k) => Object.is(x[k], next[k]),
+        );
+        return unchanged ? x : next;
+      }),
+    );
   };
 
   const addEssential = () => {
@@ -445,7 +462,8 @@ export function DataEditor({
             app&apos;s available balance (not amount owed). Optional{' '}
             <strong className="text-sage-900 dark:text-moss-tip">APR %</strong> powers payoff simulation interest;{' '}
             <strong className="text-sage-900 dark:text-moss-tip">Due day</strong> is the payment due date on your statement
-            (e.g. ANZ ≈ 1st, BSP ≈ 26th — not the statement close date).
+            (e.g. ANZ ≈ 1st, BSP ≈ 26th — not the statement close date). Paid-off debts disappear from this table — see
+            Workspace → achievements.
           </p>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[920px] text-left text-sm">
@@ -464,7 +482,14 @@ export function DataEditor({
                 </tr>
               </thead>
               <tbody>
-                {state.debts.map((d) => (
+                {editorDebts.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} className="py-8 text-center text-sm text-sage-600 dark:text-moss-muted">
+                      No active debts here — cleared rows are in Workspace → achievements.
+                    </td>
+                  </tr>
+                ) : null}
+                {editorDebts.map((d) => (
                   <tr key={d.id} className="border-t border-sage-200/80 dark:border-moss-border">
                     <td className="min-w-[14rem] py-2 pr-2 align-middle">
                       <SegmentedChoice
@@ -493,14 +518,24 @@ export function DataEditor({
                       />
                     </td>
                     <td className="py-2 pr-2">
-                      <NumericAmountInput
-                        min={0}
-                        className="w-24 rounded border border-sage-300 bg-white px-2 py-1 dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
-                        title={d.kind === 'card' ? 'Credit limit (optional)' : 'Optional limit'}
-                        placeholder="—"
-                        value={d.creditLimit ?? 0}
-                        onValueChange={(n) => patchDebt(d.id, { creditLimit: n > 0 ? n : undefined })}
-                      />
+                      {d.kind === 'card' ? (
+                        <NumericAmountInput
+                          min={0}
+                          className="w-24 rounded border border-sage-300 bg-white px-2 py-1 dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
+                          title="Credit limit"
+                          placeholder="—"
+                          value={d.creditLimit ?? 0}
+                          onValueChange={(n) => patchDebt(d.id, { creditLimit: n > 0 ? n : undefined })}
+                        />
+                      ) : (
+                        <span
+                          className="inline-block w-24 px-2 py-1 text-sage-400 dark:text-moss-muted"
+                          title="Credit limit applies to cards only"
+                          aria-hidden
+                        >
+                          —
+                        </span>
+                      )}
                     </td>
                     <td className="py-2 pr-2">
                       <NumericAmountInput

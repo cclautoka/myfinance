@@ -64,6 +64,17 @@ export const totalDebtRemaining = (
 ): number =>
   round2(debts.reduce((s, d) => s + effectiveDebtBalance(d, ref, state), 0));
 
+/** Min payment capped at what is actually left — last installment may be smaller than the plan row. */
+export const effectiveMinPayment = (
+  d: DebtAccount,
+  ref: Date = new Date(),
+  state?: FinanceState,
+): number => {
+  const bal = effectiveDebtBalance(d, ref, state);
+  if (bal <= 0 || d.monthlyPayment <= 0) return 0;
+  return round2(Math.min(d.monthlyPayment, bal));
+};
+
 export const extraIncomeMonthTotal = (state: FinanceState, monthKey: string): number => {
   const [y, m] = monthKey.split('-').map(Number);
   return state.extraIncome

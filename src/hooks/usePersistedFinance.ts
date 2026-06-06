@@ -201,7 +201,9 @@ export function usePersistedFinance() {
 
   const markServerSynced = useCallback((updatedAt: string, syncedState: FinanceState) => {
     if (updatedAt) lastKnownServerUpdatedAtRef.current = updatedAt;
-    lastSyncedStateHashRef.current = hashFinanceState(syncedState);
+    const h = hashFinanceState(syncedState);
+    lastSyncedStateHashRef.current = h;
+    lastSavedToastHashRef.current = h;
     setSyncConflict(false);
   }, []);
 
@@ -455,6 +457,7 @@ export function usePersistedFinance() {
 
   /** Server persistence (debounced) — local cache is written in saveFinanceState above. */
   const lastSaveErrorToastRef = useRef<{ message: string; at: number } | null>(null);
+  const lastSavedToastHashRef = useRef<string | null>(null);
 
   const flushServerSave = useCallback(
     async (opts?: { force?: boolean; notify?: boolean }) => {
@@ -484,7 +487,11 @@ export function usePersistedFinance() {
           lastSaveErrorToastRef.current = null;
           markServerSynced(result.updatedAt, stateRef.current);
           if (opts?.notify !== false) {
-            pushToast({ type: 'success', message: HOUSEHOLD_SAVED_TOAST });
+            const savedHash = hashFinanceState(stateRef.current);
+            if (savedHash !== lastSavedToastHashRef.current) {
+              lastSavedToastHashRef.current = savedHash;
+              pushToast({ type: 'success', message: HOUSEHOLD_SAVED_TOAST });
+            }
           }
           return;
         }
@@ -579,15 +586,27 @@ export function usePersistedFinance() {
   }, []);
 
   const setIncome = useCallback((income: FinanceState['income']) => {
-    setState((s) => ({ ...s, income }));
+    setState((s) => {
+      if (JSON.stringify(s.income) === JSON.stringify(income)) return s;
+      return { ...s, income };
+    });
   }, []);
 
   const setEssentials = useCallback((essentials: EssentialExpense[]) => {
-    setState((s) => ({ ...s, essentials }));
+    setState((s) => {
+      if (JSON.stringify(s.essentials) === JSON.stringify(essentials)) return s;
+      return { ...s, essentials };
+    });
   }, []);
 
   const setDebts = useCallback((debts: DebtAccount[]) => {
-    setState((s) => ({ ...s, debts }));
+    setState((s) => {
+      if (JSON.stringify(s.debts) === JSON.stringify(debts)) return s;
+      const next = { ...s, debts };
+      stateRef.current = next;
+      void writeWidgetCache(next);
+      return next;
+    });
   }, []);
 
   const updateDebtBalance = useCallback((debtId: string, availableCredit: number, creditLimit?: number) => {

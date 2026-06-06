@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DebtAccount, FinanceState } from '../types/finance';
-import { effectiveDebtBalance, totalDebtRemaining } from './calculations';
+import { effectiveDebtBalance, effectiveMinPayment, totalDebtRemaining } from './calculations';
 import { unpaidDebtContractRemaining } from './billsTimeline';
 
 function hp(overrides: Partial<DebtAccount> = {}): DebtAccount {
@@ -51,6 +51,15 @@ describe('effectiveDebtBalance with HP schedule', () => {
   it('falls back to time estimate without state', () => {
     const bal = effectiveDebtBalance(hp(), new Date('2026-06-06'));
     expect(bal).toBeGreaterThan(281);
+  });
+});
+
+describe('effectiveMinPayment', () => {
+  it('caps at remaining balance on final installment', () => {
+    const state = stateWithPaidMonths(['2026-05', '2026-06']);
+    expect(effectiveMinPayment(hp(), new Date('2026-06-06'), state)).toBe(281);
+    const partial = { ...hp(), balance: 278.48 };
+    expect(effectiveMinPayment(partial, new Date('2026-06-06'))).toBe(278.48);
   });
 });
 

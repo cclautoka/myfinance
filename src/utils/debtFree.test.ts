@@ -47,6 +47,18 @@ describe('simulateDebtPayoff', () => {
     expect(r.schedule[r.schedule.length - 1]?.totalBalance).toBe(0);
   });
 
+  it('snowball redirect shortens payoff when a small debt clears first', () => {
+    const ref = new Date('2026-06-06');
+    const debts = [
+      debt({ id: 'hp', name: 'HP', balance: 281, kind: 'installment', monthlyPayment: 281, endsOn: '2026-07-31' }),
+      debt({ id: 'c1', name: 'Card', balance: 5000, kind: 'card', monthlyPayment: 200 }),
+    ];
+    const withoutRedirect = simulateDebtPayoff(debts, ref, { maxMonths: 120 });
+    expect(withoutRedirect.months).not.toBeNull();
+    // HP clears in 1 month; $281/mo snowballs onto the card — faster than card-only $200/mo.
+    expect(withoutRedirect.months!).toBeLessThan(Math.ceil(5000 / 200));
+  });
+
   it('HP drops off schedule after endsOn while card continues', () => {
     const ref = new Date('2026-06-06');
     const debts = [

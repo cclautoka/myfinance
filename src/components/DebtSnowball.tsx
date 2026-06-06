@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import type { FinanceState } from '../types/finance';
 import { snowballTip } from '../copy/tooltips';
-import { effectiveDebtBalance } from '../utils/calculations';
+import { effectiveDebtBalance, effectiveMinPayment } from '../utils/calculations';
 import { formatMoney } from '../utils/format';
 import { snowballOrder } from '../utils/snowball';
 import { HoverTip } from './ui/HoverTip';
@@ -25,13 +25,15 @@ export function DebtSnowball({ state, compact }: { state: FinanceState; compact?
     return { ordered: o, maxEffectiveBalance: maxEff };
   }, [state]);
 
-  const chartData = ordered.map((r) => ({
-    /** Full name — short labels duplicated keys (e.g. three “Personal — …” rows) and broke Recharts tooltips. */
-    name: r.debt.name,
-    balance: Math.round(r.effectiveBalance),
-    payment: r.debt.monthlyPayment,
-    order: r.snowballOrder,
-  }));
+  const chartData = ordered.map((r) => {
+    const minPay = effectiveMinPayment(r.debt, new Date(), state);
+    return {
+      name: r.debt.name,
+      balance: Math.round(r.effectiveBalance),
+      payment: minPay,
+      order: r.snowballOrder,
+    };
+  });
 
   return (
     <HoverTip content={snowballTip()}>
@@ -71,6 +73,8 @@ export function DebtSnowball({ state, compact }: { state: FinanceState; compact?
           <ul className="space-y-3">
             {ordered.map((r) => {
               const bal = r.effectiveBalance;
+              const minPay = effectiveMinPayment(r.debt, new Date(), state);
+              const planPay = r.debt.monthlyPayment;
               /** Same visual language as the chart: width ∝ balance vs max on this list (old “paydown” formula hit 50% whenever min payment was tiny). */
               const stripPct =
                 bal <= 0 || maxEffectiveBalance <= 0
@@ -91,7 +95,11 @@ export function DebtSnowball({ state, compact }: { state: FinanceState; compact?
                     </div>
                     <div className="text-right text-sm">
                       <p className="font-semibold text-sage-900 dark:text-moss-fg">{formatMoney(bal)} remaining (est.)</p>
-                      <p className="text-sage-600 dark:text-moss-muted">Min payment {formatMoney(r.debt.monthlyPayment)}</p>
+                      <p className="text-sage-600 dark:text-moss-muted">
+                        {minPay < planPay && minPay > 0
+                          ? `Next payment ${formatMoney(minPay)} (final)`
+                          : `Min payment ${formatMoney(minPay)}`}
+                      </p>
                     </div>
                   </div>
                   <div className="mt-2 h-2 overflow-hidden rounded-full bg-sage-200 dark:bg-moss-bg">

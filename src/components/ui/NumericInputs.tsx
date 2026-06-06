@@ -84,7 +84,7 @@ export function NumericAmountInput({
       }}
       onBlur={(e) => {
         const n = parseAmountInput(draft, { min: minNum, max: maxNum });
-        onValueChange(n);
+        if (n !== value) onValueChange(n);
         setFocused(false);
         onBlur?.(e);
       }}
@@ -227,12 +227,12 @@ export function NumericIntegerInput({
             onBlur?.(e);
             return;
           }
-          onValueChange(0);
+          if (value !== 0) onValueChange(0);
           setFocused(false);
           onBlur?.(e);
           return;
         }
-        onValueChange(parsed);
+        if (parsed !== value) onValueChange(parsed);
         setFocused(false);
         onBlur?.(e);
       }}

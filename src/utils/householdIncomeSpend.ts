@@ -1,6 +1,7 @@
 import { currentMonthKey } from '../data/defaults';
 import type { FinanceState, SurprisePaidByRole } from '../types/finance';
 import { extraIncomeMonthTotal } from './calculations';
+import { pocketLeftSoFar } from './budgetSurplus';
 import {
   billOccurrenceIsPaid,
   billOccurrencePaidDisplayAmount,
@@ -41,6 +42,8 @@ export type MonthIncomeSpendSummary = {
   rows: IncomeSpendRow[];
   unassigned: UnassignedSpend;
   chartMax: number;
+  /** Matches Dashboard “Left from deposits” — all marked bills due so far, not just attributed ones. */
+  householdPocketLeft: number;
 };
 
 function billDisplayName(state: FinanceState, billId: string): string {
@@ -206,11 +209,28 @@ export function monthIncomeSpendSummary(
     billsTotal: round2(unassignedBills.reduce((s, b) => s + b.amount, 0)),
   };
 
+  const householdPocketLeft = pocketLeftSoFar(state, monthKey);
+
+  // When one person logged all pay, bar “left” should match household pocket (includes unassigned bills).
+  const soleDepositor =
+    logged.wife <= 0 && logged.joint <= 0 && extra <= 0 && rows.some((r) => r.key === 'owner');
+  if (soleDepositor) {
+    const owner = rows.find((r) => r.key === 'owner');
+    if (owner) {
+      if (householdPocketLeft < 0) {
+        owner.remaining = 0;
+        owner.overspend = round2(-householdPocketLeft);
+      } else {
+        owner.remaining = householdPocketLeft;
+      }
+    }
+  }
+
   const chartMax = Math.max(
     1,
     ...rows.map((r) => Math.max(r.incomeLogged, r.spent)),
     unassigned.billsTotal,
   );
 
-  return { monthKey, rows, unassigned, chartMax };
+  return { monthKey, rows, unassigned, chartMax, householdPocketLeft };
 }

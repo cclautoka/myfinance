@@ -131,8 +131,9 @@ export function dashboardBillsTickedTip(): ReactNode {
 export function dashboardDebtFreeMonthsTip(): ReactNode {
   return (
     <>
-      Simulated month-by-month payoff using your Payment column, optional card APR, and HP end dates. Personal loans
-      without a payment are excluded. Update card balances when you spend — not bank-exact.
+      Simulated month-by-month payoff from your current balances, capped payments, and snowball redirect when a debt
+      clears. Personal loans without a payment are excluded from the countdown (still in total debt). Mark HP payments
+      and update card balances for an honest estimate.
     </>
   );
 }
@@ -373,8 +374,11 @@ export function incomeVsSpendTip(): ReactNode {
   return (
     <>
       <strong className="text-sage-900 dark:text-moss-tip">Primary</strong> is husband&apos;s logged pay.{' '}
-      <strong className="text-sage-900 dark:text-moss-tip">Partner</strong> is wife&apos;s. Dark shading is bills and
-      surprises attributed to that person when they mark as paid. Red means spent more than logged pay for that person.
+      <strong className="text-sage-900 dark:text-moss-tip">Partner</strong> is wife&apos;s. Dark shading is bills
+      attributed to that person. When only Primary logged pay this month,{' '}
+      <strong className="text-sage-900 dark:text-moss-tip">left</strong> matches{' '}
+      <strong className="text-sage-900 dark:text-moss-tip">Left from deposits</strong> above — including bills not yet
+      tagged Primary or Partner.
     </>
   );
 }
