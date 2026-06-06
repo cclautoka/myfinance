@@ -27,6 +27,7 @@ const debtRowSchema = z.object({
   monthlyPayment: z.coerce.number().finite(),
   dueDay: z.coerce.number().int().min(1).max(31),
   autoDeduction: z.boolean(),
+  autoDeductionPaidByRole: z.enum(['owner', 'partner']).optional(),
   endsOn: z.string().nullable().optional(),
   kind: z.enum(['card', 'installment', 'loan', 'personal']),
   annualInterestApr: z.coerce.number().finite().optional(),

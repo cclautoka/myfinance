@@ -5,6 +5,7 @@ import {
   NumericAmountInput,
   NumericIntegerInput,
 } from '../components/ui/NumericInputs';
+import { AUTO_DEDUCTION_PAID_BY_SEGMENT } from '../utils/surprisePaidBy';
 import { createStarterDebt } from './setupIds';
 
 const DEBT_KIND_SEGMENT: { id: DebtKind; label: string }[] = [
@@ -45,7 +46,7 @@ export function SetupDebtRows({ rows, onChange, errors }: SetupDebtRowsProps) {
         </p>
       ) : null}
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[880px] text-left text-sm">
+        <table className="w-full min-w-[980px] text-left text-sm">
           <thead>
             <tr className="text-xs uppercase text-slate-600 dark:text-moss-muted">
               <th className="pb-2 pr-2">Type</th>
@@ -55,6 +56,7 @@ export function SetupDebtRows({ rows, onChange, errors }: SetupDebtRowsProps) {
               <th className="pb-2 pr-2">Payment</th>
               <th className="pb-2 pr-2">Due day</th>
               <th className="pb-2 pr-2">Auto</th>
+              <th className="pb-2 pr-2">Paid by</th>
               <th className="pb-2 pr-2">Ends (ISO)</th>
               <th className="pb-2 text-right"> </th>
             </tr>
@@ -124,8 +126,29 @@ export function SetupDebtRows({ rows, onChange, errors }: SetupDebtRowsProps) {
                     offLabel="Off"
                     onLabel="Auto"
                     checked={Boolean(d.autoDeduction)}
-                    onCheckedChange={(on) => patch(d.id, { autoDeduction: on })}
+                    onCheckedChange={(on) =>
+                      patch(d.id, {
+                        autoDeduction: on,
+                        ...(on && !d.autoDeductionPaidByRole ? { autoDeductionPaidByRole: 'owner' } : {}),
+                      })
+                    }
                   />
+                </td>
+                <td className="min-w-[9rem] py-2 pr-2 align-middle">
+                  {d.autoDeduction ? (
+                    <SegmentedChoice
+                      name={`setup-debt-auto-paid-by-${d.id}`}
+                      aria-label={`Auto payment attributed to for ${d.name || 'debt'}`}
+                      size="compact"
+                      value={d.autoDeductionPaidByRole ?? 'owner'}
+                      options={AUTO_DEDUCTION_PAID_BY_SEGMENT}
+                      onChange={(v) => patch(d.id, { autoDeductionPaidByRole: v as 'owner' | 'partner' })}
+                    />
+                  ) : (
+                    <span className="inline-block px-2 py-1 text-slate-400 dark:text-moss-muted" aria-hidden>
+                      —
+                    </span>
+                  )}
                 </td>
                 <td className="py-2 pr-2">
                   <input

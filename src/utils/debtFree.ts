@@ -252,7 +252,7 @@ export function staleCardBalanceDebts(debts: DebtAccount[], ref = new Date(), ma
 
 export type DebtFreeMonthsTrendKind = 'unknown' | 'worse' | 'better' | 'unchanged';
 
-/** Compare current payoff months to the snapshot taken at this month’s opening. */
+/** Compare current payoff months to the snapshot taken when this month was opened. */
 export function debtFreeMonthsTrend(state: FinanceState, ref = new Date()): {
   kind: DebtFreeMonthsTrendKind;
   delta: number | null;
@@ -260,8 +260,11 @@ export function debtFreeMonthsTrend(state: FinanceState, ref = new Date()): {
   currentMonths: number | null;
 } {
   const currentMonths = estimatedDebtFreeMonths(state, ref);
-  const prevMk = previousCalendarMonthKey(currentMonthKey());
-  const priorMonths = state.debtFreeProjectionByMonth?.[prevMk]?.months ?? null;
+  const mk = currentMonthKey();
+  const prevMk = previousCalendarMonthKey(mk);
+  const snap = state.debtFreeProjectionByMonth ?? {};
+  /** Baseline from this month’s opening; fall back to prior month if June opened before snapshots existed. */
+  const priorMonths = snap[mk]?.months ?? snap[prevMk]?.months ?? null;
 
   if (priorMonths === null || currentMonths === null) {
     return { kind: 'unknown', delta: null, priorMonths, currentMonths };

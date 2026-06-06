@@ -147,17 +147,17 @@ export function dashboardDebtFreeMonthsTrendTip(
   if (kind === 'unknown') {
     return (
       <>
-        <strong className="text-sage-900 dark:text-moss-tip">No trend yet</strong> — we compare to when you opened last
-        month. After your first month-opening, a green ↓ means fewer months to debt-free; red ↑ means the path got longer.
+        <strong className="text-sage-900 dark:text-moss-tip">No trend yet</strong> — we compare to when you opened{' '}
+        this month. After month-opening, green ↓ means fewer months to debt-free; red ↑ means the path got longer.
       </>
     );
   }
   if (kind === 'worse' && delta !== null && priorMonths !== null && currentMonths !== null) {
     return (
       <>
-        <strong className="text-rose-800 dark:text-rose-200">Path lengthened</strong> — up {delta} mo since last month
-        open ({priorMonths} → {currentMonths} mo). Often card use or stale balances. Update available credit for an
-        honest read.
+        <strong className="text-rose-800 dark:text-rose-200">Path lengthened</strong> — up {delta} mo since you opened
+        this month ({priorMonths} → {currentMonths} mo). Often card use or stale balances. Update balance for an honest
+        read.
       </>
     );
   }
@@ -165,14 +165,14 @@ export function dashboardDebtFreeMonthsTrendTip(
     return (
       <>
         <strong className="text-emerald-800 dark:text-emerald-200">Path shortened</strong> — down {Math.abs(delta)} mo
-        since last month open ({priorMonths} → {currentMonths} mo). Keep it up.
+        since you opened this month ({priorMonths} → {currentMonths} mo). Keep it up.
       </>
     );
   }
   return (
     <>
       <strong className="text-sage-900 dark:text-moss-tip">Unchanged</strong> — same estimated months as when you opened
-      this month ({currentMonths ?? '—'} mo).
+      this month ({priorMonths ?? currentMonths ?? '—'} mo).
     </>
   );
 }

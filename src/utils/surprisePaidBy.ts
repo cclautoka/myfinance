@@ -15,3 +15,9 @@ export const SURPRISE_PAID_BY_OPTIONS: { value: SurprisePaidByRole; label: strin
   { value: 'owner', label: 'Primary' },
   { value: 'partner', label: 'Partner' },
 ];
+
+/** Segmented control for auto-deduction “paid by” in plan editor tables. */
+export const AUTO_DEDUCTION_PAID_BY_SEGMENT: { id: SurprisePaidByRole; label: string }[] = [
+  { id: 'owner', label: 'Primary' },
+  { id: 'partner', label: 'Partner' },
+];

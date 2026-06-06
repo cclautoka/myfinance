@@ -13,7 +13,7 @@ import type {
 } from '../types/finance';
 import { STORAGE_KEY } from '../types/finance';
 import { applyAutoScheduledPayLogs } from '../utils/autoScheduledPayLog';
-import { applyAutoMarkHandled } from '../utils/autoBills';
+import { applyAutoMarkHandled, syncAutoDeductionBillAttribution } from '../utils/autoBills';
 import { monthSpendableCarry, surplusSweepRoomRemaining } from '../utils/budgetSurplus';
 import { combinedMonthlyIncome } from '../utils/calculations';
 import { hasMeaningfulFinanceTouch } from '../utils/monthOpening';
@@ -265,7 +265,7 @@ const silentlyBackfillMonthCashflowOpeningForLegacySave = (
 };
 
 const normalizeLoadedState = (base: FinanceState, parsed?: Partial<FinanceState>): FinanceState => {
-  if (!parsed) return applyAutoScheduledPayLogs(applyAutoMarkHandled(base));
+  if (!parsed) return syncAutoDeductionBillAttribution(applyAutoScheduledPayLogs(applyAutoMarkHandled(base)));
   const merged = deepMerge(base, parsed);
   const withPlanned = ensurePlannedMonthlyDollars(merged, parsed);
   const migrated = stripLegacyWeeklyEssentialMonthKeys(withPlanned);
@@ -273,7 +273,9 @@ const normalizeLoadedState = (base: FinanceState, parsed?: Partial<FinanceState>
   const withMonth = resetWalletsIfNewMonth(pruned);
   const legacyOpening = silentlyBackfillMonthCashflowOpeningForLegacySave(withMonth, parsed);
   const withGoals = normalizeSavingsGoals(legacyOpening);
-  const withAuto = applyAutoScheduledPayLogs(applyAutoMarkHandled(withGoals));
+  const withAuto = syncAutoDeductionBillAttribution(
+    applyAutoScheduledPayLogs(applyAutoMarkHandled(withGoals)),
+  );
   return { ...withAuto, theme: loadThemePreference() };
 };
 

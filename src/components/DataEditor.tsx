@@ -31,6 +31,7 @@ import { SegmentedChoice } from './ui/SegmentedChoice';
 import { ScheduledPayAutomationFields } from './ScheduledPayAutomationFields';
 import { BlurCommittedInput } from './ui/BlurCommittedInput';
 import { pushToast } from '../ui/toast/toastBus';
+import { AUTO_DEDUCTION_PAID_BY_SEGMENT } from '../utils/surprisePaidBy';
 
 const PAY_SCHEDULE_SEGMENT: { id: PaySchedule; label: string }[] = [
   { id: 'weekly', label: 'Weekly' },
@@ -462,11 +463,13 @@ export function DataEditor({
             app&apos;s available balance (not amount owed). Optional{' '}
             <strong className="text-sage-900 dark:text-moss-tip">APR %</strong> powers payoff simulation interest;{' '}
             <strong className="text-sage-900 dark:text-moss-tip">Due day</strong> is the payment due date on your statement
-            (e.g. ANZ ≈ 1st, BSP ≈ 26th — not the statement close date). Paid-off debts disappear from this table — see
-            Workspace → achievements.
+            (e.g. ANZ ≈ 1st, BSP ≈ 26th — not the statement close date).{' '}
+            <strong className="text-sage-900 dark:text-moss-tip">Auto</strong> marks handled after due day; choose{' '}
+            <strong className="text-sage-900 dark:text-moss-tip">Paid by</strong> for income-vs-spend (defaults Primary).
+            Paid-off debts disappear from this table — see Workspace → achievements.
           </p>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[920px] text-left text-sm">
+            <table className="w-full min-w-[1020px] text-left text-sm">
               <thead>
                 <tr className="text-xs uppercase text-sage-600 dark:text-moss-muted">
                   <th className="pb-2 pr-2">Type</th>
@@ -477,6 +480,7 @@ export function DataEditor({
                   <th className="pb-2 pr-2">Payment</th>
                   <th className="pb-2 pr-2">Due day</th>
                   <th className="pb-2 pr-2">Auto</th>
+                  <th className="pb-2 pr-2">Paid by</th>
                   <th className="pb-2 pr-2">Ends (ISO)</th>
                   <th className="pb-2 text-right"> </th>
                 </tr>
@@ -484,7 +488,7 @@ export function DataEditor({
               <tbody>
                 {editorDebts.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="py-8 text-center text-sm text-sage-600 dark:text-moss-muted">
+                    <td colSpan={11} className="py-8 text-center text-sm text-sage-600 dark:text-moss-muted">
                       No active debts here — cleared rows are in Workspace → achievements.
                     </td>
                   </tr>
@@ -579,8 +583,35 @@ export function DataEditor({
                         offLabel="Off"
                         onLabel="Auto"
                         checked={Boolean(d.autoDeduction)}
-                        onCheckedChange={(on) => patchDebt(d.id, { autoDeduction: on })}
+                        onCheckedChange={(on) =>
+                          patchDebt(d.id, {
+                            autoDeduction: on,
+                            ...(on && !d.autoDeductionPaidByRole ? { autoDeductionPaidByRole: 'owner' } : {}),
+                          })
+                        }
                       />
+                    </td>
+                    <td className="min-w-[9rem] py-2 pr-2 align-middle">
+                      {d.autoDeduction ? (
+                        <SegmentedChoice
+                          name={`debt-auto-paid-by-${d.id}`}
+                          aria-label={`Auto payment attributed to for ${d.name || 'debt'}`}
+                          size="compact"
+                          value={d.autoDeductionPaidByRole ?? 'owner'}
+                          options={AUTO_DEDUCTION_PAID_BY_SEGMENT}
+                          onChange={(v) =>
+                            patchDebt(d.id, { autoDeductionPaidByRole: v as 'owner' | 'partner' })
+                          }
+                        />
+                      ) : (
+                        <span
+                          className="inline-block px-2 py-1 text-sage-400 dark:text-moss-muted"
+                          title="Turn on Auto to choose Primary or Partner"
+                          aria-hidden
+                        >
+                          —
+                        </span>
+                      )}
                     </td>
                     <td className="py-2 pr-2">
                       <input

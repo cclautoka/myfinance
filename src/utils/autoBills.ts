@@ -1,4 +1,10 @@
-import type { DebtAccount, FinanceState } from '../types/finance';
+import type {
+  BillPaymentAttribution,
+  DebtAccount,
+  FinanceState,
+  SurprisePaidByRole,
+} from '../types/finance';
+import { getClientPlatform } from './clientPlatform';
 
 const setDaySafe = (year: number, monthIndex: number, day: number): Date => {
   const last = new Date(year, monthIndex + 1, 0).getDate();
@@ -8,6 +14,18 @@ const setDaySafe = (year: number, monthIndex: number, day: number): Date => {
 
 const monthKey = (ref: Date): string =>
   `${ref.getFullYear()}-${String(ref.getMonth() + 1).padStart(2, '0')}`;
+
+export function autoDeductionPaidByRole(debt: DebtAccount): SurprisePaidByRole {
+  return debt.autoDeductionPaidByRole ?? 'owner';
+}
+
+function attributionEntry(role: SurprisePaidByRole): BillPaymentAttribution {
+  return {
+    role,
+    platform: getClientPlatform(),
+    at: new Date().toISOString(),
+  };
+}
 
 /**
  * After the due date passes in the calendar month, **auto-deduction** debts are marked handled
@@ -21,6 +39,7 @@ export function applyAutoMarkHandled(state: FinanceState, ref: Date = new Date()
 
   const billsPaid = { ...state.billsPaid };
   const billPaidAmounts = { ...(state.billPaidAmounts ?? {}) };
+  const billPaymentAttribution = { ...(state.billPaymentAttribution ?? {}) };
   const unmarked = state.billsAutoUnmarked ?? {};
 
   for (const d of state.debts) {
@@ -42,10 +61,42 @@ export function applyAutoMarkHandled(state: FinanceState, ref: Date = new Date()
       const inner = { ...(billPaidAmounts[d.id] ?? {}) };
       inner[mk] = d.monthlyPayment;
       billPaidAmounts[d.id] = inner;
+
+      const attrInner = { ...(billPaymentAttribution[d.id] ?? {}) };
+      if (!attrInner[mk]?.role) {
+        attrInner[mk] = attributionEntry(autoDeductionPaidByRole(d));
+        billPaymentAttribution[d.id] = attrInner;
+      }
     }
   }
 
-  return { ...state, billsPaid, billPaidAmounts };
+  return { ...state, billsPaid, billPaidAmounts, billPaymentAttribution };
+}
+
+/** Backfill Primary/Partner tags on auto-marked bills that predate attribution. */
+export function syncAutoDeductionBillAttribution(state: FinanceState): FinanceState {
+  const billPaymentAttribution = { ...(state.billPaymentAttribution ?? {}) };
+  let changed = false;
+
+  for (const d of state.debts) {
+    if (!d.autoDeduction || d.monthlyPayment <= 0) continue;
+    const role = autoDeductionPaidByRole(d);
+    const paidKeys = state.billsPaid[d.id] ?? [];
+    if (!paidKeys.length) continue;
+
+    let attrInner = billPaymentAttribution[d.id];
+    for (const payKey of paidKeys) {
+      if (attrInner?.[payKey]?.role) continue;
+      if (!attrInner) attrInner = {};
+      attrInner = { ...attrInner, [payKey]: attributionEntry(role) };
+      changed = true;
+    }
+    if (attrInner && Object.keys(attrInner).length) {
+      billPaymentAttribution[d.id] = attrInner;
+    }
+  }
+
+  return changed ? { ...state, billPaymentAttribution } : state;
 }
 
 /** True if toggling unpaid should record an opt-out so auto-fill does not return next load. */

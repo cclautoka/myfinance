@@ -54,7 +54,7 @@ export function DebtFreeMonthsTrend({
     <HoverTip content={tip} layout="wrap">
       <span
         className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-transform duration-300 hover:scale-110 ${SHELL_CLASS[kind]}`}
-        aria-label="Debt-free trend vs last month open"
+        aria-label="Debt-free trend vs this month open"
       >
         <TrendIcon kind={kind} />
       </span>

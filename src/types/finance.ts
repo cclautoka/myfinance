@@ -75,6 +75,8 @@ export interface DebtAccount {
   monthlyPayment: number;
   dueDay: number;
   autoDeduction: boolean;
+  /** Who income-vs-spend attributes auto-marked payments to (defaults Primary). */
+  autoDeductionPaidByRole?: SurprisePaidByRole;
   endsOn?: string | null;
   kind: DebtKind;
   /** Optional annual APR % — used only for a rough “interest this month” hint; 0 / omit = hide. */

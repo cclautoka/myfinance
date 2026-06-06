@@ -37,7 +37,7 @@ export function DebtPayoffPathPanel({ state }: { state: FinanceState }) {
 
   const mk = currentMonthKey();
   const prevMk = previousCalendarMonthKey(mk);
-  const priorSnap = state.debtFreeProjectionByMonth?.[prevMk];
+  const priorSnap = state.debtFreeProjectionByMonth?.[mk] ?? state.debtFreeProjectionByMonth?.[prevMk];
   const staleCards = useMemo(() => staleCardBalanceDebts(state.debts, ref), [state.debts, ref]);
 
   const chartMonths = baseline.schedule.slice(0, Math.min(36, baseline.schedule.length));

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DebtAccount, FinanceState } from '../types/finance';
+import { currentMonthKey } from '../data/defaults';
 import {
   debtFreeMonthsTrend,
   debtPayoffScenarioDelta,
@@ -143,5 +144,17 @@ describe('debtFreeMonthsTrend', () => {
       debts: [debt({ id: 'c1', name: 'Card', balance: 1000, kind: 'card', monthlyPayment: 200 })],
     } as FinanceState;
     expect(debtFreeMonthsTrend(state).kind).toBe('unknown');
+  });
+
+  it('compares to this month opening snapshot and shows better when months drop', () => {
+    const mk = currentMonthKey();
+    const state = {
+      debts: [debt({ id: 'c1', name: 'Card', balance: 800, kind: 'card', monthlyPayment: 200 })],
+      debtFreeProjectionByMonth: { [mk]: { months: 21, totalDebt: 800 } },
+    } as FinanceState;
+    const trend = debtFreeMonthsTrend(state, new Date('2026-06-06'));
+    expect(trend.currentMonths).toBeLessThan(21);
+    expect(trend.kind).toBe('better');
+    expect(trend.priorMonths).toBe(21);
   });
 });
