@@ -135,7 +135,7 @@ public class IncomeSpendWidgetProvider extends AppWidgetProvider {
       } else {
         rv.setTextViewText(R.id.widget_line1, "Open app to sync");
         rv.setTextViewText(R.id.widget_line2, "");
-        rv.setImageViewBitmap(R.id.widget_chart, drawBars(320, 32, new WidgetCache.IncomeVsSpend(0, 0, 0, 0, 0, 0)));
+        rv.setImageViewBitmap(R.id.widget_chart, drawBars(320, 32, new WidgetCache.IncomeVsSpend(0, 0, 0, 0, 0, 0, 0, 0)));
       }
 
       Intent open = new Intent(context, MainActivity.class);

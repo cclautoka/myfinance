@@ -96,23 +96,20 @@ export function ProgressRing({
           />
         ) : null}
       </div>
-      <div className="text-center">
+      <div className="relative w-full max-w-[11rem] px-6 text-center sm:max-w-[12rem]">
+        {tip ? (
+          <div className="absolute right-0 top-0 z-10">
+            <InfoTipButton
+              content={tip}
+              className="h-7 w-7 [&_svg]:h-4 [&_svg]:w-4 sm:h-8 sm:w-8 sm:[&_svg]:h-[18px] sm:[&_svg]:w-[18px]"
+            />
+          </div>
+        ) : null}
         <p className="text-sm font-medium text-sage-900 dark:text-moss-fg">{label}</p>
         {sublabel && <p className="text-xs text-sage-600 dark:text-moss-muted">{sublabel}</p>}
       </div>
     </div>
   );
-
-  if (tip) {
-    return (
-      <div className="relative">
-        <div className="absolute -right-1 -top-1 z-10 sm:right-0 sm:top-0">
-          <InfoTipButton content={tip} />
-        </div>
-        {body}
-      </div>
-    );
-  }
 
   return body;
 }
