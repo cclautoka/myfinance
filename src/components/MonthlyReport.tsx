@@ -41,7 +41,7 @@ export function MonthlyReport({
     const incomeLogged = incomeLogMonthTotal(state, summaryMonthKey);
     const paychequeOtEst = incomeLogOvertimeMonthTotal(state, summaryMonthKey);
     const br = allocationBreakdown(state);
-    const debt = totalDebtRemaining(state.debts);
+    const debt = totalDebtRemaining(state.debts, refForCounts, state);
     const extras = extraIncomeMonthTotal(state, summaryMonthKey);
     const surprises = surpriseExpensesMonthTotal(state, summaryMonthKey);
     const months = estimatedDebtFreeMonths(state);

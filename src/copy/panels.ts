@@ -58,6 +58,10 @@ export const panels = {
     subtitle:
       'From loan rows under Your income & regular bills. You refresh balances. APR is optional for a rough interest hint only.',
   },
+  debtAchievements: {
+    title: 'Paid off — achievements',
+    subtitle: 'Debts cleared from your active list. Open one to see every payment logged.',
+  },
   debtSnowball: {
     title: 'Payoff order cheer chart',
     titleCompact: 'Debt payoff snapshot',

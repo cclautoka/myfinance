@@ -84,9 +84,10 @@ export function dashboardDebtTip(): ReactNode {
 export function debtBalancesPanelTip(): ReactNode {
   return (
     <>
-      Shows each row&apos;s effective balance (typed statement balance, or an installment estimate when blank).
-      Use <strong className="text-sage-900 dark:text-moss-tip">Update available</strong> with your bank app&apos;s
-      available balance — we work out owed from limit − available. Payoff path updates each time.
+      Active debts only in the main table — paid-off rows move to achievements below. Cards:{' '}
+      <strong className="text-sage-900 dark:text-moss-tip">Update available</strong>. HP / loans: tap a row to mark the
+      next calendar payment, or use <strong className="text-sage-900 dark:text-moss-tip">Update</strong> to override
+      balance or mark fully paid off.
     </>
   );
 }

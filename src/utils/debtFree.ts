@@ -10,6 +10,8 @@ export type DebtPayoffSimOptions = {
   extraCardSpendPerMonth?: number;
   /** Cap simulation length (default 600 months). */
   maxMonths?: number;
+  /** When set, HP/loan balances use marked bill calendar payments. */
+  state?: FinanceState;
 };
 
 export type DebtPayoffSchedulePoint = {
@@ -48,16 +50,20 @@ function debtEndsOnDate(d: DebtAccount): Date | null {
 }
 
 /** Debts that participate in payoff simulation (payment > 0 and positive effective balance). */
-export function debtsIncludedInPayoffSim(debts: DebtAccount[], ref = new Date()): DebtAccount[] {
-  return debts.filter((d) => d.monthlyPayment > 0 && effectiveDebtBalance(d, ref) > 0);
+export function debtsIncludedInPayoffSim(
+  debts: DebtAccount[],
+  ref = new Date(),
+  state?: FinanceState,
+): DebtAccount[] {
+  return debts.filter((d) => d.monthlyPayment > 0 && effectiveDebtBalance(d, ref, state) > 0);
 }
 
-function initSimDebts(debts: DebtAccount[], ref: Date): SimDebt[] {
-  return debtsIncludedInPayoffSim(debts, ref).map((d) => ({
+function initSimDebts(debts: DebtAccount[], ref: Date, state?: FinanceState): SimDebt[] {
+  return debtsIncludedInPayoffSim(debts, ref, state).map((d) => ({
     id: d.id,
     name: d.name,
     kind: d.kind,
-    balance: round2(effectiveDebtBalance(d, ref)),
+    balance: round2(effectiveDebtBalance(d, ref, state)),
     payment: round2(d.monthlyPayment),
     apr: d.annualInterestApr ?? 0,
     endsOn: debtEndsOnDate(d),
@@ -126,11 +132,14 @@ export function simulateDebtPayoff(
 ): DebtPayoffSimResult {
   const maxMonths = opts.maxMonths ?? 600;
   const extra = Math.max(0, opts.extraCardSpendPerMonth ?? 0);
-  const rows = initSimDebts(debts, ref);
+  const financeState = opts.state;
+  const rows = initSimDebts(debts, ref, financeState);
 
   if (rows.length === 0) {
-    const hasOwed = debts.some((d) => effectiveDebtBalance(d, ref) > 0);
-    const hasPaying = debts.some((d) => d.monthlyPayment > 0 && effectiveDebtBalance(d, ref) > 0);
+    const hasOwed = debts.some((d) => effectiveDebtBalance(d, ref, financeState) > 0);
+    const hasPaying = debts.some(
+      (d) => d.monthlyPayment > 0 && effectiveDebtBalance(d, ref, financeState) > 0,
+    );
     if (hasOwed && !hasPaying) {
       return { months: null, debtFreeDate: null, schedule: [], includedDebtIds: [] };
     }
@@ -178,11 +187,11 @@ export function simulateDebtPayoff(
 
 /** Headline months-to-debt-free from simulation (null when no qualifying payments). */
 export const estimatedDebtFreeMonths = (state: FinanceState, ref = new Date()): number | null => {
-  return simulateDebtPayoff(state.debts, ref).months;
+  return simulateDebtPayoff(state.debts, ref, { state }).months;
 };
 
 export const estimatedDebtFreeDate = (state: FinanceState, ref = new Date()): Date | null => {
-  return simulateDebtPayoff(state.debts, ref).debtFreeDate;
+  return simulateDebtPayoff(state.debts, ref, { state }).debtFreeDate;
 };
 
 /** Compare baseline vs extra card spend scenario. */
@@ -190,9 +199,10 @@ export function debtPayoffScenarioDelta(
   debts: DebtAccount[],
   ref: Date,
   extraCardSpendPerMonth: number,
+  state?: FinanceState,
 ): { baselineMonths: number | null; scenarioMonths: number | null; monthsAdded: number | null } {
-  const baseline = simulateDebtPayoff(debts, ref);
-  const scenario = simulateDebtPayoff(debts, ref, { extraCardSpendPerMonth });
+  const baseline = simulateDebtPayoff(debts, ref, { state });
+  const scenario = simulateDebtPayoff(debts, ref, { extraCardSpendPerMonth, state });
   const monthsAdded =
     baseline.months !== null && scenario.months !== null ? scenario.months - baseline.months : null;
   return {

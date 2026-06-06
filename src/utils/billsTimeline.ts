@@ -118,6 +118,59 @@ const debtInstancesForMonth = (d: DebtAccount, year: number, monthIndex: number)
   ];
 };
 
+/** All scheduled payment occurrences from tracking start through contract `endsOn`. */
+export function debtContractOccurrences(
+  d: DebtAccount,
+  fromMonthKey: string = HISTORY_TRACKING_STARTED_MONTH_KEY,
+): TimelineBill[] {
+  if (!d.endsOn || d.monthlyPayment <= 0) return [];
+  const startP = parseCalendarMonthKey(fromMonthKey);
+  if (!startP) return [];
+  const end = new Date(d.endsOn);
+  const items: TimelineBill[] = [];
+  let y = startP.year;
+  let m = startP.monthIndex;
+  const endY = end.getFullYear();
+  const endM = end.getMonth();
+  while (y < endY || (y === endY && m <= endM)) {
+    items.push(...debtInstancesForMonth(d, y, m));
+    m += 1;
+    if (m > 11) {
+      m = 0;
+      y += 1;
+    }
+  }
+  return items;
+}
+
+/** Sum of unpaid contract payments still on the calendar (HP / loans with blank balance). */
+export function unpaidDebtContractRemaining(state: FinanceState, d: DebtAccount): number {
+  let sum = 0;
+  for (const b of debtContractOccurrences(d)) {
+    if (billOccurrenceIsPaid(state, b)) continue;
+    sum += billOccurrencePaidDisplayAmount(state, b, b.amount);
+  }
+  return Math.round(sum * 100) / 100;
+}
+
+/** All calendar occurrences for a debt row (contract schedule or rolling timeline). */
+export function debtPaymentOccurrences(state: FinanceState, d: DebtAccount, ref = new Date()): TimelineBill[] {
+  if (d.endsOn && d.monthlyPayment > 0) return debtContractOccurrences(d);
+  return buildTimeline(state, 24, ref).filter((b) => b.billId === d.id);
+}
+
+/** Earliest unpaid installment on the bill calendar for this debt. */
+export function nextUnpaidDebtOccurrence(
+  state: FinanceState,
+  debtId: string,
+  ref = new Date(),
+): TimelineBill | null {
+  const d = state.debts.find((x) => x.id === debtId);
+  if (!d || d.monthlyPayment <= 0) return null;
+  const sorted = [...debtPaymentOccurrences(state, d, ref)].sort((a, b) => a.due.getTime() - b.due.getTime());
+  return sorted.find((b) => !billOccurrenceIsPaid(state, b)) ?? null;
+}
+
 /** How many months backward we scan for unchecked past dues (overlap with paycheck timing). */
 const TIMELINE_LOOKBACK_MONTHS = 6;
 

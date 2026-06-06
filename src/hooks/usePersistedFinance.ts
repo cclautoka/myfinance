@@ -25,7 +25,12 @@ import type {
 import { currentMonthKey, previousCalendarMonthKey } from '../data/defaults';
 import { debtIsAutoDeduction } from '../utils/autoBills';
 import type { BillsPaidTogglePayload } from '../utils/billsTimeline';
-import { billPaymentKey } from '../utils/billsTimeline';
+import {
+  billOccurrenceIsPaid,
+  billPaymentKey,
+  debtPaymentOccurrences,
+  nextUnpaidDebtOccurrence,
+} from '../utils/billsTimeline';
 import { applyAutoScheduledPayLogs } from '../utils/autoScheduledPayLog';
 import {
   monthPocketSlackForRollover,
@@ -58,6 +63,41 @@ import { writeWidgetCache } from '../utils/widgetCacheWriter';
 import { buildWidgetCacheV1 } from '../utils/widgetCache';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+function applyMarkAllUnpaidDebtOccurrences(s: FinanceState, debtId: string): FinanceState {
+  const d = s.debts.find((x) => x.id === debtId);
+  if (!d) return s;
+  const occs = debtPaymentOccurrences(s, d);
+  const sess = readHouseholdSession();
+  const role = sess?.role === 'partner' ? 'partner' : 'owner';
+  const entry: BillPaymentAttribution = {
+    role,
+    memberEmail: sess?.email,
+    platform: getClientPlatform(),
+    at: new Date().toISOString(),
+  };
+
+  const billsPaid = { ...s.billsPaid };
+  const cur = new Set(billsPaid[debtId] ?? []);
+  const billPaidAmounts = { ...(s.billPaidAmounts ?? {}) };
+  const inner = { ...(billPaidAmounts[debtId] ?? {}) };
+  const billPaymentAttribution = { ...(s.billPaymentAttribution ?? {}) };
+  const attrInner = { ...(billPaymentAttribution[debtId] ?? {}) };
+
+  for (const occ of occs) {
+    if (billOccurrenceIsPaid(s, occ)) continue;
+    const payKey = billPaymentKey(s, occ);
+    cur.add(payKey);
+    inner[payKey] = occ.amount;
+    attrInner[payKey] = entry;
+  }
+
+  billsPaid[debtId] = [...cur];
+  billPaidAmounts[debtId] = inner;
+  if (Object.keys(attrInner).length) billPaymentAttribution[debtId] = attrInner;
+
+  return { ...s, billsPaid, billPaidAmounts, billPaymentAttribution };
+}
 
 function hashFinanceState(s: FinanceState): string {
   try {
@@ -555,6 +595,52 @@ export function usePersistedFinance() {
     }
   }, []);
 
+  const updateDebtBalanceDirect = useCallback(
+    (debtId: string, balance: number, options?: { markPaidOff?: boolean }) => {
+      const before = stateRef.current;
+      const beforeMonths = estimatedDebtFreeMonths(before);
+      const today = new Date().toISOString().slice(0, 10);
+      const target = before.debts.find((d) => d.id === debtId);
+      if (!target || target.kind === 'card') return;
+
+      const safeBal = round2(Math.max(0, balance));
+      const markPaidOff = Boolean(options?.markPaidOff || safeBal <= 0);
+
+      setState((s) => {
+        let next: FinanceState = {
+          ...s,
+          debts: s.debts.map((d) =>
+            d.id === debtId ? { ...d, balance: safeBal, balanceUpdatedAt: today } : d,
+          ),
+        };
+        if (markPaidOff) next = applyMarkAllUnpaidDebtOccurrences(next, debtId);
+        stateRef.current = next;
+        void writeWidgetCache(next);
+        return next;
+      });
+
+      const afterDebts = before.debts.map((d) =>
+        d.id === debtId ? { ...d, balance: safeBal, balanceUpdatedAt: today } : d,
+      );
+      let afterState: FinanceState = { ...before, debts: afterDebts };
+      if (markPaidOff) afterState = applyMarkAllUnpaidDebtOccurrences(afterState, debtId);
+      const afterMonths = estimatedDebtFreeMonths(afterState);
+      const name = target.name;
+
+      if (markPaidOff) {
+        pushToast({ type: 'success', message: `${name} marked paid off.` });
+      } else if (beforeMonths !== null && afterMonths !== null && beforeMonths !== afterMonths) {
+        pushToast({
+          type: 'success',
+          message: `${name} updated · est. debt-free ${beforeMonths} → ${afterMonths} mo`,
+        });
+      } else {
+        pushToast({ type: 'success', message: `${name}: ${formatMoney(safeBal)} remaining` });
+      }
+    },
+    [],
+  );
+
   const setAllocation = useCallback((allocation: AllocationPercents) => {
     setState((s) => ({ ...s, allocation }));
   }, []);
@@ -670,6 +756,42 @@ export function usePersistedFinance() {
     }
     void flushServerSave({ notify: true });
   }, [flushServerSave]);
+
+  const markNextDebtPayment = useCallback(
+    (debtId: string) => {
+      const s = stateRef.current;
+      const d = s.debts.find((x) => x.id === debtId);
+      if (!d || d.kind === 'card' || d.monthlyPayment <= 0) return;
+
+      const next = nextUnpaidDebtOccurrence(s, debtId);
+      if (!next) {
+        pushToast({
+          type: 'success',
+          message: `${d.name}: calendar is up to date — use Update if the balance still looks wrong.`,
+        });
+        return;
+      }
+
+      const payKey = billPaymentKey(s, { billId: debtId, due: next.due, category: 'debt' });
+      const wasPaid = (s.billsPaid[debtId] ?? []).includes(payKey);
+      toggleBillPaid({
+        billId: debtId,
+        due: next.due,
+        category: 'debt',
+        label: d.name,
+        actualPaid: next.amount,
+      });
+
+      if (!wasPaid) {
+        const mk = payKey.length === 7 ? payKey : next.due.toISOString().slice(0, 10);
+        pushToast({
+          type: 'success',
+          message: `${d.name}: ${formatMoney(next.amount)} marked paid (${mk})`,
+        });
+      }
+    },
+    [toggleBillPaid],
+  );
 
   const addExtraIncome = useCallback((entry: ExtraIncomeEntry) => {
     setState((s) => {
@@ -839,10 +961,11 @@ export function usePersistedFinance() {
         return { ...patched, balanceUpdatedAt: today };
       });
 
-      const sim = simulateDebtPayoff(nextDebts);
+      const nextState = { ...s, debts: nextDebts };
+      const sim = simulateDebtPayoff(nextDebts, new Date(), { state: nextState });
       const debtFreeProjectionByMonth = {
         ...(s.debtFreeProjectionByMonth ?? {}),
-        [mk]: { months: sim.months, totalDebt: round2(totalDebtRemaining(nextDebts)) },
+        [mk]: { months: sim.months, totalDebt: round2(totalDebtRemaining(nextDebts, new Date(), nextState)) },
       };
 
       const nextGoals = (s.savingsGoals ?? []).map((g) => {
@@ -1002,6 +1125,8 @@ export function usePersistedFinance() {
     setEssentials,
     setDebts,
     updateDebtBalance,
+    updateDebtBalanceDirect,
+    markNextDebtPayment,
     setAllocation,
     setWallets,
     setEmergency,

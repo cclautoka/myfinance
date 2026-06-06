@@ -3,10 +3,12 @@ import {
   dateToMonthKey,
   HISTORY_TRACKING_STARTED_MONTH_KEY,
 } from '../data/defaults';
-import type { FinanceState } from '../types/finance';
+import type { DebtAccount, FinanceState } from '../types/finance';
 import {
   billOccurrenceIsPaid,
   billOccurrencePaidDisplayAmount,
+  billPaymentKey,
+  debtPaymentOccurrences,
   timelineOccurrencesDueInCalendarMonth,
 } from './billsTimeline';
 
@@ -98,6 +100,36 @@ export function lifetimePaidByBill(state: FinanceState, ref = new Date()): Lifet
       lastPaidDate: v.lastDueMs > 0 ? new Date(v.lastDueMs).toISOString().slice(0, 10) : null,
     }))
     .sort((a, b) => b.total - a.total);
+}
+
+export type DebtPaymentHistoryEntry = {
+  dueDate: string;
+  amount: number;
+  paidBy: 'Primary' | 'Partner' | 'Unknown';
+  markedAt: string | null;
+  paymentKey: string;
+};
+
+/** Paid installments for a debt — due date, amount, and who marked handled. */
+export function debtPaymentHistory(
+  state: FinanceState,
+  debt: DebtAccount,
+  ref = new Date(),
+): DebtPaymentHistoryEntry[] {
+  const entries: DebtPaymentHistoryEntry[] = [];
+  for (const occ of debtPaymentOccurrences(state, debt, ref)) {
+    if (!billOccurrenceIsPaid(state, occ)) continue;
+    const payKey = billPaymentKey(state, occ);
+    const attr = state.billPaymentAttribution?.[debt.id]?.[payKey];
+    entries.push({
+      dueDate: occ.due.toISOString().slice(0, 10),
+      amount: round2(billOccurrencePaidDisplayAmount(state, occ, occ.amount)),
+      paidBy: attr?.role === 'partner' ? 'Partner' : attr?.role === 'owner' ? 'Primary' : 'Unknown',
+      markedAt: attr?.at ?? null,
+      paymentKey: payKey,
+    });
+  }
+  return entries.sort((a, b) => b.dueDate.localeCompare(a.dueDate));
 }
 
 function expenseMonthKey(dateIso: string): string | null {

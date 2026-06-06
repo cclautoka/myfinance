@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { FinanceState } from '../types/finance';
 import { snowballTip } from '../copy/tooltips';
+import { effectiveDebtBalance } from '../utils/calculations';
 import { formatMoney } from '../utils/format';
 import { snowballOrder } from '../utils/snowball';
 import { HoverTip } from './ui/HoverTip';
@@ -17,10 +18,12 @@ import {
 
 export function DebtSnowball({ state, compact }: { state: FinanceState; compact?: boolean }) {
   const { ordered, maxEffectiveBalance } = useMemo(() => {
-    const o = snowballOrder(state.debts);
+    const ref = new Date();
+    const active = state.debts.filter((d) => effectiveDebtBalance(d, ref, state) > 0);
+    const o = snowballOrder(active, ref, state);
     const maxEff = o.reduce((m, r) => Math.max(m, r.effectiveBalance), 0);
     return { ordered: o, maxEffectiveBalance: maxEff };
-  }, [state.debts]);
+  }, [state]);
 
   const chartData = ordered.map((r) => ({
     /** Full name — short labels duplicated keys (e.g. three “Personal — …” rows) and broke Recharts tooltips. */

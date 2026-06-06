@@ -48,7 +48,7 @@ export const exportFinanceCsv = (state: FinanceState, snapshotMonth?: string): s
     'Est. OT on paycheques vs usual cheque (model)',
     String(incomeLogOvertimeMonthTotal(state, mk)),
   ]);
-  rows.push(['Summary', 'Debt remaining (est.)', String(totalDebtRemaining(state.debts))]);
+  rows.push(['Summary', 'Debt remaining (est.)', String(totalDebtRemaining(state.debts, new Date(), state))]);
   rows.push(['Summary', 'Emergency fund', String(state.emergencyFund)]);
   rows.push(['Essentials', 'Monthly total', String(monthlyEssentialAmount(state.essentials))]);
 
@@ -61,7 +61,7 @@ export const exportFinanceCsv = (state: FinanceState, snapshotMonth?: string): s
 
   const debtRef = new Date();
   for (const d of state.debts) {
-    const eff = Math.round(effectiveDebtBalance(d, debtRef) * 100) / 100;
+    const eff = Math.round(effectiveDebtBalance(d, debtRef, state) * 100) / 100;
     const apr = d.annualInterestApr ?? 0;
     rows.push([
       'Debt',

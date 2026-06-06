@@ -1,4 +1,4 @@
-import type { DebtAccount } from '../types/finance';
+import type { DebtAccount, FinanceState } from '../types/finance';
 import { effectiveDebtBalance } from './calculations';
 
 export interface SnowballRow {
@@ -8,10 +8,10 @@ export interface SnowballRow {
 }
 
 /** Smallest effective balance first (classic snowball). */
-export const snowballOrder = (debts: DebtAccount[], ref = new Date()): SnowballRow[] => {
+export const snowballOrder = (debts: DebtAccount[], ref = new Date(), state?: FinanceState): SnowballRow[] => {
   const rows: SnowballRow[] = debts.map((d) => ({
     debt: d,
-    effectiveBalance: effectiveDebtBalance(d, ref),
+    effectiveBalance: effectiveDebtBalance(d, ref, state),
     snowballOrder: 0,
   }));
 
@@ -32,8 +32,8 @@ export const snowballOrder = (debts: DebtAccount[], ref = new Date()): SnowballR
   });
 };
 
-export const snowballHead = (debts: DebtAccount[], ref = new Date()): DebtAccount | null => {
-  const o = snowballOrder(debts, ref).find((r) => r.snowballOrder === 1);
+export const snowballHead = (debts: DebtAccount[], ref = new Date(), state?: FinanceState): DebtAccount | null => {
+  const o = snowballOrder(debts, ref, state).find((r) => r.snowballOrder === 1);
   return o?.debt ?? null;
 };
 
@@ -41,8 +41,9 @@ export const snowballHead = (debts: DebtAccount[], ref = new Date()): DebtAccoun
 export const endingSoonRedirect = (
   debts: DebtAccount[],
   ref = new Date(),
+  state?: FinanceState,
 ): { ending: DebtAccount; redirectAmount: number; target: DebtAccount } | null => {
-  const head = snowballHead(debts, ref);
+  const head = snowballHead(debts, ref, state);
   if (!head) return null;
 
   for (const d of debts) {

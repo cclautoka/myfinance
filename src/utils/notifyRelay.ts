@@ -22,7 +22,7 @@ export type SaveEmailDigestV1 = {
 export function buildFinanceChangeSummary(state: FinanceState): string {
   const mk = currentMonthKey();
   const planned = combinedMonthlyIncome(state);
-  const debt = totalDebtRemaining(state.debts);
+  const debt = totalDebtRemaining(state.debts, new Date(), state);
   const lines = [
     `Household finances · saved ${new Date().toISOString()}`,
     `Calendar month: ${mk}`,

@@ -156,6 +156,8 @@ export function AuthenticatedFinanceApp() {
     setEssentials,
     setDebts,
     updateDebtBalance,
+    updateDebtBalanceDirect,
+    markNextDebtPayment,
     resetAll,
     reloadFromServer,
     serverWorkbookExists,
@@ -616,7 +618,12 @@ export function AuthenticatedFinanceApp() {
                         </div>
                       </div>
                     </div>
-                    <DebtBalancesPanel state={state} onUpdateDebtBalance={updateDebtBalance} />
+                    <DebtBalancesPanel
+                      state={state}
+                      onUpdateDebtBalance={updateDebtBalance}
+                      onUpdateDebtBalanceDirect={updateDebtBalanceDirect}
+                      onMarkNextDebtPayment={markNextDebtPayment}
+                    />
                     <div className="rounded-xl border border-sage-200/80 bg-sage-50/50 px-4 py-3 text-sm text-sage-700 dark:border-moss-border dark:bg-moss-bg/50 dark:text-moss-subtle">
                       <strong className="text-sage-900 dark:text-moss-fg">Payoff bar chart</strong> lives on the{' '}
                       <button

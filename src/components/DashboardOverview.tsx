@@ -142,7 +142,7 @@ export function DashboardOverview({
   const goalManualDefault = useMemo(() => 200, []);
   const goalSubDefault = useMemo(() => 100, []);
   const income = combinedMonthlyIncome(state);
-  const debt = totalDebtRemaining(state.debts);
+  const debt = totalDebtRemaining(state.debts, new Date(), state);
   const mk = currentMonthKey();
   const extraIn = extraIncomeMonthTotal(state, mk);
   const surprises = surpriseExpensesMonthTotal(state, mk);

@@ -25,14 +25,14 @@ export function DebtPayoffPathPanel({ state }: { state: FinanceState }) {
   const [extraSpend, setExtraSpend] = useState(0);
   const ref = useMemo(() => new Date(), []);
 
-  const baseline = useMemo(() => simulateDebtPayoff(state.debts, ref), [state.debts, ref]);
+  const baseline = useMemo(() => simulateDebtPayoff(state.debts, ref, { state }), [state, ref]);
   const scenario = useMemo(
-    () => simulateDebtPayoff(state.debts, ref, { extraCardSpendPerMonth: extraSpend }),
-    [state.debts, ref, extraSpend],
+    () => simulateDebtPayoff(state.debts, ref, { extraCardSpendPerMonth: extraSpend, state }),
+    [state, ref, extraSpend],
   );
   const delta = useMemo(
-    () => debtPayoffScenarioDelta(state.debts, ref, extraSpend),
-    [state.debts, ref, extraSpend],
+    () => debtPayoffScenarioDelta(state.debts, ref, extraSpend, state),
+    [state, ref, extraSpend],
   );
 
   const mk = currentMonthKey();
@@ -76,7 +76,7 @@ export function DebtPayoffPathPanel({ state }: { state: FinanceState }) {
             <div className="text-right text-sm text-sage-700 dark:text-moss-subtle">
               <p>Total owed (approx.)</p>
               <p className="font-semibold tabular-nums text-sage-900 dark:text-moss-fg">
-                {formatMoney(totalDebtRemaining(state.debts, ref))}
+                {formatMoney(totalDebtRemaining(state.debts, ref, state))}
               </p>
             </div>
           </div>
