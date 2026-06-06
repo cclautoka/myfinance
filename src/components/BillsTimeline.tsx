@@ -1,10 +1,11 @@
 import { useMemo } from 'react';
 import type { FinanceState, TimelineBill } from '../types/finance';
+import { currentMonthKey } from '../data/defaults';
+import { pocketLeftSoFar } from '../utils/budgetSurplus';
 import { bills as billsCopy } from '../copy/bills';
 import { billsTimelineTip } from '../copy/tooltips';
 import type { BillsPaidTogglePayload } from '../utils/billsTimeline';
 import {
-  availableForBillsHint,
   billIsInGraceAfterDue,
   billOccurrenceIsPaid,
   billOccurrencePaidDisplayAmount,
@@ -65,9 +66,11 @@ export function BillsTimeline({
   onTogglePaid: (row: BillsPaidTogglePayload) => void;
 }) {
   const rows = useMemo(() => buildTimeline(state, 3), [state]);
-  const hint = availableForBillsHint(state);
-  const upcoming10 = upcomingDeductionsTotal(state, 10);
-  const tight = upcoming10 > hint * 0.85 && upcoming10 > 0;
+  const monthKey = currentMonthKey();
+  const ref = useMemo(() => new Date(), []);
+  const pocketLeft = pocketLeftSoFar(state, monthKey, ref);
+  const upcoming10 = upcomingDeductionsTotal(state, 10, ref);
+  const tight = upcoming10 > 0 && upcoming10 > Math.max(0, pocketLeft);
 
   const overdueCount = useMemo(
     () =>
@@ -104,7 +107,9 @@ export function BillsTimeline({
 
             {tight && (
               <div className="mb-4 min-w-0 max-w-full break-words rounded-xl border border-sage-200/90 bg-sage-50/90 p-4 text-sm text-sage-800 dark:border-moss-border dark:bg-moss-surface dark:text-moss-subtle">
-                {billsCopy.cushionTight(formatMoney(upcoming10), formatMoney(hint))}
+                {pocketLeft < 0
+                  ? billsCopy.cushionTightBehind(formatMoney(upcoming10), formatMoney(-pocketLeft))
+                  : billsCopy.cushionTight(formatMoney(upcoming10), formatMoney(pocketLeft))}
               </div>
             )}
 

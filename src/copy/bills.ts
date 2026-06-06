@@ -8,8 +8,11 @@ export const bills = {
   upcomingHint: 'Hides paid lines.',
   fullTimeline: 'Full timeline',
 
-  cushionTight: (upcoming: string, cushion: string) =>
-    `About ${upcoming} is due in the next ten days. Your plan leaves roughly ${cushion} for bills. A quick heads-up—not your bank balance.`,
+  /** Upcoming window exceeds pocket left (same math as Dashboard “Left from deposits”). */
+  cushionTight: (upcoming: string, pocketLeft: string) =>
+    `About ${upcoming} is due in the next ten days. ${glossary.leftFromDeposits} after bills due so far: roughly ${pocketLeft}. A quick heads-up—not your bank balance.`,
+  cushionTightBehind: (upcoming: string, behind: string) =>
+    `About ${upcoming} is due in the next ten days. Deposits this month are roughly ${behind} behind after bills due so far. A quick heads-up—not your bank balance.`,
   cushionComfortable: (upcoming: string) =>
     `About ${upcoming} is due in the next ten days.`,
 

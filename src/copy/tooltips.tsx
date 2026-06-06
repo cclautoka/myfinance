@@ -246,7 +246,9 @@ export function billsTimelineTip(): ReactNode {
       The checklist starts at <strong className="text-sage-900 dark:text-moss-tip">{since}</strong>. Earlier months
       appear under Past months only. Weekly essentials appear once per Saturday. Mark each row separately. Debts
       with <strong className="text-sage-900 dark:text-moss-tip">Auto deduction</strong> can mark as paid after the due
-      date unless you tap Undo paid for that month.
+      date unless you tap Undo paid for that month. The heads-up banner compares the next ten days of unpaid lines to{' '}
+      <strong className="text-sage-900 dark:text-moss-tip">Left from deposits</strong> on the Dashboard (pay + carry,
+      minus bills due so far).
     </>
   );
 }
