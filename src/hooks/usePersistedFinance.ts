@@ -30,6 +30,7 @@ import {
   billPaymentKey,
   debtPaymentOccurrences,
   nextUnpaidDebtOccurrence,
+  unpaidDebtContractRemaining,
 } from '../utils/billsTimeline';
 import { applyAutoScheduledPayLogs } from '../utils/autoScheduledPayLog';
 import {
@@ -39,7 +40,7 @@ import {
   type MonthOpeningAllocationInput,
 } from '../utils/budgetSurplus';
 import { applyCardAvailableCheckIn } from '../utils/cardCredit';
-import { totalDebtRemaining } from '../utils/calculations';
+import { effectiveDebtBalance, totalDebtRemaining } from '../utils/calculations';
 import { estimatedDebtFreeMonths, simulateDebtPayoff } from '../utils/debtFree';
 import { formatMoney } from '../utils/format';
 import {
@@ -97,6 +98,41 @@ function applyMarkAllUnpaidDebtOccurrences(s: FinanceState, debtId: string): Fin
   if (Object.keys(attrInner).length) billPaymentAttribution[debtId] = attrInner;
 
   return { ...s, billsPaid, billPaidAmounts, billPaymentAttribution };
+}
+
+/** After a debt installment is marked paid, sync balance and finalize when nothing remains. */
+function applySmartDebtPaymentFinalize(s: FinanceState, billId: string): FinanceState {
+  const today = new Date().toISOString().slice(0, 10);
+  const d = s.debts.find((x) => x.id === billId);
+  if (!d) return s;
+
+  let debts = s.debts;
+  const ref = new Date();
+
+  if (d.endsOn && d.monthlyPayment > 0 && d.balance > 0) {
+    const unpaid = unpaidDebtContractRemaining(s, d);
+    if (unpaid < d.balance) {
+      debts = debts.map((x) =>
+        x.id === billId ? { ...x, balance: round2(unpaid), balanceUpdatedAt: today } : x,
+      );
+    }
+  }
+
+  let next: FinanceState = { ...s, debts };
+  const current = next.debts.find((x) => x.id === billId);
+  if (!current) return next;
+
+  if (effectiveDebtBalance(current, ref, next) <= 0) {
+    next = applyMarkAllUnpaidDebtOccurrences(next, billId);
+    next = {
+      ...next,
+      debts: next.debts.map((x) =>
+        x.id === billId ? { ...x, balance: 0, balanceUpdatedAt: today } : x,
+      ),
+    };
+  }
+
+  return next;
 }
 
 function hashFinanceState(s: FinanceState): string {
@@ -738,7 +774,7 @@ export function usePersistedFinance() {
             )
           : s.debts;
 
-      const next = {
+      let next: FinanceState = {
         ...s,
         debts,
         billsPaid: { ...s.billsPaid, [billId]: [...cur] },
@@ -746,6 +782,11 @@ export function usePersistedFinance() {
         billPaidAmounts,
         billPaymentAttribution,
       };
+
+      if (!wasPaid && debtRow && row.category === 'debt') {
+        next = applySmartDebtPaymentFinalize(next, billId);
+      }
+
       stateRef.current = next;
       void writeWidgetCache(next);
       return next;
@@ -774,6 +815,9 @@ export function usePersistedFinance() {
 
       const payKey = billPaymentKey(s, { billId: debtId, due: next.due, category: 'debt' });
       const wasPaid = (s.billsPaid[debtId] ?? []).includes(payKey);
+      const unpaidBefore = debtPaymentOccurrences(s, d).filter((b) => !billOccurrenceIsPaid(s, b)).length;
+      const isLastInstallment = unpaidBefore === 1;
+
       toggleBillPaid({
         billId: debtId,
         due: next.due,
@@ -783,11 +827,15 @@ export function usePersistedFinance() {
       });
 
       if (!wasPaid) {
-        const mk = payKey.length === 7 ? payKey : next.due.toISOString().slice(0, 10);
-        pushToast({
-          type: 'success',
-          message: `${d.name}: ${formatMoney(next.amount)} marked paid (${mk})`,
-        });
+        if (isLastInstallment) {
+          pushToast({ type: 'success', message: `${d.name} paid off — moved to achievements.` });
+        } else {
+          const mk = payKey.length === 7 ? payKey : next.due.toISOString().slice(0, 10);
+          pushToast({
+            type: 'success',
+            message: `${d.name}: ${formatMoney(next.amount)} marked paid (${mk})`,
+          });
+        }
       }
     },
     [toggleBillPaid],

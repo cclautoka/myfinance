@@ -84,10 +84,9 @@ export function dashboardDebtTip(): ReactNode {
 export function debtBalancesPanelTip(): ReactNode {
   return (
     <>
-      Active debts only in the main table — paid-off rows move to achievements below. Cards:{' '}
-      <strong className="text-sage-900 dark:text-moss-tip">Update available</strong>. HP / loans: tap a row to mark the
-      next calendar payment, or use <strong className="text-sage-900 dark:text-moss-tip">Update</strong> to override
-      balance or mark fully paid off.
+      Every row uses <strong className="text-sage-900 dark:text-moss-tip">Update balance</strong> — cards enter
+      available credit; HP / loans enter what you still owe. Tap HP rows to mark the next payment; when nothing is left,
+      the debt moves to achievements automatically.
     </>
   );
 }

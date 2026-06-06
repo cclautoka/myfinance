@@ -43,6 +43,11 @@ describe('effectiveDebtBalance with HP schedule', () => {
     expect(effectiveDebtBalance(hp(), new Date('2026-06-06'), state)).toBe(281);
   });
 
+  it('returns zero when every installment is marked paid', () => {
+    const state = stateWithPaidMonths(['2026-05', '2026-06', '2026-07']);
+    expect(effectiveDebtBalance(hp(), new Date('2026-06-06'), state)).toBe(0);
+  });
+
   it('falls back to time estimate without state', () => {
     const bal = effectiveDebtBalance(hp(), new Date('2026-06-06'));
     expect(bal).toBeGreaterThan(281);

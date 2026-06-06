@@ -153,6 +153,12 @@ export function unpaidDebtContractRemaining(state: FinanceState, d: DebtAccount)
   return Math.round(sum * 100) / 100;
 }
 
+/** True when every scheduled installment through `endsOn` is marked paid. */
+export function debtCalendarFullyPaid(state: FinanceState, d: DebtAccount): boolean {
+  if (!d.endsOn || d.monthlyPayment <= 0) return false;
+  return unpaidDebtContractRemaining(state, d) <= 0;
+}
+
 /** All calendar occurrences for a debt row (contract schedule or rolling timeline). */
 export function debtPaymentOccurrences(state: FinanceState, d: DebtAccount, ref = new Date()): TimelineBill[] {
   if (d.endsOn && d.monthlyPayment > 0) return debtContractOccurrences(d);

@@ -1,5 +1,5 @@
 import type { DebtAccount, EssentialExpense, FinanceState, IncomeConfig } from '../types/finance';
-import { unpaidDebtContractRemaining } from './billsTimeline';
+import { unpaidDebtContractRemaining, debtCalendarFullyPaid } from './billsTimeline';
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
@@ -43,6 +43,7 @@ export const effectiveDebtBalance = (
   ref: Date = new Date(),
   state?: FinanceState,
 ): number => {
+  if (state && d.endsOn && d.monthlyPayment > 0 && debtCalendarFullyPaid(state, d)) return 0;
   if (d.balance > 0) return round2(d.balance);
   if (!d.endsOn) return 0;
   if (state && d.monthlyPayment > 0) {

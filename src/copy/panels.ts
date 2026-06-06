@@ -62,6 +62,8 @@ export const panels = {
     title: 'Paid off — achievements',
     subtitle: 'Debts cleared from your active list. Open one to see every payment logged.',
   },
+  /** Single label for every debt row’s refresh control (cards, HP, loans, personal). */
+  debtUpdateBalance: 'Update balance',
   debtSnowball: {
     title: 'Payoff order cheer chart',
     titleCompact: 'Debt payoff snapshot',

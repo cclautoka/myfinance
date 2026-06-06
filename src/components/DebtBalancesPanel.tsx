@@ -54,12 +54,15 @@ function buildDebtRows(state: FinanceState): DebtRow[] {
 }
 
 function rowIsClickable(d: DebtAccount): boolean {
-  if (d.kind === 'card') return true;
+  if (d.kind === 'card' || d.kind === 'loan') return true;
   return d.monthlyPayment > 0;
 }
 
-function updateButtonLabel(d: DebtAccount): string {
-  return d.kind === 'card' ? 'Update available' : 'Update';
+function rowClickHint(d: DebtAccount): string | null {
+  if (d.kind === 'card' || d.kind === 'loan' || d.monthlyPayment <= 0) {
+    return `Tap row to ${panels.debtUpdateBalance.toLowerCase()}`;
+  }
+  return 'Tap row to mark next payment';
 }
 
 export function DebtBalancesPanel({
@@ -116,7 +119,7 @@ export function DebtBalancesPanel({
   };
 
   const handleRowClick = (d: DebtAccount) => {
-    if (d.kind === 'card') {
+    if (d.kind === 'card' || d.kind === 'loan') {
       openUpdate(d);
       return;
     }
@@ -138,11 +141,9 @@ export function DebtBalancesPanel({
         onClick={clickable ? () => handleRowClick(d) : paidOff ? () => setHistoryDebtId(d.id) : undefined}
         title={
           clickable
-            ? d.kind === 'card'
-              ? 'Update available credit'
-              : d.monthlyPayment > 0
-                ? 'Mark next installment paid'
-                : 'Update balance'
+            ? d.kind === 'card' || d.kind === 'loan' || d.monthlyPayment <= 0
+              ? panels.debtUpdateBalance
+              : 'Mark next installment paid'
             : paidOff
               ? 'View payment history'
               : undefined
@@ -166,9 +167,14 @@ export function DebtBalancesPanel({
               checked {d.balanceUpdatedAt}
             </span>
           ) : null}
-          {!paidOff && d.kind !== 'card' && d.monthlyPayment > 0 ? (
+          {d.kind === 'loan' && d.balanceUpdatedAt ? (
+            <span className="mt-0.5 block text-[10px] font-normal text-sage-500 dark:text-moss-muted">
+              checked {d.balanceUpdatedAt}
+            </span>
+          ) : null}
+          {!paidOff && rowClickHint(d) ? (
             <span className="mt-0.5 block text-[10px] font-normal text-teal-800/90 dark:text-teal-200/80">
-              Tap row to mark next payment
+              {rowClickHint(d)}
             </span>
           ) : null}
           {utilPct !== null ? (
@@ -206,7 +212,7 @@ export function DebtBalancesPanel({
                 openUpdate(d);
               }}
             >
-              {updateButtonLabel(d)}
+              {panels.debtUpdateBalance}
             </button>
           ) : paidOff ? (
             <button
@@ -275,10 +281,10 @@ export function DebtBalancesPanel({
               </table>
             </div>
             <p className="mt-4 text-xs leading-relaxed text-sage-600 dark:text-moss-muted">
-              <strong className="text-sage-800 dark:text-moss-subtle">HP / loans:</strong> tap a row to mark the next
-              installment paid (updates snowball automatically). Use <strong className="text-sage-800 dark:text-moss-subtle">Update</strong>{' '}
-              for a manual balance override or to mark fully paid off. Cards:{' '}
-              <strong className="text-sage-800 dark:text-moss-subtle">Update available</strong> from your bank app.
+              <strong className="text-sage-800 dark:text-moss-subtle">HP:</strong> tap a row to mark the next installment
+              paid (balance drops automatically). Everything else: use{' '}
+              <strong className="text-sage-800 dark:text-moss-subtle">{panels.debtUpdateBalance}</strong> or tap the row
+              — last payment moves the debt to achievements automatically.
             </p>
           </Card>
 
