@@ -377,8 +377,8 @@ export function incomeVsSpendTip(): ReactNode {
       <strong className="text-sage-900 dark:text-moss-tip">Partner</strong> is wife&apos;s. Dark shading is bills
       attributed to that person. When only Primary logged pay this month,{' '}
       <strong className="text-sage-900 dark:text-moss-tip">left</strong> matches{' '}
-      <strong className="text-sage-900 dark:text-moss-tip">Left from deposits</strong> above — including bills not yet
-      tagged Primary or Partner.
+      <strong className="text-sage-900 dark:text-moss-tip">Left from deposits</strong> above — carry-over from last month
+      is included in the bar width and clears false “over pay” warnings.
     </>
   );
 }

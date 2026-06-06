@@ -1,7 +1,7 @@
 import { currentMonthKey } from '../data/defaults';
 import type { FinanceState, SurprisePaidByRole } from '../types/finance';
 import { extraIncomeMonthTotal } from './calculations';
-import { pocketLeftSoFar } from './budgetSurplus';
+import { pocketLeftSoFar, monthSpendableCarry } from './budgetSurplus';
 import {
   billOccurrenceIsPaid,
   billOccurrencePaidDisplayAmount,
@@ -23,6 +23,8 @@ export type IncomeSpendRow = {
   key: IncomeSpendRowKey;
   label: string;
   incomeLogged: number;
+  /** Optional carry-in from last month (sole Primary depositor row). */
+  carryIn: number;
   spent: number;
   remaining: number;
   overspend: number;
@@ -31,6 +33,11 @@ export type IncomeSpendRow = {
   billsTotal: number;
   surprisesTotal: number;
 };
+
+/** Logged pay plus any carry-in counted toward this row’s spendable pool. */
+export function incomeSpendableTotal(row: IncomeSpendRow): number {
+  return round2(row.incomeLogged + row.carryIn);
+}
 
 export type UnassignedSpend = {
   billsTotal: number;
@@ -148,6 +155,7 @@ function buildPersonRow(
     key,
     label,
     incomeLogged,
+    carryIn: 0,
     spent,
     remaining,
     overspend,
@@ -178,6 +186,7 @@ export function monthIncomeSpendSummary(
       key: 'joint',
       label: 'Joint deposits',
       incomeLogged: logged.joint,
+      carryIn: 0,
       spent: 0,
       remaining: logged.joint,
       overspend: 0,
@@ -193,6 +202,7 @@ export function monthIncomeSpendSummary(
       key: 'extra',
       label: 'Extra cash',
       incomeLogged: extra,
+      carryIn: 0,
       spent: 0,
       remaining: extra,
       overspend: 0,
@@ -211,24 +221,26 @@ export function monthIncomeSpendSummary(
 
   const householdPocketLeft = pocketLeftSoFar(state, monthKey);
 
-  // When one person logged all pay, bar “left” should match household pocket (includes unassigned bills).
+  // When one person logged all pay, bar “left” / “over” match household pocket (carry burns before deposits).
   const soleDepositor =
     logged.wife <= 0 && logged.joint <= 0 && extra <= 0 && rows.some((r) => r.key === 'owner');
   if (soleDepositor) {
     const owner = rows.find((r) => r.key === 'owner');
     if (owner) {
+      owner.carryIn = monthSpendableCarry(state, monthKey);
       if (householdPocketLeft < 0) {
         owner.remaining = 0;
         owner.overspend = round2(-householdPocketLeft);
       } else {
         owner.remaining = householdPocketLeft;
+        owner.overspend = 0;
       }
     }
   }
 
   const chartMax = Math.max(
     1,
-    ...rows.map((r) => Math.max(r.incomeLogged, r.spent)),
+    ...rows.map((r) => Math.max(incomeSpendableTotal(r), r.spent)),
     unassigned.billsTotal,
   );
 

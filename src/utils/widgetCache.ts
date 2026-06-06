@@ -20,7 +20,9 @@ export type WidgetGoalItem = {
 export type WidgetIncomeVsSpend = {
   monthKey: string;
   primaryIncome: number;
+  primaryCarryIn: number;
   partnerIncome: number;
+  partnerCarryIn: number;
   primarySpent: number;
   partnerSpent: number;
   primaryLeft: number;
@@ -119,7 +121,9 @@ export function buildWidgetCacheV1(state: FinanceState, opts?: { householdId?: s
   const incomeVsSpend: WidgetIncomeVsSpend = {
     monthKey,
     primaryIncome: round2(primary?.incomeLogged ?? 0),
+    primaryCarryIn: round2(primary?.carryIn ?? 0),
     partnerIncome: round2(partner?.incomeLogged ?? 0),
+    partnerCarryIn: round2(partner?.carryIn ?? 0),
     primarySpent: round2(primary?.spent ?? 0),
     partnerSpent: round2(partner?.spent ?? 0),
     primaryLeft: round2(primary?.remaining ?? 0),

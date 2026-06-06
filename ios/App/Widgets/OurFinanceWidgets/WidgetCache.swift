@@ -17,7 +17,9 @@ struct WidgetGoalItem: Codable, Hashable {
 struct WidgetIncomeVsSpend: Codable, Hashable {
     var monthKey: String
     var primaryIncome: Double
+    var primaryCarryIn: Double?
     var partnerIncome: Double
+    var partnerCarryIn: Double?
     var primarySpent: Double
     var partnerSpent: Double
     var primaryLeft: Double

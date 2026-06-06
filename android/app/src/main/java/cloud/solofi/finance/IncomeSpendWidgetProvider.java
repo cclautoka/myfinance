@@ -60,8 +60,8 @@ public class IncomeSpendWidgetProvider extends AppWidgetProvider {
     c.drawRoundRect(r1, radius, radius, track);
     c.drawRoundRect(r2, radius, radius, track);
 
-    double ownerIncome = Math.max(0, v.primaryIncome);
-    double partnerIncome = Math.max(0, v.partnerIncome);
+    double ownerIncome = Math.max(0, v.primaryIncome + v.primaryCarryIn);
+    double partnerIncome = Math.max(0, v.partnerIncome + v.partnerCarryIn);
 
     double ownerSpentWithinIncome = Math.max(0, Math.min(ownerIncome, ownerIncome - Math.max(0, v.primaryLeft)));
     double ownerOver = Math.max(0, v.primaryOver);

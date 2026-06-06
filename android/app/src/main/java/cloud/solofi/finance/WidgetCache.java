@@ -36,15 +36,28 @@ public class WidgetCache {
 
   public static class IncomeVsSpend {
     public final double primaryIncome;
+    public final double primaryCarryIn;
     public final double partnerIncome;
+    public final double partnerCarryIn;
     public final double primaryLeft;
     public final double partnerLeft;
     public final double primaryOver;
     public final double partnerOver;
 
-    public IncomeVsSpend(double pi, double pai, double pl, double pal, double pOver, double po) {
+    public IncomeVsSpend(
+      double pi,
+      double pci,
+      double pai,
+      double paci,
+      double pl,
+      double pal,
+      double pOver,
+      double po
+    ) {
       this.primaryIncome = pi;
+      this.primaryCarryIn = pci;
       this.partnerIncome = pai;
+      this.partnerCarryIn = paci;
       this.primaryLeft = pl;
       this.partnerLeft = pal;
       this.primaryOver = pOver;
@@ -102,7 +115,9 @@ public class WidgetCache {
       JSONObject ivs = j.optJSONObject("incomeVsSpend");
       IncomeVsSpend inc = new IncomeVsSpend(
         ivs != null ? ivs.optDouble("primaryIncome", 0) : 0,
+        ivs != null ? ivs.optDouble("primaryCarryIn", 0) : 0,
         ivs != null ? ivs.optDouble("partnerIncome", 0) : 0,
+        ivs != null ? ivs.optDouble("partnerCarryIn", 0) : 0,
         ivs != null ? ivs.optDouble("primaryLeft", 0) : 0,
         ivs != null ? ivs.optDouble("partnerLeft", 0) : 0,
         ivs != null ? ivs.optDouble("primaryOver", 0) : 0,

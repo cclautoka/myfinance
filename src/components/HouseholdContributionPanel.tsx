@@ -5,7 +5,7 @@ import type { FinanceState } from '../types/finance';
 import { currentMonthKey } from '../data/defaults';
 import { formatMoney } from '../utils/format';
 import { panels } from '../copy/panels';
-import { monthIncomeSpendSummary, type IncomeSpendRow } from '../utils/householdIncomeSpend';
+import { monthIncomeSpendSummary, incomeSpendableTotal, type IncomeSpendRow } from '../utils/householdIncomeSpend';
 import { Card } from './ui/Card';
 
 const ROW_STYLES: Record<
@@ -43,6 +43,7 @@ function emptyChartRow(key: 'owner' | 'partner', label: string): IncomeSpendRow 
     key,
     label,
     incomeLogged: 0,
+    carryIn: 0,
     spent: 0,
     remaining: 0,
     overspend: 0,
@@ -65,6 +66,14 @@ function IncomeSpendBreakdown({ row }: { row: IncomeSpendRow }) {
       <p className="mt-1 text-slate-600 dark:text-moss-subtle">
         Logged pay: <strong className="text-slate-900 dark:text-moss-fg">{formatMoney(row.incomeLogged)}</strong>
       </p>
+      {row.carryIn > 0 ? (
+        <p className="mt-1 text-slate-600 dark:text-moss-subtle">
+          Carried over: <strong className="text-slate-900 dark:text-moss-fg">{formatMoney(row.carryIn)}</strong>
+          {' · '}
+          Spendable:{' '}
+          <strong className="text-slate-900 dark:text-moss-fg">{formatMoney(incomeSpendableTotal(row))}</strong>
+        </p>
+      ) : null}
       {row.bills.length > 0 ? (
         <div className="mt-2">
           <p className="font-semibold text-slate-700 dark:text-moss-subtle">Bills marked as paid</p>
@@ -144,14 +153,15 @@ function IncomeSpendBarRow({
   isActive: boolean;
 }) {
   const styles = rowStyle(row.key);
+  const spendable = incomeSpendableTotal(row);
   const { ref: trackRef, inView } = useInView({
     rootMargin: '0px 0px -8% 0px',
     animateOnlyAfterScroll: true,
   });
-  const trackMax = Math.max(row.incomeLogged, row.spent, 1);
-  const incomePct = (row.incomeLogged / trackMax) * 100;
-  const spentPct = (Math.min(row.spent, row.incomeLogged) / trackMax) * 100;
-  const spentWithinIncomePct = row.incomeLogged > 0 ? (Math.min(row.spent, row.incomeLogged) / row.incomeLogged) * 100 : 0;
+  const trackMax = Math.max(spendable, row.spent, 1);
+  const incomePct = (spendable / trackMax) * 100;
+  const spentPct = (Math.min(row.spent, spendable) / trackMax) * 100;
+  const spentWithinIncomePct = spendable > 0 ? (Math.min(row.spent, spendable) / spendable) * 100 : 0;
   const overspendPct = (row.overspend / trackMax) * 100;
 
   return (
@@ -165,7 +175,7 @@ function IncomeSpendBarRow({
       onBlur={onLeave}
       tabIndex={0}
       role="group"
-      aria-label={`${row.label}: income ${formatMoney(row.incomeLogged)}, spent ${formatMoney(row.spent)}`}
+      aria-label={`${row.label}: income ${formatMoney(spendable)}, spent ${formatMoney(row.spent)}`}
     >
       <span className="text-xs font-semibold text-sage-800 dark:text-moss-subtle">{row.label}</span>
 
@@ -173,18 +183,18 @@ function IncomeSpendBarRow({
         ref={trackRef}
         className="income-bar-track relative h-9 min-w-0 overflow-visible rounded-lg bg-slate-200/50 dark:bg-moss-bg/80"
       >
-        {row.incomeLogged > 0 ? (
+        {spendable > 0 ? (
           <AnimatedBar className={styles.income} widthPct={incomePct} inView={inView} />
         ) : null}
-        {spentWithinIncomePct > 0 && row.incomeLogged > 0 ? (
+        {spentWithinIncomePct > 0 && spendable > 0 ? (
           <AnimatedBar
             className={styles.spent}
             widthPct={spentPct}
             inView={inView}
-            title={`Spent ${formatMoney(Math.min(row.spent, row.incomeLogged))}`}
+            title={`Spent ${formatMoney(Math.min(row.spent, spendable))}`}
           />
         ) : null}
-        {row.incomeLogged <= 0 && row.spent > 0 ? (
+        {spendable <= 0 && row.spent > 0 ? (
           <AnimatedBar
             className={styles.spent}
             widthPct={(row.spent / trackMax) * 100}
@@ -212,6 +222,11 @@ function IncomeSpendBarRow({
       </div>
 
       <div className="shrink-0 text-right leading-tight tabular-nums">
+        {row.carryIn > 0 ? (
+          <p className="text-[10px] font-medium text-sage-600 dark:text-moss-muted">
+            +{formatMoney(row.carryIn)} carry
+          </p>
+        ) : null}
         <p className="min-w-0 max-w-full font-display font-semibold tabular-nums leading-[1.05] tracking-tight text-[clamp(1.05rem,3.4cqi+0.55rem,1.35rem)] text-sage-950 dark:text-moss-fg">
           {formatMoney(row.incomeLogged)}
         </p>
