@@ -113,8 +113,9 @@ export function dashboardNextBillTip(): ReactNode {
 export function dashboardSafeSpendTip(): ReactNode {
   return (
     <>
-      Approximate leftover per week after essentials, groceries, debt payments, and savings from your plan, with a
-      gentle haircut if big bills bunch up soon. A rough estimate only, not permission to spend or a limit.
+      Rough weekly room left from <strong className="text-sage-900 dark:text-moss-tip">Left from deposits</strong>{' '}
+      after subtracting unpaid bills due in the next two weeks, spread over the weeks left this month. Uses logged pay
+      and carry — not your Household monthly plan. Illustrative only, not spending advice.
     </>
   );
 }
@@ -192,9 +193,10 @@ export function dashboardPlannedVsActualExpensesTip(): ReactNode {
     <>
       <strong className="text-sage-900 dark:text-moss-tip">Planned</strong> sums Household and Plan: essentials,
       groceries, debt payments, plus planned savings and personal.{' '}
-      <strong className="text-sage-900 dark:text-moss-tip">Actual</strong> counts bills due this month that you
-      marked as paid (using actual paid when entered), plus unexpected expenses dated this month. Unmarked bills
-      do not count. Not a bank feed.
+      <strong className="text-sage-900 dark:text-moss-tip">Actual</strong> counts all bills due this month that you
+      marked as paid (using actual paid when entered), plus unexpected expenses dated this month — even if the due date
+      is later. That differs from <strong className="text-sage-900 dark:text-moss-tip">Left from deposits</strong>,
+      which only subtracts bills due on or before today. Unmarked bills do not count. Not a bank feed.
     </>
   );
 }

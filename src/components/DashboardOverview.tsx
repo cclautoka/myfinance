@@ -500,12 +500,14 @@ export function DashboardOverview({
           <MetricWithTip tip={dashboardSafeSpendTip()} preview={preview}>
             <MetricCard variant="neutral">
               <p className="text-xs font-semibold uppercase tracking-wide text-sage-700 dark:text-moss-muted">
-                Est. weekly discretionary buffer
+                Est. weekly room left (cash)
               </p>
               <p className="mt-2 font-display text-3xl font-semibold tabular-nums text-teal-900 dark:text-moss-tip">
                 {formatMoney(safe.weeklyHint)}
               </p>
-              <p className="mt-1 text-[11px] text-sage-600 dark:text-moss-muted">Illustrative; not spending advice</p>
+              <p className="mt-1 text-[11px] text-sage-600 dark:text-moss-muted">
+                From Left from deposits · not plan-based
+              </p>
             </MetricCard>
           </MetricWithTip>
         </div>

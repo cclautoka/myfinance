@@ -9,10 +9,13 @@ ARG GITHUB_RUN_NUMBER=""
 ENV DOKPLOY_GIT_SHA=$DOKPLOY_GIT_SHA \
     DOKPLOY_BUILD_NUMBER=$DOKPLOY_BUILD_NUMBER \
     GITHUB_SHA=$GITHUB_SHA \
-    GITHUB_RUN_NUMBER=$GITHUB_RUN_NUMBER
+    GITHUB_RUN_NUMBER=$GITHUB_RUN_NUMBER \
+    DOCKER_BUILD=1 \
+    CI=true
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
+RUN node scripts/bump-patch-version.mjs --ci
 RUN npm run build
 
 FROM node:22-alpine AS runtime

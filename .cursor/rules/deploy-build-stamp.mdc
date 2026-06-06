@@ -1,0 +1,23 @@
+---
+description: Deploy build stamp and version bump requirements
+globs: Dockerfile,vite.config.ts,src/components/Header.tsx,scripts/bump-patch-version.mjs,docs/dokploy-setup.md
+alwaysApply: false
+---
+
+# Deploy build stamp
+
+When changing deploy, Docker, Vite build, or header display:
+
+1. **Injected at build time** (see `vite.config.ts`):
+   - `__APP_VERSION__` from `package.json` (Docker bump runs `scripts/bump-patch-version.mjs --ci` first)
+   - `__BUILD_TIME_ISO__` — ISO timestamp of the Vite build
+   - `__BUILD_NUMBER__` — `DOKPLOY_BUILD_NUMBER`, `GITHUB_RUN_NUMBER`, or git commit count
+   - `__BUILD_SHA__` — `DOKPLOY_GIT_SHA`, `GITHUB_SHA`, or local git short SHA
+
+2. **Header** (`Header.tsx`) must always show: `Build {version} · #{number} · {sha} · {local time}`. Never hide `#0`.
+
+3. **Dokploy**: document required build-args in `docs/dokploy-setup.md` — `DOKPLOY_GIT_SHA`, `DOKPLOY_BUILD_NUMBER`.
+
+4. **After user-visible deploy fixes**: remind to hard-refresh (PWA/cache) and confirm the header stamp changed.
+
+5. Do not bump `package.json` in git on every feature commit — patch bump is **Docker build-time only** unless the user asks for a release version commit.

@@ -107,6 +107,18 @@ Success response: JSON `{"ok":true}`.
 2. The running container executes **`db:migrate`** then starts the API — check logs for `db:migrate — OK` before `Listening on 8787`.
 3. Open **Build logs** if the image fails to build (common issues: out-of-memory on small VPS — upgrade RAM or add swap; or Git clone/auth errors).
 
+### Build stamp (header)
+
+Each deploy should show a fresh line under the workspace title, e.g. `Build 1.1.3 · #42 · a1b2c3d · 6/6/2026, 1:00:00 PM`.
+
+1. In Dokploy **Build arguments** (or equivalent Docker build-args), set:
+   - `DOKPLOY_GIT_SHA` — short commit hash from the build (7 chars is enough)
+   - `DOKPLOY_BUILD_NUMBER` — deploy counter or pipeline id (shows as `#42`)
+2. The Dockerfile runs `scripts/bump-patch-version.mjs --ci` before `npm run build`, which bumps the patch in `package.json` **inside the image only** (repo on GitHub stays on release tags you choose).
+3. After deploy, **hard-refresh** the site (or clear PWA cache) so the new hashed JS loads — otherwise the old build stamp can stick.
+
+If `#` or SHA is missing, check build logs for `bump-patch-version:` and confirm build-args are passed through to `docker build`.
+
 ---
 
 ## 7. After it’s green

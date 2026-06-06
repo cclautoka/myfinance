@@ -1,7 +1,5 @@
 import { useMemo } from 'react';
 import type { FinanceState, TimelineBill } from '../types/finance';
-import { currentMonthKey } from '../data/defaults';
-import { pocketLeftSoFar } from '../utils/budgetSurplus';
 import { bills as billsCopy } from '../copy/bills';
 import { billsTimelineTip } from '../copy/tooltips';
 import type { BillsPaidTogglePayload } from '../utils/billsTimeline';
@@ -11,8 +9,8 @@ import {
   billOccurrencePaidDisplayAmount,
   billVisualStatus,
   buildTimeline,
-  upcomingDeductionsTotal,
 } from '../utils/billsTimeline';
+import { billCalendarHeadsUp } from '../utils/moneyConsistency';
 import { businessWeekdaysFromTomorrowThroughDueInclusive } from '../utils/businessDays';
 import { formatMoney, formatShortDate } from '../utils/format';
 import { BillPaymentMarkControls } from './BillPaymentMarkControls';
@@ -66,11 +64,9 @@ export function BillsTimeline({
   onTogglePaid: (row: BillsPaidTogglePayload) => void;
 }) {
   const rows = useMemo(() => buildTimeline(state, 3), [state]);
-  const monthKey = currentMonthKey();
   const ref = useMemo(() => new Date(), []);
-  const pocketLeft = pocketLeftSoFar(state, monthKey, ref);
-  const upcoming10 = upcomingDeductionsTotal(state, 10, ref);
-  const tight = upcoming10 > 0 && upcoming10 > Math.max(0, pocketLeft);
+  const headsUp = useMemo(() => billCalendarHeadsUp(state, 10, ref), [state, ref]);
+  const { upcomingTotal: upcoming10, pocketLeft, tight } = headsUp;
 
   const overdueCount = useMemo(
     () =>

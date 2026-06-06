@@ -27,12 +27,12 @@ export function Header({
   const shaRaw = String(__BUILD_SHA__ ?? '').trim();
   const rev = String(__BUILD_NUMBER__ ?? '').trim();
   const shaKnown = shaRaw.length > 0 && shaRaw !== 'dev';
-  const shaForDisplay = import.meta.env.PROD ? (shaKnown ? shaRaw : null) : shaRaw || 'local';
-  const revForDisplay = rev && rev !== '0' ? rev : null;
+  const shaForDisplay = import.meta.env.PROD ? (shaKnown ? shaRaw : '—') : shaRaw || 'local';
+  const revForDisplay = rev.length > 0 ? rev : '0';
 
   const buildParts = import.meta.env.PROD
-    ? [`Build ${__APP_VERSION__}`, shaForDisplay, revForDisplay ? `#${revForDisplay}` : null, buildStamp]
-    : [`Build dev`, shaForDisplay, buildStamp];
+    ? [`Build ${__APP_VERSION__}`, `#${revForDisplay}`, shaForDisplay, buildStamp]
+    : [`Build dev`, shaForDisplay, `#${revForDisplay}`, buildStamp];
   const buildLine = buildParts.filter(Boolean).join(' · ');
   const buildLineExpanded = buildLine;
 

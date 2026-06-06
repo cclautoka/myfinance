@@ -11,7 +11,6 @@ import {
   calendarDaysAfterDue,
   startOfLocalDay,
 } from './businessDays';
-import { allocationBreakdown } from './allocation';
 
 /** Passed from the timeline row when toggling handled / undo. */
 export type BillsTogglePayload = Pick<TimelineBill, 'billId' | 'due' | 'category'> & {
@@ -391,10 +390,4 @@ export const billsPaidThisMonthCount = (state: FinanceState, ref = new Date()): 
   }
 
   return n;
-};
-
-/** @deprecated Plan-only slack; bill calendar now uses {@link pocketLeftSoFar} from budgetSurplus. */
-export const availableForBillsHint = (state: FinanceState): number => {
-  const br = allocationBreakdown(state);
-  return Math.max(0, br.income - br.essentials - br.groceries - br.debt - br.savings + state.emergencyFund * 0);
 };
