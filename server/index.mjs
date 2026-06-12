@@ -601,9 +601,15 @@ fastify.get('/v1/state/meta', async (request, reply) => {
     ok: true,
     id,
     exists: Boolean(existing),
-    updatedAt: existing?.updatedAt ?? null,
+    updatedAt: serializeUpdatedAt(existing?.updatedAt) ?? null,
   });
 });
+
+function serializeUpdatedAt(updatedAt) {
+  if (updatedAt == null) return null;
+  if (updatedAt instanceof Date) return updatedAt.toISOString();
+  return String(updatedAt);
+}
 
 function stateUpdatedAtMs(updatedAt) {
   if (updatedAt == null) return 0;
@@ -632,7 +638,7 @@ fastify.get('/v1/state/watch', async (request, reply) => {
     }
     const at = existing.updatedAt;
     if (stateUpdatedAtMs(at) > sinceMs) {
-      return reply.send({ ok: true, id, exists: true, changed: true, updatedAt: at });
+      return reply.send({ ok: true, id, exists: true, changed: true, updatedAt: serializeUpdatedAt(at) });
     }
     await new Promise((resolve) => setTimeout(resolve, pollMs));
   }
@@ -643,7 +649,7 @@ fastify.get('/v1/state/watch', async (request, reply) => {
     id,
     exists: Boolean(existing),
     changed: false,
-    updatedAt: existing?.updatedAt ?? null,
+    updatedAt: serializeUpdatedAt(existing?.updatedAt) ?? null,
   });
 });
 
@@ -654,7 +660,7 @@ fastify.get('/v1/state', async (request, reply) => {
   if (!getDbEnabled()) return reply.code(503).send({ error: 'DATABASE_URL is not set.' });
   const existing = await readState(id);
   if (!existing) return reply.code(404).send({ error: 'Not found' });
-  return reply.send({ ok: true, id, state: existing.state, updatedAt: existing.updatedAt });
+  return reply.send({ ok: true, id, state: existing.state, updatedAt: serializeUpdatedAt(existing.updatedAt) });
 });
 
 fastify.put('/v1/state', async (request, reply) => {
@@ -685,7 +691,7 @@ fastify.put('/v1/state', async (request, reply) => {
       ok: false,
       error: 'conflict',
       id,
-      updatedAt: previous.updatedAt,
+      updatedAt: serializeUpdatedAt(previous.updatedAt),
       state: previous.state,
     });
   }
@@ -719,7 +725,7 @@ fastify.put('/v1/state', async (request, reply) => {
     // Best-effort: nudge devices to reload widgets quickly (OS throttling applies).
     void sendWidgetsRefreshPush(id, request.log, { reason: 'state_saved' });
   }
-  return reply.send({ ok: true, id, updatedAt: r.updatedAt });
+  return reply.send({ ok: true, id, updatedAt: serializeUpdatedAt(r.updatedAt) });
 });
 
 fastify.get('/v1/audit', async (request, reply) => {

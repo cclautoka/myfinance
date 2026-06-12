@@ -419,12 +419,35 @@ export const watchServerStateChanges = async (
   };
 };
 
+/** Parse 409 conflict body from PUT /v1/state (server includes latest workbook). */
+export function parseConflictStateResponse(
+  body: unknown,
+): { state: FinanceState; updatedAt: string } | null {
+  if (!body || typeof body !== 'object') return null;
+  const j = body as { state?: Partial<FinanceState>; updatedAt?: unknown };
+  if (!j.state || typeof j.state !== 'object') return null;
+  const base = defaultFinanceState();
+  const normalized = normalizeLoadedState(base, j.state);
+  const raw = j.updatedAt;
+  const updatedAt =
+    raw === null || raw === undefined ? '' : typeof raw === 'string' ? raw : String(raw);
+  if (!updatedAt.trim()) return null;
+  return { state: normalized, updatedAt };
+}
+
 export const putServerFinanceState = async (
   state: FinanceState,
   opts?: { force?: boolean; baseUpdatedAt?: string | null; notify?: boolean; widgetCacheV1?: unknown },
 ): Promise<
   | { ok: true; updatedAt: string }
-  | { ok: false; status: number; error: string; conflict?: boolean }
+  | {
+      ok: false;
+      status: number;
+      error: string;
+      conflict?: boolean;
+      conflictState?: FinanceState;
+      conflictUpdatedAt?: string;
+    }
 > => {
   const c = getServerStorageConfig(opts);
   if (!c.enabled) return { ok: false, status: 0, error: 'Server storage not configured' };
@@ -447,7 +470,20 @@ export const putServerFinanceState = async (
       clearHouseholdSession();
     }
     if (res.status === 409) {
-      return { ok: false, status: 409, error: 'Another device saved newer changes.', conflict: true };
+      let parsed: { state: FinanceState; updatedAt: string } | null = null;
+      try {
+        parsed = parseConflictStateResponse(JSON.parse(t) as unknown);
+      } catch {
+        /* ignore */
+      }
+      return {
+        ok: false,
+        status: 409,
+        error: 'Another device saved newer changes.',
+        conflict: true,
+        conflictState: parsed?.state,
+        conflictUpdatedAt: parsed?.updatedAt,
+      };
     }
     return { ok: false, status: res.status, error: t || res.statusText };
   }

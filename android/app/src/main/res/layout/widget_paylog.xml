@@ -5,9 +5,16 @@
   android:layout_height="match_parent"
   android:background="@drawable/widget_shell">
 
+  <ImageView
+    android:id="@+id/widget_hud_overlay"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:contentDescription=""
+    android:scaleType="fitXY" />
+
   <View
     android:layout_width="match_parent"
-    android:layout_height="3dp"
+    android:layout_height="4dp"
     android:background="@drawable/widget_accent_teal" />
 
   <LinearLayout
@@ -17,27 +24,31 @@
     android:orientation="vertical"
     android:padding="14dp">
 
-    <FrameLayout
-      android:layout_width="52dp"
-      android:layout_height="52dp"
-      android:background="@drawable/widget_pay_fab">
+    <TextView
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:fontFamily="monospace"
+      android:letterSpacing="0.14"
+      android:text="◈ FINANCE / PAYLOG"
+      android:textAllCaps="true"
+      android:textColor="@color/widget_text_muted"
+      android:textSize="9sp"
+      android:textStyle="bold" />
 
-      <TextView
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:gravity="center"
-        android:text="+"
-        android:textColor="@color/widget_text_primary"
-        android:textSize="28sp"
-        android:textStyle="bold" />
-    </FrameLayout>
+    <ImageView
+      android:id="@+id/widget_fab"
+      android:layout_width="56dp"
+      android:layout_height="56dp"
+      android:layout_marginTop="10dp"
+      android:contentDescription="Log pay" />
 
     <TextView
       android:layout_width="wrap_content"
       android:layout_height="wrap_content"
       android:layout_marginTop="10dp"
-      android:letterSpacing="0.08"
-      android:text="LOG PAY"
+      android:fontFamily="monospace"
+      android:letterSpacing="0.12"
+      android:text="LOG DEPOSIT"
       android:textAllCaps="true"
       android:textColor="@color/widget_text_accent"
       android:textSize="11sp"
@@ -46,9 +57,10 @@
     <TextView
       android:layout_width="wrap_content"
       android:layout_height="wrap_content"
-      android:layout_marginTop="2dp"
-      android:text="Tap to add a deposit"
+      android:layout_marginTop="3dp"
+      android:fontFamily="monospace"
+      android:text="Tap to open paycheque log"
       android:textColor="@color/widget_text_muted"
-      android:textSize="11sp" />
+      android:textSize="10sp" />
   </LinearLayout>
 </FrameLayout>

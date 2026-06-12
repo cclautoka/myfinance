@@ -354,6 +354,7 @@ export function usePersistedFinance() {
     if (!readHouseholdSession()?.token) return;
     const cfg = getServerStorageConfig();
     if (!cfg.enabled || pollInFlightRef.current) return;
+    if (!serverHydratedRef.current) return;
 
     pollInFlightRef.current = true;
     try {
@@ -364,8 +365,17 @@ export function usePersistedFinance() {
       if (!isRemoteNewer(remoteAt, localAt)) return;
 
       if (isClientDirty()) {
-        setSyncConflict(true);
-        return;
+        // No real local edits since last sync — cancel a queued debounced PUT and pull partner data.
+        const noLocalEdits = hashFinanceState(stateRef.current) === lastSyncedStateHashRef.current;
+        if (noLocalEdits && serverSaveRef.current !== null && !saveInFlightRef.current) {
+          clearTimeout(serverSaveRef.current);
+          serverSaveRef.current = null;
+        } else if (saveInFlightRef.current) {
+          return;
+        } else {
+          setSyncConflict(true);
+          return;
+        }
       }
 
       const remote = await fetchServerFinanceState();
@@ -441,6 +451,8 @@ export function usePersistedFinance() {
     if (Capacitor.isNativePlatform()) {
       window.addEventListener('pageshow', onFocus);
     }
+    const onNativeResume = () => pullIfVisible();
+    window.addEventListener('finance-app-resume', onNativeResume);
     const fastPoll = window.setInterval(pullIfVisible, 3000);
 
     return () => {
@@ -448,6 +460,7 @@ export function usePersistedFinance() {
       stopWatchLoop();
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('finance-app-resume', onNativeResume);
       if (Capacitor.isNativePlatform()) {
         window.removeEventListener('pageshow', onFocus);
       }
@@ -496,10 +509,20 @@ export function usePersistedFinance() {
           return;
         }
         if (result.conflict) {
-          setSyncConflict(true);
-          const conflictMsg =
-            'Could not save — another device saved first. Reload from server or save this device.';
-          pushToast({ type: 'error', message: conflictMsg });
+          if (result.conflictState && result.conflictUpdatedAt) {
+            applyRemoteState(result.conflictState, result.conflictUpdatedAt, {
+              toast: true,
+              toastMessage: 'Your partner saved newer changes — workbook updated.',
+            });
+          } else {
+            setSyncConflict(true);
+            pushToast({
+              type: 'error',
+              message:
+                'Could not save — another device saved first. Tap Reload from server in the banner or Tools.',
+            });
+            void checkRemoteAndMaybeApply();
+          }
           return;
         }
         const message = Capacitor.isNativePlatform()
@@ -516,10 +539,12 @@ export function usePersistedFinance() {
         if (resaveAfterFlightRef.current) {
           resaveAfterFlightRef.current = false;
           void flushServerSave(opts);
+        } else {
+          void checkRemoteAndMaybeApply();
         }
       }
     },
-    [markServerSynced],
+    [markServerSynced, applyRemoteState, checkRemoteAndMaybeApply],
   );
 
   const forcePushLocalToServer = useCallback(async () => {

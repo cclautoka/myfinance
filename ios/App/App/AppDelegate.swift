@@ -43,7 +43,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
-        // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
+        dispatchAppResumeToWeb()
+    }
+
+    private func dispatchAppResumeToWeb() {
+        guard let bridgeVC = window?.rootViewController as? CAPBridgeViewController else { return }
+        bridgeVC.bridge?.webView?.evaluateJavaScript(
+            "window.dispatchEvent(new Event('finance-app-resume'));",
+            completionHandler: nil
+        )
     }
 
     func applicationWillTerminate(_ application: UIApplication) {

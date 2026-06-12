@@ -27,31 +27,41 @@ struct IncomeSpendWidgetView: View {
 
     var body: some View {
         let v = entry.cache?.incomeVsSpend
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Income vs spend")
-                .font(.caption).fontWeight(.semibold)
-            if let v = v {
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text("Primary").font(.caption2).foregroundStyle(.secondary)
-                        Text("$\(Int(v.primaryLeft)) left").font(.headline)
+        WidgetHudContainer(accent: .teal, live: v != nil) {
+            VStack(alignment: .leading, spacing: 8) {
+                WidgetHeader(accent: .teal, title: "INCOME VS SPEND", live: v != nil)
+                if let v = v {
+                    HStack {
+                        Text(primaryLine(v))
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .lineLimit(1)
+                        Spacer(minLength: 4)
+                        Text(partnerLine(v))
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundStyle(Color(red: 0.13, green: 0.83, blue: 0.93))
+                            .lineLimit(1)
                     }
-                    Spacer()
-                    VStack(alignment: .leading) {
-                        Text("Partner").font(.caption2).foregroundStyle(.secondary)
-                        if v.partnerOver > 0 {
-                            Text("+$\(Int(v.partnerOver)) over").font(.headline).foregroundStyle(.red)
-                        } else {
-                            Text("$\(Int(v.partnerLeft)) left").font(.headline)
-                        }
-                    }
+                    IncomeBarChart(v: v)
+                } else {
+                    Text("OPEN APP TO SYNC").font(.headline)
+                    Text("STATUS // OFFLINE").font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
                 }
-            } else {
-                Text("Open app to sync").font(.headline)
             }
         }
         .widgetURL(URL(string: "https://localhost/#widget=income"))
-        .containerBackground(.fill.tertiary, for: .widget)
+        .containerBackground(for: .widget) {
+            WidgetHudBackground(accent: .teal)
+        }
+    }
+
+    private func primaryLine(_ v: WidgetIncomeVsSpend) -> String {
+        if v.primaryOver > 0 { return "PRI OVER +$\(Int(v.primaryOver))" }
+        return "PRI $\(Int(v.primaryLeft)) LEFT"
+    }
+
+    private func partnerLine(_ v: WidgetIncomeVsSpend) -> String {
+        if v.partnerOver > 0 { return "PTN OVER +$\(Int(v.partnerOver))" }
+        return "PTN $\(Int(v.partnerLeft)) LEFT"
     }
 }
 
@@ -63,8 +73,7 @@ struct IncomeSpendWidget: Widget {
             IncomeSpendWidgetView(entry: entry)
         }
         .configurationDisplayName("Income vs spend")
-        .description("Shows Primary/Partner left or over for this month.")
+        .description("Dual-bar cashflow HUD for Primary and Partner.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .accessoryRectangular])
     }
 }
-

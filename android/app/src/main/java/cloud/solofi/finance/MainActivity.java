@@ -28,6 +28,19 @@ public class MainActivity extends BridgeActivity {
     super.onResume();
     // Redraw home-screen widgets from cached payload when app returns to foreground.
     WidgetRefresh.updateAll(getApplicationContext());
+    dispatchAppResumeToWeb();
+  }
+
+  private void dispatchAppResumeToWeb() {
+    if (getBridge() == null || getBridge().getWebView() == null) return;
+    getBridge()
+        .getWebView()
+        .post(
+            () ->
+                getBridge()
+                    .getWebView()
+                    .evaluateJavascript(
+                        "window.dispatchEvent(new Event('finance-app-resume'));", null));
   }
 
   @Override

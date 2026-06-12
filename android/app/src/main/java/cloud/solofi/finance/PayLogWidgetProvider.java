@@ -17,13 +17,16 @@ public class PayLogWidgetProvider extends AppWidgetProvider {
   public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
     for (int id : appWidgetIds) {
       RemoteViews rv = new RemoteViews(context.getPackageName(), R.layout.widget_paylog);
+      WidgetUi.applyChrome(rv, context, appWidgetManager, id, WidgetArt.ACCENT_CYAN, true, 110, 110, false);
+      rv.setImageViewBitmap(R.id.widget_fab, WidgetArt.drawPayFab(168));
+
       Intent open = new Intent(context, MainActivity.class);
       open.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
       open.putExtra("route", "#widget=paylog");
-      PendingIntent pi = PendingIntent.getActivity(context, id, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+      PendingIntent pi =
+          PendingIntent.getActivity(context, id, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
       rv.setOnClickPendingIntent(R.id.widget_root, pi);
       appWidgetManager.updateAppWidget(id, rv);
     }
   }
 }
-

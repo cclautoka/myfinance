@@ -136,6 +136,11 @@ export function bindPushNotificationHandlers(onOpenApp: () => void): () => void 
   const handles: PluginListenerHandle[] = [];
 
   void PushNotifications.addListener('pushNotificationReceived', (notification) => {
+    const data = notification.data as Record<string, string> | undefined;
+    if (data?.type === 'widgets_refresh') {
+      window.dispatchEvent(new Event('finance-app-resume'));
+      return;
+    }
     const title = notification.title?.trim() || 'Our Finance';
     const body = notification.body?.trim() || 'You have a new alert.';
     pushToast({ type: 'success', message: `${title}: ${body}` });

@@ -15,13 +15,42 @@ struct PayLogProvider: TimelineProvider {
 
 struct PayLogWidgetView: View {
     var entry: PayLogProvider.Entry
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Pay logging").font(.caption).fontWeight(.semibold)
-            Text("Tap to log a deposit").font(.headline)
+        WidgetHudContainer(accent: .cyan, live: true) {
+            VStack(spacing: 8) {
+                WidgetHeader(accent: .cyan, title: "LOG DEPOSIT", live: true)
+                ZStack {
+                    Circle()
+                        .fill(Color.teal.opacity(0.25))
+                        .frame(width: 58, height: 58)
+                        .blur(radius: 6)
+                    Circle()
+                        .stroke(Color(red: 0.36, green: 0.92, blue: 0.82).opacity(0.55), lineWidth: 2)
+                        .frame(width: 52, height: 52)
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(red: 0.18, green: 0.83, blue: 0.75), Color(red: 0.05, green: 0.58, blue: 0.53)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 48, height: 48)
+                    Image(systemName: "plus")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+                Text("Tap to open paycheque log")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .widgetURL(URL(string: "https://localhost/#widget=paylog"))
-        .containerBackground(.fill.tertiary, for: .widget)
+        .containerBackground(for: .widget) {
+            WidgetHudBackground(accent: .cyan)
+        }
     }
 }
 
@@ -32,8 +61,7 @@ struct PayLogWidget: Widget {
             PayLogWidgetView(entry: entry)
         }
         .configurationDisplayName("Pay logging")
-        .description("Quick shortcut to the paycheque log.")
+        .description("Quick neon shortcut to log a deposit.")
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular])
     }
 }
-

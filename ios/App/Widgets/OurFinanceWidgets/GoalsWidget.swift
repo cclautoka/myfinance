@@ -27,21 +27,40 @@ struct GoalsWidgetView: View {
 
     var body: some View {
         let goals = entry.cache?.goals ?? []
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Goals")
-                .font(.caption).fontWeight(.semibold)
-            if let top = goals.first {
-                Text(top.name).font(.headline).lineLimit(1)
-                ProgressView(value: top.progressPct / 100.0)
-                Text("\(Int(top.progressPct))% • $\(Int(top.balance)) / $\(Int(top.target))")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            } else {
-                Text("Set goals in app").font(.headline)
+        WidgetHudContainer(accent: .violet, live: !goals.isEmpty) {
+            VStack(alignment: .leading, spacing: 8) {
+                WidgetHeader(accent: .violet, title: "RESERVE TRACKER", live: !goals.isEmpty)
+                if goals.isEmpty {
+                    HStack(spacing: 10) {
+                        TechGoalRing(progress: 0)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("OPEN OUR FINANCE").font(.system(size: 11, weight: .bold, design: .monospaced))
+                            Text("Sign in once to sync").font(.system(size: 9, design: .monospaced)).foregroundStyle(.secondary)
+                        }
+                    }
+                } else {
+                    HStack(alignment: .top, spacing: 10) {
+                        ForEach(Array(goals.prefix(3).enumerated()), id: \.offset) { _, g in
+                            VStack(spacing: 4) {
+                                TechGoalRing(progress: g.progressPct)
+                                Text(g.name.uppercased())
+                                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                    .lineLimit(1)
+                                Text("$\(Int(g.balance)) / $\(Int(g.target))")
+                                    .font(.system(size: 8, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                    }
+                }
             }
         }
         .widgetURL(URL(string: "https://localhost/#widget=goals"))
-        .containerBackground(.fill.tertiary, for: .widget)
+        .containerBackground(for: .widget) {
+            WidgetHudBackground(accent: .violet)
+        }
     }
 }
 
@@ -53,8 +72,7 @@ struct GoalsWidget: Widget {
             GoalsWidgetView(entry: entry)
         }
         .configurationDisplayName("Goals progress")
-        .description("Shows savings goals progress.")
+        .description("Neon reserve rings with live goal progress.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .accessoryRectangular, .accessoryCircular])
     }
 }
-

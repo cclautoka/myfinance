@@ -49,56 +49,74 @@ public class BillsWidgetProvider extends AppWidgetProvider {
     }
   }
 
+  private static String countdownLine(String dueIso, double amount) {
+    try {
+      long days = ChronoUnit.DAYS.between(LocalDate.now(), LocalDate.parse(dueIso));
+      int amt = (int) Math.round(amount);
+      if (days < 0) {
+        return "OVERDUE T+" + Math.abs(days) + "D · $" + amt;
+      }
+      if (days == 0) {
+        return "DUE TODAY · $" + amt;
+      }
+      return "T-" + days + "D · " + dueIso + " · $" + amt;
+    } catch (Exception e) {
+      return dueIso + " · $" + (int) Math.round(amount);
+    }
+  }
+
   @Override
   public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
     String json = WidgetBridgePlugin.readCacheJson(context);
     WidgetCache cache = WidgetCache.parse(json);
+    boolean live = cache != null;
 
     for (int id : appWidgetIds) {
       try {
-      RemoteViews rv = new RemoteViews(context.getPackageName(), R.layout.widget_bills);
-      int progressPct = 0;
-      boolean urgent = false;
-      boolean overdue = false;
+        RemoteViews rv = new RemoteViews(context.getPackageName(), R.layout.widget_bills);
+        WidgetUi.applyChrome(rv, context, appWidgetManager, id, WidgetArt.ACCENT_AMBER, live, 180, 180, true);
 
-      if (cache != null && cache.nextDue != null) {
-        rv.setTextViewText(R.id.widget_title, "Due next");
-        rv.setTextViewText(R.id.widget_line1, cache.nextDue.label);
-        rv.setTextViewText(
-            R.id.widget_line2,
-            cache.nextDue.dueDateIso + " · $" + (int) Math.round(cache.nextDue.amount));
-        progressPct = dueProgress(cache.nextDue.dueDateIso);
-        urgent = isUrgent(cache.nextDue.dueDateIso);
-        overdue = isOverdue(cache.nextDue.dueDateIso);
+        int progressPct = 0;
+        boolean urgent = false;
+        boolean overdue = false;
 
-        if (cache.overdue.size() > 0) {
-          rv.setViewVisibility(R.id.widget_meta, View.VISIBLE);
+        if (cache != null && cache.nextDue != null) {
+          rv.setTextViewText(R.id.widget_title, "NEXT DUE");
+          rv.setTextViewText(R.id.widget_line1, cache.nextDue.label);
           rv.setTextViewText(
-              R.id.widget_meta,
-              cache.overdue.size() + " overdue · tap to review");
+              R.id.widget_line2, countdownLine(cache.nextDue.dueDateIso, cache.nextDue.amount));
+          progressPct = dueProgress(cache.nextDue.dueDateIso);
+          urgent = isUrgent(cache.nextDue.dueDateIso);
+          overdue = isOverdue(cache.nextDue.dueDateIso);
+
+          if (cache.overdue.size() > 0) {
+            rv.setViewVisibility(R.id.widget_meta, View.VISIBLE);
+            rv.setTextViewText(
+                R.id.widget_meta, "ALERT // " + cache.overdue.size() + " OVERDUE");
+          } else {
+            rv.setViewVisibility(R.id.widget_meta, View.GONE);
+          }
         } else {
+          rv.setTextViewText(R.id.widget_title, "BILLS MODULE");
+          rv.setTextViewText(R.id.widget_line1, "Open app to sync");
+          rv.setTextViewText(R.id.widget_line2, "STATUS // AWAITING DATA");
           rv.setViewVisibility(R.id.widget_meta, View.GONE);
         }
-      } else {
-        rv.setTextViewText(R.id.widget_title, "Bills");
-        rv.setTextViewText(R.id.widget_line1, "Open app to sync");
-        rv.setTextViewText(R.id.widget_line2, "");
-        rv.setViewVisibility(R.id.widget_meta, View.GONE);
-      }
 
-      rv.setImageViewBitmap(
-          R.id.widget_progress_bitmap,
-          WidgetArt.drawDueProgress(400, 24, progressPct, urgent, overdue));
+        int[] size = WidgetUi.overlaySizePx(context, appWidgetManager, id, 180, 180);
+        rv.setImageViewBitmap(
+            R.id.widget_progress_bitmap,
+            WidgetArt.drawDueProgress(Math.max(280, size[0] - 28), 20, progressPct, urgent, overdue));
 
-      Intent open = new Intent(context, MainActivity.class);
-      open.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-      open.putExtra("route", "#widget=bills");
-      PendingIntent pi =
-          PendingIntent.getActivity(
-              context, id, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-      rv.setOnClickPendingIntent(R.id.widget_root, pi);
+        Intent open = new Intent(context, MainActivity.class);
+        open.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        open.putExtra("route", "#widget=bills");
+        PendingIntent pi =
+            PendingIntent.getActivity(
+                context, id, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        rv.setOnClickPendingIntent(R.id.widget_root, pi);
 
-      appWidgetManager.updateAppWidget(id, rv);
+        appWidgetManager.updateAppWidget(id, rv);
       } catch (Exception e) {
         android.util.Log.e("BillsWidget", "onUpdate failed", e);
       }
