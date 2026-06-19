@@ -17,6 +17,9 @@ export type SpendLineItem = {
   label: string;
   amount: number;
   kind: 'bill' | 'surprise' | 'sweep';
+  /** Present on bill items so unassigned spend can be tagged to a person. */
+  billId?: string;
+  payKey?: string;
 };
 
 export type IncomeSpendRow = {
@@ -128,6 +131,8 @@ function collectUnassignedBills(state: FinanceState, monthKey: string): SpendLin
       label: payKey.includes('-') && payKey.length > 7 ? `${name} (${payKey})` : name,
       amount: round2(amount),
       kind: 'bill',
+      billId: row.billId,
+      payKey,
     });
   }
   return out;

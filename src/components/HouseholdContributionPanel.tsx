@@ -5,7 +5,12 @@ import type { FinanceState } from '../types/finance';
 import { currentMonthKey } from '../data/defaults';
 import { formatMoney } from '../utils/format';
 import { panels } from '../copy/panels';
-import { monthIncomeSpendSummary, incomeSpendableTotal, type IncomeSpendRow } from '../utils/householdIncomeSpend';
+import {
+  monthIncomeSpendSummary,
+  incomeSpendableTotal,
+  type IncomeSpendRow,
+  type SpendLineItem,
+} from '../utils/householdIncomeSpend';
 import { Card } from './ui/Card';
 
 const ROW_STYLES: Record<
@@ -280,7 +285,79 @@ function FloatingBreakdown({
   );
 }
 
-export function HouseholdContributionPanel({ state }: { state: FinanceState }) {
+function UnassignedSpendList({
+  items,
+  total,
+  onAssign,
+}: {
+  items: SpendLineItem[];
+  total: number;
+  onAssign: (billId: string, payKey: string, role: 'owner' | 'partner') => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const count = items.length;
+
+  return (
+    <div className="rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-xs leading-relaxed text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 text-left font-medium"
+        aria-expanded={open}
+      >
+        <span>{panels.incomeSpend.unassigned(formatMoney(total), count)}</span>
+        <span className="shrink-0 rounded-md border border-amber-300/70 px-2 py-0.5 text-[11px] font-semibold dark:border-amber-800/70">
+          {open ? 'Hide' : 'Assign'}
+        </span>
+      </button>
+
+      {open ? (
+        <ul className="mt-2 space-y-2 border-t border-amber-200/70 pt-2 dark:border-amber-900/50">
+          {items.map((item) => {
+            const assignable = Boolean(item.billId && item.payKey);
+            return (
+              <li
+                key={`${item.billId ?? item.label}-${item.payKey ?? item.amount}`}
+                className="flex flex-wrap items-center justify-between gap-2"
+              >
+                <span className="min-w-0 flex-1 truncate">
+                  {item.label}
+                  <span className="ml-1 font-semibold tabular-nums">{formatMoney(item.amount)}</span>
+                </span>
+                {assignable ? (
+                  <span className="flex shrink-0 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => onAssign(item.billId as string, item.payKey as string, 'owner')}
+                      className="rounded-md bg-teal-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-teal-700 dark:bg-teal-700 dark:hover:bg-teal-600"
+                    >
+                      Primary
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onAssign(item.billId as string, item.payKey as string, 'partner')}
+                      className="rounded-md bg-sky-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-sky-700 dark:bg-sky-700 dark:hover:bg-sky-600"
+                    >
+                      Partner
+                    </button>
+                  </span>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+export function HouseholdContributionPanel({
+  state,
+  onAssignBillPayment,
+}: {
+  state: FinanceState;
+  onAssignBillPayment?: (billId: string, payKey: string, role: 'owner' | 'partner') => void;
+}) {
   const monthKey = currentMonthKey();
   const summary = useMemo(() => monthIncomeSpendSummary(state, monthKey), [state, monthKey]);
   const panelId = useId();
@@ -356,7 +433,13 @@ export function HouseholdContributionPanel({ state }: { state: FinanceState }) {
           />
         ) : null}
 
-        {summary.unassigned.billsTotal > 0 ? (
+        {summary.unassigned.billsTotal > 0 && onAssignBillPayment ? (
+          <UnassignedSpendList
+            items={summary.unassigned.bills}
+            total={summary.unassigned.billsTotal}
+            onAssign={onAssignBillPayment}
+          />
+        ) : summary.unassigned.billsTotal > 0 ? (
           <p className="rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-xs leading-relaxed text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
             {panels.incomeSpend.unassigned(
               formatMoney(summary.unassigned.billsTotal),

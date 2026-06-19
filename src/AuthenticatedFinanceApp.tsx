@@ -142,6 +142,7 @@ export function AuthenticatedFinanceApp() {
     setEmergency,
     setThreeMonthTarget,
     toggleBillPaid,
+    assignBillPayment,
     addExtraIncome,
     removeExtraIncome,
     addSurpriseExpense,
@@ -466,7 +467,7 @@ export function AuthenticatedFinanceApp() {
                     />
                     <Suspense fallback={<ChartPanelSkeleton />}>
                       <div id="household-income-spend" className="dashboard-below-fold scroll-mt-24">
-                        <HouseholdContributionPanel state={state} />
+                        <HouseholdContributionPanel state={state} onAssignBillPayment={assignBillPayment} />
                       </div>
                     </Suspense>
                     <Suspense fallback={<ChartPanelSkeleton />}>

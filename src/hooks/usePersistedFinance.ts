@@ -842,6 +842,36 @@ export function usePersistedFinance() {
     void flushServerSave({ notify: true });
   }, [flushServerSave]);
 
+  /** Tag an already-paid bill occurrence to Primary (owner) or Partner on the income vs spend chart. */
+  const assignBillPayment = useCallback(
+    (billId: string, payKey: string, role: 'owner' | 'partner') => {
+      if (!billId || !payKey) return;
+      setState((s) => {
+        const billPaymentAttribution = { ...(s.billPaymentAttribution ?? {}) };
+        const attrInner = { ...(billPaymentAttribution[billId] ?? {}) };
+        const sess = readHouseholdSession();
+        const entry: BillPaymentAttribution = {
+          role,
+          memberEmail: sess?.email,
+          platform: getClientPlatform(),
+          at: new Date().toISOString(),
+        };
+        attrInner[payKey] = entry;
+        billPaymentAttribution[billId] = attrInner;
+        const next = { ...s, billPaymentAttribution };
+        stateRef.current = next;
+        void writeWidgetCache(next);
+        return next;
+      });
+      if (serverSaveRef.current !== null) {
+        clearTimeout(serverSaveRef.current);
+        serverSaveRef.current = null;
+      }
+      void flushServerSave({ notify: true });
+    },
+    [flushServerSave],
+  );
+
   const markNextDebtPayment = useCallback(
     (debtId: string) => {
       const s = stateRef.current;
@@ -1225,6 +1255,7 @@ export function usePersistedFinance() {
     setThreeMonthTarget,
     setTheme,
     toggleBillPaid,
+    assignBillPayment,
     addExtraIncome,
     removeExtraIncome,
     addSurpriseExpense,
