@@ -1,4 +1,4 @@
-import type { FinanceState, IncomeEarner, IncomeLogEntry, PaySchedule } from '../types/finance';
+import type { FinanceState, IncomeConfig, IncomeEarner, IncomeLogEntry, PaySchedule } from '../types/finance';
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
@@ -14,6 +14,37 @@ export const estimatedPaychequeFromMonthly = (monthly: number, schedule: PaySche
       return monthly;
   }
 };
+
+/** Inverse of {@link estimatedPaychequeFromMonthly} — turn one typical deposit back into a monthly-plan figure. */
+export const monthlyPlanFromPaycheque = (perPay: number, schedule: PaySchedule): number => {
+  switch (schedule) {
+    case 'weekly':
+      return perPay * 4;
+    case 'biweekly':
+      return (perPay * 26) / 12;
+    case 'monthly':
+    default:
+      return perPay;
+  }
+};
+
+/**
+ * Planned monthly income for one earner. Uses the typed monthly figure when present,
+ * otherwise derives it from the per-cheque amount × pay rhythm so a household that only
+ * fills in per-cheque pay still gets a planned income total.
+ */
+export function plannedMonthlyForEarner(income: IncomeConfig, earner: 'husband' | 'wife'): number {
+  if (earner === 'husband') {
+    if (income.husbandMonthly > 0) return round2(income.husbandMonthly);
+    if (income.husbandTypicalPerPay > 0)
+      return round2(monthlyPlanFromPaycheque(income.husbandTypicalPerPay, income.husbandPaySchedule ?? 'weekly'));
+    return 0;
+  }
+  if (income.wifeMonthly > 0) return round2(income.wifeMonthly);
+  if (income.wifeTypicalPerPay > 0)
+    return round2(monthlyPlanFromPaycheque(income.wifeTypicalPerPay, income.wifePaySchedule ?? 'biweekly'));
+  return 0;
+}
 
 export function expectedPaychequeForLoggedEarner(state: FinanceState, earner: IncomeEarner): number {
   const inc = state.income;

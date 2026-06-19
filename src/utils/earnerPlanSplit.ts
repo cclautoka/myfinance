@@ -1,5 +1,6 @@
 import type { FinanceState } from '../types/finance';
 import { allocationBreakdown } from './allocation';
+import { plannedMonthlyForEarner } from './expectedPaycheque';
 
 /** How household plan dollars overlay each earner when costs are modeled as funded in proportion to planned salary. */
 export type EarnerHouseholdPlanSplit = {
@@ -21,8 +22,8 @@ export type EarnerHouseholdPlanSplit = {
 
 export function earnerHouseholdPlanSplit(state: FinanceState): EarnerHouseholdPlanSplit {
   const br = allocationBreakdown(state);
-  const H = Math.max(0, state.income.husbandMonthly);
-  const W = Math.max(0, state.income.wifeMonthly);
+  const H = Math.max(0, plannedMonthlyForEarner(state.income, 'husband'));
+  const W = Math.max(0, plannedMonthlyForEarner(state.income, 'wife'));
   const C = br.income;
   const hShare = C > 0 ? H / C : 0;
   const wShare = C > 0 ? W / C : 0;

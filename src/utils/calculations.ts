@@ -1,5 +1,6 @@
 import type { DebtAccount, EssentialExpense, FinanceState, IncomeConfig } from '../types/finance';
 import { unpaidDebtContractRemaining, debtCalendarFullyPaid } from './billsTimeline';
+import { plannedMonthlyForEarner } from './expectedPaycheque';
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
@@ -32,7 +33,9 @@ export const otherPlannedIncomeTotal = (income: IncomeConfig): number => {
 };
 
 export const combinedMonthlyIncome = (state: FinanceState): number =>
-  state.income.husbandMonthly + state.income.wifeMonthly + otherPlannedIncomeTotal(state.income);
+  plannedMonthlyForEarner(state.income, 'husband') +
+  plannedMonthlyForEarner(state.income, 'wife') +
+  otherPlannedIncomeTotal(state.income);
 
 export const totalDebtPayments = (debts: DebtAccount[]): number =>
   debts.reduce((s, d) => s + d.monthlyPayment, 0);
