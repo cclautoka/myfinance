@@ -265,14 +265,30 @@ const silentlyBackfillMonthCashflowOpeningForLegacySave = (
 };
 
 /**
- * Stamp a fresh-start day on workbooks that have data but no recorded history yet (e.g. a brand-new
+ * Real user activity — ignores auto-generated paycheque rows (label `… · auto)`), which the app
+ * back-fills on its own and must not count as a household having "started".
+ */
+const hasManualFinanceHistory = (state: FinanceState): boolean => {
+  if (state.extraIncome.length > 0) return true;
+  if (state.surpriseExpenses.length > 0) return true;
+  if ((state.budgetSurplusSweeps ?? []).length > 0) return true;
+  if (Object.keys(state.monthCashflowOpening ?? {}).length > 0) return true;
+  for (const arr of Object.values(state.billsPaid)) {
+    if (arr && arr.length > 0) return true;
+  }
+  if (state.incomeLog.some((e) => !/·\s*auto\)\s*$/.test(e.label))) return true;
+  return false;
+};
+
+/**
+ * Stamp a fresh-start day on workbooks that have data but no real history yet (e.g. a brand-new
  * seeded household), so earlier months are never shown as overdue. We anchor on the 1st of the
- * current month so the whole starting month is tracked. Existing active workbooks (any logged income,
- * paid bill, etc.) keep the app-wide tracking floor.
+ * current month so the whole starting month is tracked. Established workbooks (paid bills, manual
+ * income, sealed months, etc.) keep the app-wide tracking floor.
  */
 const applyFreshStartTrackingDate = (state: FinanceState): FinanceState => {
   if (state.trackingStartedOn) return state;
-  if (hasMeaningfulFinanceTouch(state)) return state;
+  if (hasManualFinanceHistory(state)) return state;
   const today = new Date();
   const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
   return { ...state, trackingStartedOn: iso };
