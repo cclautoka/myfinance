@@ -3,6 +3,7 @@ import {
   parseResetTokenFromHash,
   readNotifyRelayConfig,
   syncHouseholdIdFromSession,
+  writeNotifyRelayConfig,
 } from '../utils/notifyRelayConfig';
 import { postHouseholdApiJson } from '../utils/householdApiJson';
 import { resolveHouseholdApiBase } from '../utils/householdApiBase';
@@ -35,7 +36,14 @@ function hasPairingCode(p: ActivePairing | null): p is ActivePairing {
   return Boolean(p?.code);
 }
 
-export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void }) {
+export function HouseholdAuthPanel({
+  onAuthChange,
+  onNotifyConfigChanged,
+}: {
+  onAuthChange?: () => void;
+  /** Called after the partner email is edited so the parent can push the updated snapshot to the server. */
+  onNotifyConfigChanged?: () => void;
+}) {
   const session = typeof window !== 'undefined' ? readHouseholdSession() : null;
   const hid = useMemo(
     () => (typeof window !== 'undefined' ? syncHouseholdIdFromSession() : ''),
@@ -56,6 +64,10 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
   const [inviteJoinEmailSent, setInviteJoinEmailSent] = useState(false);
   const [pairingCopied, setPairingCopied] = useState(false);
   const [securityOpen, setSecurityOpen] = useState(false);
+  const [configTick, setConfigTick] = useState(0);
+  const [editingPartnerEmail, setEditingPartnerEmail] = useState(false);
+  const [partnerEmailDraft, setPartnerEmailDraft] = useState('');
+  const [partnerEmailErr, setPartnerEmailErr] = useState<string | null>(null);
   const pairingSectionRef = useRef<HTMLDivElement>(null);
 
   const [mode, setMode] = useState<HouseholdMode>(() => {
@@ -394,6 +406,49 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
     onAuthChange?.();
   };
 
+  // Recompute when the local notify config changes (configTick) or the session email changes.
+  const currentPartnerEmail = useMemo(
+    () => resolvePartnerEmailForInvite(session?.email),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- configTick forces re-read of localStorage config
+    [session?.email, configTick],
+  );
+
+  const beginEditPartnerEmail = () => {
+    setPartnerEmailDraft(currentPartnerEmail);
+    setPartnerEmailErr(null);
+    setEditingPartnerEmail(true);
+  };
+
+  /**
+   * The partner email doubles as their login address (they join with the exact invite email) and the
+   * notification recipient, so writing it here keeps both in sync. Owner keeps their own slot; the
+   * partner takes the other.
+   */
+  const savePartnerEmail = () => {
+    const next = partnerEmailDraft.trim();
+    if (!isValidEmail(next)) {
+      setPartnerEmailErr('Enter a valid email address.');
+      return;
+    }
+    const owner = (session?.email ?? '').trim().toLowerCase();
+    if (next.toLowerCase() === owner) {
+      setPartnerEmailErr('Partner email must differ from your own.');
+      return;
+    }
+    const cfg = readNotifyRelayConfig();
+    if (owner && cfg.wifeEmail.trim().toLowerCase() === owner) {
+      writeNotifyRelayConfig({ ...cfg, husbandEmail: next });
+    } else {
+      const husband = cfg.husbandEmail.trim() || (session?.email ?? '');
+      writeNotifyRelayConfig({ ...cfg, husbandEmail: husband, wifeEmail: next });
+    }
+    setEditingPartnerEmail(false);
+    setPartnerEmailErr(null);
+    setConfigTick((n) => n + 1);
+    onNotifyConfigChanged?.();
+    pushToast({ type: 'success', message: 'Partner email updated. Send a fresh partner link so they join with it.' });
+  };
+
   const generatePairingClick = async () => {
     setBusy(true);
     try {
@@ -537,6 +592,58 @@ export function HouseholdAuthPanel({ onAuthChange }: { onAuthChange?: () => void
             Generate a pairing code, then create an invite link. Your partner opens the link and enters their email plus this
             code.
           </p>
+
+          <div className="mt-3 rounded-lg border border-slate-200/90 bg-slate-50/80 px-3 py-2.5 dark:border-moss-border dark:bg-moss-bg/50">
+            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-sage-600 dark:text-moss-muted">
+              Partner email
+            </p>
+            <p className="mt-1 text-xs text-sage-600 dark:text-moss-muted">
+              This is the address your partner uses to join/sign in and where their notifications go — kept in sync.
+            </p>
+            {editingPartnerEmail ? (
+              <div className="mt-2">
+                <input
+                  className="w-full rounded-lg border border-sage-300 bg-white px-3 py-2 text-sm dark:border-moss-border dark:bg-moss-surface dark:text-moss-fg"
+                  placeholder="partner@example.com"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  aria-invalid={Boolean(partnerEmailErr)}
+                  aria-describedby={partnerEmailErr ? fieldErrorId('ha-partner-email') : undefined}
+                  value={partnerEmailDraft}
+                  onChange={(e) => {
+                    setPartnerEmailDraft(e.target.value);
+                    setPartnerEmailErr(null);
+                  }}
+                />
+                <FieldError id={fieldErrorId('ha-partner-email')} message={partnerEmailErr ?? undefined} />
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button type="button" className="btn-primary btn-primary-sm font-bold" onClick={savePartnerEmail}>
+                    Save partner email
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary btn-secondary-sm font-bold"
+                    onClick={() => {
+                      setEditingPartnerEmail(false);
+                      setPartnerEmailErr(null);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="break-all font-mono text-sm font-semibold text-sage-900 dark:text-moss-fg">
+                  {currentPartnerEmail || 'Not set'}
+                </span>
+                <button type="button" className="btn-secondary btn-secondary-sm font-bold" onClick={beginEditPartnerEmail}>
+                  {currentPartnerEmail ? 'Change' : 'Set partner email'}
+                </button>
+              </div>
+            )}
+          </div>
           {hasPairingCode(activePairing) ? (
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <p className="font-mono text-xl font-bold tracking-[0.3em] text-teal-800 dark:text-teal-200">

@@ -199,7 +199,14 @@ export function NotifyRelaySettings({
       </p>
 
       <div className="mt-6">
-        <HouseholdAuthPanel key={authTick} onAuthChange={() => setAuthTick((n) => n + 1)} />
+        <HouseholdAuthPanel
+          key={authTick}
+          onAuthChange={() => setAuthTick((n) => n + 1)}
+          onNotifyConfigChanged={() => {
+            const fresh = { ...readNotifyRelayConfig(), url: resolveNotifyRelayUrl() };
+            persist(fresh);
+          }}
+        />
       </div>
 
       <div className="mt-4 rounded-2xl border border-slate-200/90 bg-slate-50/85 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] dark:border-moss-border dark:bg-moss-surface/65 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
