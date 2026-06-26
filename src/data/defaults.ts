@@ -59,14 +59,14 @@ export function rollingMonthKeys(monthsBack: number, ref = new Date()): string[]
   return out;
 }
 
-/** First month listed in History (the month before in-app tracking below). */
-export const HISTORY_EARLIEST_MONTH_KEY = '2026-04';
+/** First month listed in History. Equal to tracking start → no pre-tracking "before we started" bucket. */
+export const HISTORY_EARLIEST_MONTH_KEY = '2026-06';
 
 /**
  * First month the household checklist & overdue logic apply (forward timeline, History bill rows, MTD counts).
- * April {@link HISTORY_EARLIEST_MONTH_KEY} stays in History as an empty “before we started” bucket.
+ * Nothing before this month is shown anywhere — the household started fresh in June 2026.
  */
-export const HISTORY_TRACKING_STARTED_MONTH_KEY = '2026-05';
+export const HISTORY_TRACKING_STARTED_MONTH_KEY = '2026-06';
 
 /** Local midnight on the 1st of {@link HISTORY_TRACKING_STARTED_MONTH_KEY} — no bill occurrences before this are shown. */
 export function billTrackingEarliestDueDate(): Date {
