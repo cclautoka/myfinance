@@ -38,6 +38,7 @@ import {
   findMemberByHouseholdAndEmail,
   findMembersByEmail,
   insertHouseholdMember,
+  updateMemberEmail,
   countOwnersForHousehold,
   listMembersForHousehold,
   getMemberById,
@@ -1536,6 +1537,69 @@ fastify.post('/v1/household/pairing/create', async (request, reply) => {
     code: digits,
     persistent: true,
     message: 'Pairing code created — it does not expire. Share the same code until your partner joins.',
+  });
+});
+
+/**
+ * Owner sets / resets the partner account email. Creates the partner member if missing, otherwise
+ * updates the existing partner row. The address doubles as the partner's login and notification email.
+ * Owner-set, so it is marked verified (private household; owner is authoritative).
+ */
+fastify.post('/v1/household/partner/set-email', async (request, reply) => {
+  const body = request.body ?? {};
+  const householdId = typeof body.householdId === 'string' ? body.householdId.trim().slice(0, 64) : '';
+  if (!householdId) return reply.code(400).send({ error: 'householdId required' });
+  if (!(await assertAuthorized(request, reply, householdId))) return;
+  if (refuseHouseholdApiKey(request, reply)) return;
+  await initDbIfNeeded(request.log);
+  if (!getDbEnabled()) return reply.code(503).send({ error: 'DATABASE_URL is not set.' });
+  const owner = await requirePrimaryOwnerMember(request, reply, householdId, body);
+  if (!owner) return;
+
+  const email = normalizeEmail(body.email);
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return reply.code(400).send({ error: 'A valid partner email is required.' });
+  }
+  if (email === normalizeEmail(owner.email)) {
+    return reply.code(400).send({ error: 'Partner email must differ from the owner email.' });
+  }
+
+  const members = await listMembersForHousehold(householdId);
+  const partner = members.find((m) => m.role === 'partner');
+  const clash = await findMemberByHouseholdAndEmail(householdId, email);
+  if (clash && (!partner || clash.id !== partner.id)) {
+    return reply.code(409).send({
+      error: clash.role === 'owner' ? 'That email is already the owner email.' : 'That email already belongs to another member.',
+    });
+  }
+
+  let row;
+  try {
+    if (partner) {
+      row = await updateMemberEmail(partner.id, email, { markVerified: true });
+    } else {
+      const created = await insertHouseholdMember({ householdId, email, passwordHash: null, role: 'partner' });
+      await markMemberEmailVerified(created.id);
+      row = await getMemberById(created.id);
+    }
+  } catch (e) {
+    request.log.error(e);
+    return reply.code(409).send({ error: 'Could not save partner email (it may already be in use).' });
+  }
+  if (!row) return reply.code(500).send({ error: 'Could not save partner email.' });
+
+  try {
+    await deleteUnusedEmailTokens(row.id, 'verify');
+  } catch (e) {
+    request.log.error(e);
+  }
+
+  const notifyEmails = await resolveNotifyEmailsForHousehold(householdId);
+  return reply.send({
+    ok: true,
+    partnerEmail: row.email,
+    emailVerified: Boolean(row.email_verified_at),
+    notifyEmails,
   });
 });
 

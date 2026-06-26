@@ -424,7 +424,7 @@ export function HouseholdAuthPanel({
    * notification recipient, so writing it here keeps both in sync. Owner keeps their own slot; the
    * partner takes the other.
    */
-  const savePartnerEmail = () => {
+  const savePartnerEmail = async () => {
     const next = partnerEmailDraft.trim();
     if (!isValidEmail(next)) {
       setPartnerEmailErr('Enter a valid email address.');
@@ -435,18 +435,31 @@ export function HouseholdAuthPanel({
       setPartnerEmailErr('Partner email must differ from your own.');
       return;
     }
-    const cfg = readNotifyRelayConfig();
-    if (owner && cfg.wifeEmail.trim().toLowerCase() === owner) {
-      writeNotifyRelayConfig({ ...cfg, husbandEmail: next });
-    } else {
-      const husband = cfg.husbandEmail.trim() || (session?.email ?? '');
-      writeNotifyRelayConfig({ ...cfg, husbandEmail: husband, wifeEmail: next });
-    }
-    setEditingPartnerEmail(false);
+    setBusy(true);
     setPartnerEmailErr(null);
-    setConfigTick((n) => n + 1);
-    onNotifyConfigChanged?.();
-    pushToast({ type: 'success', message: 'Partner email updated. Send a fresh partner link so they join with it.' });
+    try {
+      // Update the partner account row on the server (login email), then mirror into the local
+      // notify config (notification email) so login and notifications stay linked.
+      await postJson('/v1/household/partner/set-email', { householdId: hid, email: next }, true);
+      const cfg = readNotifyRelayConfig();
+      if (owner && cfg.wifeEmail.trim().toLowerCase() === owner) {
+        writeNotifyRelayConfig({ ...cfg, husbandEmail: next });
+      } else {
+        const husband = cfg.husbandEmail.trim() || (session?.email ?? '');
+        writeNotifyRelayConfig({ ...cfg, husbandEmail: husband, wifeEmail: next });
+      }
+      setEditingPartnerEmail(false);
+      setConfigTick((n) => n + 1);
+      onNotifyConfigChanged?.();
+      pushToast({
+        type: 'success',
+        message: 'Partner email updated. They can sign in now with that email + the pairing code.',
+      });
+    } catch (e) {
+      setPartnerEmailErr(String((e as Error)?.message ?? e));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const generatePairingClick = async () => {
@@ -618,12 +631,18 @@ export function HouseholdAuthPanel({
                 />
                 <FieldError id={fieldErrorId('ha-partner-email')} message={partnerEmailErr ?? undefined} />
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <button type="button" className="btn-primary btn-primary-sm font-bold" onClick={savePartnerEmail}>
-                    Save partner email
+                  <button
+                    type="button"
+                    className="btn-primary btn-primary-sm font-bold"
+                    disabled={busy}
+                    onClick={() => void savePartnerEmail()}
+                  >
+                    {busy ? 'Saving…' : 'Save partner email'}
                   </button>
                   <button
                     type="button"
                     className="btn-secondary btn-secondary-sm font-bold"
+                    disabled={busy}
                     onClick={() => {
                       setEditingPartnerEmail(false);
                       setPartnerEmailErr(null);

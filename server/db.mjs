@@ -333,6 +333,19 @@ export async function insertHouseholdMember({ householdId, email, passwordHash, 
   return r.rows[0];
 }
 
+/** Owner-driven email change for a member (e.g. fix a partner's address). Optionally marks it verified. */
+export async function updateMemberEmail(memberId, email, { markVerified = false } = {}) {
+  if (!pool) throw new Error('DB not initialized');
+  const verifiedClause = markVerified ? ', email_verified_at = now()' : '';
+  const r = await pool.query(
+    `update household_member set email = $2${verifiedClause}
+     where id = $1
+     returning id, household_id, email, role, email_verified_at`,
+    [memberId, email.trim()],
+  );
+  return r.rows[0] ?? null;
+}
+
 export async function countOwnersForHousehold(householdId) {
   if (!pool) throw new Error('DB not initialized');
   const r = await pool.query(
