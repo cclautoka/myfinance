@@ -9,6 +9,8 @@ RUN npm ci --omit=dev
 COPY load-env.mjs password.mjs sessionToken.mjs index.mjs staticCache.mjs templates.mjs snapshots.mjs db.mjs financeStateDiff.mjs emptyFinanceState.mjs reminders.mjs reminderSend.mjs pushSend.mjs reminderCron.mjs mail.mjs notifyEmails.mjs ./
 COPY copy ./copy
 COPY scripts/db-migrate.mjs ./scripts/db-migrate.mjs
+COPY scripts/seed-fresh-start.mjs ./scripts/seed-fresh-start.mjs
+COPY scripts/fresh-start-state.mjs ./scripts/fresh-start-state.mjs
 ENV NODE_ENV=production
 EXPOSE 8787
-CMD ["sh", "-c", "set -e && node scripts/db-migrate.mjs && exec node index.mjs"]
+CMD ["sh", "-c", "set -e && node scripts/db-migrate.mjs && (node scripts/seed-fresh-start.mjs || echo 'seed:fresh-start skipped (non-fatal)') && exec node index.mjs"]

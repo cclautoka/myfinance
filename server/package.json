@@ -7,6 +7,7 @@
     "test": "node --test __tests__/*.test.mjs",
     "db:migrate": "node scripts/db-migrate.mjs",
     "seed:shahil": "node scripts/seed-shahil-household.mjs",
+    "seed:fresh-start": "node scripts/seed-fresh-start.mjs",
     "list:households": "node scripts/list-households.mjs",
     "create-cron-key": "node scripts/create-cron-bearer-key.mjs",
     "mark:verified": "node scripts/mark-email-verified.mjs",

@@ -58,6 +58,22 @@ function rowIsClickable(d: DebtAccount): boolean {
   return d.monthlyPayment > 0;
 }
 
+/**
+ * A zero-balance row only belongs in "Paid off — achievements" when it was a real,
+ * worked debt (had payments, a contract end date, a credit limit, or a payment plan).
+ * A freshly added blank row (balance 0, no history) stays in the active list so it can
+ * be edited — otherwise "Add loan" appears to do nothing and shows a false achievement.
+ */
+function isPaidOffAchievement(state: FinanceState, r: DebtRow): boolean {
+  if (r.balance > 0) return false;
+  const d = r.debt;
+  if (debtPaymentHistory(state, d).length > 0) return true;
+  if (d.endsOn) return true;
+  if ((d.creditLimit ?? 0) > 0) return true;
+  if (d.monthlyPayment > 0) return true;
+  return false;
+}
+
 function rowClickHint(d: DebtAccount): string | null {
   if (d.kind === 'card' || d.kind === 'loan' || d.monthlyPayment <= 0) {
     return `Tap row to ${panels.debtUpdateBalance.toLowerCase()}`;
@@ -81,8 +97,14 @@ export function DebtBalancesPanel({
   const [historyDebtId, setHistoryDebtId] = useState<string | null>(null);
 
   const allRows = useMemo(() => buildDebtRows(state), [state]);
-  const activeRows = useMemo(() => allRows.filter((r) => r.balance > 0), [allRows]);
-  const paidOffRows = useMemo(() => allRows.filter((r) => r.balance <= 0), [allRows]);
+  const paidOffRows = useMemo(
+    () => allRows.filter((r) => isPaidOffAchievement(state, r)),
+    [allRows, state],
+  );
+  const activeRows = useMemo(
+    () => allRows.filter((r) => !isPaidOffAchievement(state, r)),
+    [allRows, state],
+  );
 
   const editCardDebt = useMemo(
     () => (editCardId ? state.debts.find((d) => d.id === editCardId) ?? null : null),

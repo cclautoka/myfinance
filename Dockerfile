@@ -41,8 +41,11 @@ COPY server/reminderSend.mjs ./reminderSend.mjs
 COPY server/pushSend.mjs ./pushSend.mjs
 COPY server/reminderCron.mjs ./reminderCron.mjs
 COPY server/scripts/db-migrate.mjs ./scripts/db-migrate.mjs
+COPY server/scripts/seed-fresh-start.mjs ./scripts/seed-fresh-start.mjs
+COPY server/scripts/fresh-start-state.mjs ./scripts/fresh-start-state.mjs
 COPY --from=frontend-build /web/dist ./public
 ENV NODE_ENV=production
 EXPOSE 8787
-# Apply Postgres schema before listen (no-op if DATABASE_URL unset). Same DDL as initDb on boot — ensures deploy fails fast if DB is misconfigured.
-CMD ["sh", "-c", "set -e && node scripts/db-migrate.mjs && exec node index.mjs"]
+# 1) Apply Postgres schema (fatal if DB misconfigured). 2) Optional one-time fresh-start seed —
+#    no-op unless SEED_FRESH_START=1, and non-fatal so it never blocks boot. 3) Start the server.
+CMD ["sh", "-c", "set -e && node scripts/db-migrate.mjs && (node scripts/seed-fresh-start.mjs || echo 'seed:fresh-start skipped (non-fatal)') && exec node index.mjs"]
