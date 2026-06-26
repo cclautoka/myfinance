@@ -248,6 +248,17 @@ export interface FinanceState {
   /** Household-wide app push preferences (synced with server state). */
   pushNotificationPrefs?: PushNotificationPrefs;
   /**
+   * True once anyone in the household finished/dismissed the guided tour. Synced via server state so
+   * it does not re-open on every new login or device (localStorage alone is wiped on auth transitions).
+   */
+  onboardingTourDismissed?: boolean;
+  /**
+   * Local calendar day (YYYY-MM-DD) this household started fresh. Bill occurrences whose due date
+   * falls before this day are not tracked (never shown as overdue/upcoming) — a clean "day one" slate
+   * for new households. Absent → fall back to the app-wide {@link billTrackingEarliestDueDate} floor.
+   */
+  trackingStartedOn?: string;
+  /**
    * Last local calendar day (YYYY-MM-DD) an overdue-cadence reminder email was sent per bill occurrence.
    * Server-maintained; synced with household state.
    */

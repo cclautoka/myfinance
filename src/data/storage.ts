@@ -264,13 +264,28 @@ const silentlyBackfillMonthCashflowOpeningForLegacySave = (
   };
 };
 
+/**
+ * Stamp a fresh-start day on workbooks that have data but no recorded history yet (e.g. a brand-new
+ * seeded household), so earlier months are never shown as overdue. We anchor on the 1st of the
+ * current month so the whole starting month is tracked. Existing active workbooks (any logged income,
+ * paid bill, etc.) keep the app-wide tracking floor.
+ */
+const applyFreshStartTrackingDate = (state: FinanceState): FinanceState => {
+  if (state.trackingStartedOn) return state;
+  if (hasMeaningfulFinanceTouch(state)) return state;
+  const today = new Date();
+  const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+  return { ...state, trackingStartedOn: iso };
+};
+
 const normalizeLoadedState = (base: FinanceState, parsed?: Partial<FinanceState>): FinanceState => {
   if (!parsed) return syncAutoDeductionBillAttribution(applyAutoScheduledPayLogs(applyAutoMarkHandled(base)));
   const merged = deepMerge(base, parsed);
   const withPlanned = ensurePlannedMonthlyDollars(merged, parsed);
   const migrated = stripLegacyWeeklyEssentialMonthKeys(withPlanned);
   const pruned = prunePreTrackingBillKeys(migrated);
-  const withMonth = resetWalletsIfNewMonth(pruned);
+  const withFreshStart = applyFreshStartTrackingDate(pruned);
+  const withMonth = resetWalletsIfNewMonth(withFreshStart);
   const legacyOpening = silentlyBackfillMonthCashflowOpeningForLegacySave(withMonth, parsed);
   const withGoals = normalizeSavingsGoals(legacyOpening);
   const withAuto = syncAutoDeductionBillAttribution(

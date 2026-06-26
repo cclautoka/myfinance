@@ -1147,8 +1147,19 @@ export function usePersistedFinance() {
   }, []);
 
   const resetAll = useCallback(() => {
-    setState(defaultFinanceState());
-  }, []);
+    const blank = defaultFinanceState();
+    setState(blank);
+    stateRef.current = blank;
+    setSyncConflict(false);
+    // The debounced state-change save would push a non-forced (conflict-prone) copy; skip it
+    // and push the blank workbook authoritatively so the server can't re-sync the old data back.
+    skipNextServerSaveRef.current = true;
+    if (serverSaveRef.current !== null) {
+      clearTimeout(serverSaveRef.current);
+      serverSaveRef.current = null;
+    }
+    void flushServerSave({ force: true, notify: false });
+  }, [flushServerSave]);
 
   /** Optional: POST summary to self-hosted notify API (Dokploy) ~60s after last local change. */
   const notifyDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);

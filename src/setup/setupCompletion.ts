@@ -179,12 +179,28 @@ export function syncHouseholdSetupFromServerState(state: FinanceState, cfg: Noti
   return false;
 }
 
+/**
+ * A just-registered owner gets an empty server workbook, so "a row exists on the server"
+ * must NOT count as setup-complete — otherwise the initial setup wizard is skipped. Only a
+ * server workbook with real data short-circuits the wizard.
+ */
+function financeStateIsBlankForSetup(state: FinanceState): boolean {
+  const h = Number(state.income?.husbandMonthly) || 0;
+  const w = Number(state.income?.wifeMonthly) || 0;
+  const hp = Number(state.income?.husbandTypicalPerPay) || 0;
+  const wp = Number(state.income?.wifeTypicalPerPay) || 0;
+  if (h > 0 || w > 0 || hp > 0 || wp > 0) return false;
+  if ((state.essentials?.length ?? 0) > 0) return false;
+  if ((state.debts?.length ?? 0) > 0) return false;
+  return true;
+}
+
 export function isHouseholdSetupComplete(
   state: FinanceState,
   cfg: NotifyRelayConfig,
   options?: { serverWorkbookExists?: boolean },
 ): boolean {
-  if (options?.serverWorkbookExists) return true;
+  if (options?.serverWorkbookExists && !financeStateIsBlankForSetup(state)) return true;
   return syncHouseholdSetupFromServerState(state, cfg);
 }
 

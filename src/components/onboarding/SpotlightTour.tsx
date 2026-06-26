@@ -164,6 +164,8 @@ export function SpotlightTour({
   onPrepareStep,
   householdSignedIn = false,
   layoutSyncKey = '',
+  serverDismissed = false,
+  onDismiss,
 }: {
   /** e.g. open Tools tab before highlighting `tour-tools-notify`. */
   onPrepareStep?: (stepIndex: number) => void;
@@ -171,13 +173,23 @@ export function SpotlightTour({
   householdSignedIn?: boolean;
   /** When this changes after prepare (e.g. workspace tab), hole geometry is re-measured. */
   layoutSyncKey?: string;
+  /** Account-level dismissal synced from server state — keeps the tour closed across logins/devices. */
+  serverDismissed?: boolean;
+  /** Called when the user finishes or skips the tour, so the parent can persist it to server state. */
+  onDismiss?: () => void;
 }) {
   const steps = useMemo(
     () => onboardingStepsForContext({ householdSignedIn }),
     [householdSignedIn],
   );
 
-  const [visible, setVisible] = useState(() => typeof window !== 'undefined' && !readDismissed());
+  const [visible, setVisible] = useState(
+    () => typeof window !== 'undefined' && !readDismissed() && !serverDismissed,
+  );
+
+  useEffect(() => {
+    if (serverDismissed) setVisible(false);
+  }, [serverDismissed]);
   const [stepIndex, setStepIndex] = useState(0);
   const [hole, setHole] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
   const [popoverStyle, setPopoverStyle] = useState<CSSProperties>(() => defaultTourPopoverStyle());
@@ -187,8 +199,9 @@ export function SpotlightTour({
 
   const closeAndRemember = useCallback(() => {
     persistDismiss();
+    onDismiss?.();
     setVisible(false);
-  }, []);
+  }, [onDismiss]);
 
   const remindLater = useCallback(() => {
     try {

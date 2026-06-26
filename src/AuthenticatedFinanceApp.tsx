@@ -334,6 +334,8 @@ export function AuthenticatedFinanceApp() {
     } catch {
       /* ignore */
     }
+    // Clear the account-level dismissal too, otherwise the synced flag keeps the replay closed.
+    update({ onboardingTourDismissed: false });
     setTourLaterToast(false);
     setTourReplay((n) => n + 1);
   };
@@ -385,11 +387,13 @@ export function AuthenticatedFinanceApp() {
           onClose={() => setTimelineColumnSpotlight(false)}
         />
       ) : null}
-      {!monthOpeningBlocked ? (
+      {!monthOpeningBlocked && !isServerSyncing ? (
         <SpotlightTour
           key={tourReplay}
           householdSignedIn={householdSignedIn}
           layoutSyncKey={`${appTab}-${workspaceTab ?? 'none'}`}
+          serverDismissed={state.onboardingTourDismissed === true}
+          onDismiss={() => update({ onboardingTourDismissed: true })}
           onPrepareStep={(i) => {
             const t = ONBOARDING_STEPS[i]?.target;
             if (t === 'tour-dashboard-snapshot' || t === 'tour-bills-checklist') {

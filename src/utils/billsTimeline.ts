@@ -188,6 +188,22 @@ export function billReminderPrefs(state: FinanceState): {
   return { overdueGraceDays: grace, upcomingLeadBusinessDays: lead };
 }
 
+/**
+ * Local-midnight ms of the earliest bill occurrence this workbook tracks. The app-wide floor
+ * ({@link billTrackingEarliestDueDate}), raised to the household's own fresh-start day when set —
+ * so a household that started today never sees earlier months (or earlier this month) as overdue.
+ */
+export function householdTrackingStartMs(state: FinanceState): number {
+  const globalMs = billTrackingEarliestDueDate().getTime();
+  const iso = state.trackingStartedOn;
+  const m = iso ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso) : null;
+  if (m) {
+    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    if (!Number.isNaN(d.getTime())) return Math.max(globalMs, startOfLocalDay(d).getTime());
+  }
+  return globalMs;
+}
+
 export const buildTimeline = (state: FinanceState, monthsAhead = 3, ref = new Date()): TimelineBill[] => {
   const items: TimelineBill[] = [];
   const y0 = ref.getFullYear();
@@ -222,6 +238,7 @@ export const buildTimeline = (state: FinanceState, monthsAhead = 3, ref = new Da
   }
 
   const startToday = startOfLocalDay(ref).getTime();
+  const trackingStartT = householdTrackingStartMs(state);
   const overdueUnpaid: TimelineBill[] = [];
   const graceUnpaid: TimelineBill[] = [];
   const upcoming: TimelineBill[] = [];
@@ -230,6 +247,8 @@ export const buildTimeline = (state: FinanceState, monthsAhead = 3, ref = new Da
   for (const b of items) {
     if (billOccurrenceIsPaid(state, b)) continue;
     const dueT = startOfLocalDay(b.due).getTime();
+    // Before this household's fresh-start day: not tracked, so never overdue or upcoming.
+    if (dueT < trackingStartT) continue;
     if (dueT < startToday) {
       if (calendarDaysAfterDue(ref, b.due) > overdueGraceDays) overdueUnpaid.push(b);
       else graceUnpaid.push(b);

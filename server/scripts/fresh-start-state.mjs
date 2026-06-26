@@ -107,6 +107,9 @@ export function buildFreshStartFinanceState(today = new Date()) {
     monthCashflowOpening: {},
     theme: 'system',
     walletResetMonth: monthKey,
+    // Fresh slate from the 1st of the starting month: no earlier months show as overdue, but the
+    // whole current month is tracked.
+    trackingStartedOn: `${monthKey}-01`,
     billOverdueGraceDays: 0,
     billUpcomingLeadBusinessDays: 3,
     pushNotificationPrefs: { billReminders: true },
