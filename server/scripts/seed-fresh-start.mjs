@@ -43,8 +43,8 @@ function hasExistingData(state) {
 }
 
 async function main() {
-  if (process.env.SEED_FRESH_START !== '1') {
-    console.log('seed:fresh-start — SEED_FRESH_START not set; skipping.');
+  if ((process.env.SEED_FRESH_START ?? '').trim() !== '1') {
+    console.log('seed:fresh-start — SEED_FRESH_START not set to 1; skipping.');
     process.exit(0);
   }
   if (!process.env.DATABASE_URL?.trim()) {
