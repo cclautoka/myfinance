@@ -9,12 +9,28 @@ const MAX_REMINDER_ROWS = 25;
  * First calendar month bill reminders consider (must match `HISTORY_TRACKING_STARTED_MONTH_KEY` in `src/data/defaults.ts`).
  * Occurrences before this month are historical placeholders only — not included in email reminders.
  */
-const HISTORY_TRACKING_STARTED_MONTH_KEY = '2026-05';
+const HISTORY_TRACKING_STARTED_MONTH_KEY = '2026-06';
 
 function billTrackingEarliestDueDate() {
   const m = /^(\d{4})-(\d{2})$/.exec(HISTORY_TRACKING_STARTED_MONTH_KEY);
-  if (!m) return new Date(2026, 4, 1);
+  if (!m) return new Date(2026, 5, 1);
   return new Date(Number(m[1]), Number(m[2]) - 1, 1);
+}
+
+/**
+ * Local-midnight ms of the earliest bill occurrence this workbook tracks: the app-wide floor raised
+ * to the household's own fresh-start day (`trackingStartedOn`) when set. Mirrors
+ * `householdTrackingStartMs` in `src/utils/billsTimeline.ts` so emails match the in-app view.
+ */
+function householdTrackingStartMs(state) {
+  const globalMs = billTrackingEarliestDueDate().getTime();
+  const iso = state?.trackingStartedOn;
+  const m = typeof iso === 'string' ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso) : null;
+  if (m) {
+    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    if (!Number.isNaN(d.getTime())) return Math.max(globalMs, startOfLocalDay(d).getTime());
+  }
+  return globalMs;
 }
 
 function startOfLocalDay(d) {
@@ -191,7 +207,9 @@ function buildTimeline(state, monthsAhead = 2, ref = new Date()) {
   }
 
   items.sort((a, b) => a.due.getTime() - b.due.getTime());
-  return items;
+  // Drop occurrences before this household's fresh-start day (no pre-June dues for a June household).
+  const trackingStartMs = householdTrackingStartMs(state);
+  return items.filter((b) => startOfLocalDay(b.due).getTime() >= trackingStartMs);
 }
 
 function formatDueIso(d) {
