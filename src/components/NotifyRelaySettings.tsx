@@ -57,6 +57,7 @@ export function NotifyRelaySettings({
   const [cronKeyBusy, setCronKeyBusy] = useState(false);
   const [cronKeyReveal, setCronKeyReveal] = useState<{ key: string; curl: string } | null>(null);
   const [cronAdvancedOpen, setCronAdvancedOpen] = useState(false);
+  const [editingRecipients, setEditingRecipients] = useState(false);
   const [authTick, setAuthTick] = useState(0);
   const stateRef = useRef(state);
   const snapshotPushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -238,26 +239,37 @@ export function NotifyRelaySettings({
       </div>
 
       <div className="mt-4 space-y-3">
-        {notifyEmailsLocked ? (
-          <p className="rounded-lg border border-slate-200/80 bg-slate-50/85 px-3 py-2.5 text-sm text-slate-800 dark:border-moss-border dark:bg-moss-surface/80 dark:text-moss-subtle">
-            <span className="text-xs font-bold uppercase tracking-wide text-sage-600 dark:text-moss-muted">
-              Summary recipients
-            </span>
-            <span className="mt-1 block">
-              {householdMode === 'couple' ? (
-                <>
-                  {husbandTrim}
-                  <span className="text-sage-500 dark:text-moss-muted"> · </span>
-                  {wifeTrim}
-                </>
-              ) : (
-                husbandTrim || wifeTrim
-              )}
-            </span>
-          </p>
+        {notifyEmailsLocked && !editingRecipients ? (
+          <div className="rounded-lg border border-slate-200/80 bg-slate-50/85 px-3 py-2.5 dark:border-moss-border dark:bg-moss-surface/80">
+            <div className="flex items-start justify-between gap-3">
+              <p className="min-w-0 text-sm text-slate-800 dark:text-moss-subtle">
+                <span className="text-xs font-bold uppercase tracking-wide text-sage-600 dark:text-moss-muted">
+                  Summary recipients
+                </span>
+                <span className="mt-1 block break-words">
+                  {householdMode === 'couple' ? (
+                    <>
+                      {husbandTrim}
+                      <span className="text-sage-500 dark:text-moss-muted"> · </span>
+                      {wifeTrim}
+                    </>
+                  ) : (
+                    husbandTrim || wifeTrim
+                  )}
+                </span>
+              </p>
+              <button
+                type="button"
+                className="btn-secondary btn-secondary-sm shrink-0 font-bold"
+                onClick={() => setEditingRecipients(true)}
+              >
+                Change
+              </button>
+            </div>
+          </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
-            {!husbandTrim.includes('@') ? (
+            {editingRecipients || !husbandTrim.includes('@') ? (
               <div>
                 <label
                   className="text-xs font-semibold uppercase tracking-wide text-sage-600 dark:text-moss-muted"
@@ -279,7 +291,7 @@ export function NotifyRelaySettings({
                 <FieldError id={fieldErrorId('notify-h-email')} message={husbandEmailErr} />
               </div>
             ) : null}
-            {householdMode === 'couple' && !wifeTrim.includes('@') ? (
+            {householdMode === 'couple' && (editingRecipients || !wifeTrim.includes('@')) ? (
               <div>
                 <label
                   className="text-xs font-semibold uppercase tracking-wide text-sage-600 dark:text-moss-muted"
@@ -303,6 +315,21 @@ export function NotifyRelaySettings({
             ) : null}
           </div>
         )}
+        {editingRecipients ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="btn-primary btn-primary-sm font-bold"
+              disabled={Boolean(husbandEmailErr) || Boolean(wifeEmailErr)}
+              onClick={() => setEditingRecipients(false)}
+            >
+              Done
+            </button>
+            <span className="text-xs text-sage-600 dark:text-moss-muted">
+              Edits save automatically and sync for scheduled reminders.
+            </span>
+          </div>
+        ) : null}
         {cfg.enabled && !cfg.husbandEmail.trim() && !cfg.wifeEmail.trim() ? (
           <div
             role="status"
