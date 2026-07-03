@@ -1,6 +1,7 @@
 import type {
   BillPaymentAttribution,
   DebtAccount,
+  DebtKind,
   FinanceState,
   SurprisePaidByRole,
 } from '../types/finance';
@@ -14,6 +15,12 @@ const setDaySafe = (year: number, monthIndex: number, day: number): Date => {
 
 const monthKey = (ref: Date): string =>
   `${ref.getFullYear()}-${String(ref.getMonth() + 1).padStart(2, '0')}`;
+
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
+/** Loan/installment balances drop when a monthly payment is marked (manual or auto). */
+export const debtKindSubtractsBalanceOnPayment = (kind: DebtKind | undefined): boolean =>
+  kind === 'loan' || kind === 'installment';
 
 export function autoDeductionPaidByRole(debt: DebtAccount): SurprisePaidByRole {
   return debt.autoDeductionPaidByRole ?? 'owner';
@@ -41,6 +48,7 @@ export function applyAutoMarkHandled(state: FinanceState, ref: Date = new Date()
   const billPaidAmounts = { ...(state.billPaidAmounts ?? {}) };
   const billPaymentAttribution = { ...(state.billPaymentAttribution ?? {}) };
   const unmarked = state.billsAutoUnmarked ?? {};
+  let debts = state.debts;
 
   for (const d of state.debts) {
     if (!d.autoDeduction || d.monthlyPayment <= 0) continue;
@@ -56,6 +64,7 @@ export function applyAutoMarkHandled(state: FinanceState, ref: Date = new Date()
     const dueStart = new Date(due.getFullYear(), due.getMonth(), due.getDate()).getTime();
     if (todayStart >= dueStart) {
       const cur = new Set(billsPaid[d.id] ?? []);
+      const wasPaid = cur.has(mk);
       cur.add(mk);
       billsPaid[d.id] = [...cur];
       const inner = { ...(billPaidAmounts[d.id] ?? {}) };
@@ -67,10 +76,18 @@ export function applyAutoMarkHandled(state: FinanceState, ref: Date = new Date()
         attrInner[mk] = attributionEntry(autoDeductionPaidByRole(d));
         billPaymentAttribution[d.id] = attrInner;
       }
+
+      if (!wasPaid && debtKindSubtractsBalanceOnPayment(d.kind)) {
+        debts = debts.map((row) =>
+          row.id === d.id
+            ? { ...row, balance: round2((Number(row.balance) || 0) - d.monthlyPayment) }
+            : row,
+        );
+      }
     }
   }
 
-  return { ...state, billsPaid, billPaidAmounts, billPaymentAttribution };
+  return { ...state, debts, billsPaid, billPaidAmounts, billPaymentAttribution };
 }
 
 /** Backfill Primary/Partner tags on auto-marked bills that predate attribution. */

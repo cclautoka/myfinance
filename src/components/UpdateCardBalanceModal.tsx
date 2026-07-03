@@ -11,7 +11,6 @@ function parseAmountDraft(s: string): { ok: true; value: number } | { ok: false;
   if (!t) return { ok: false, error: 'Enter the amount your bank app shows as available.' };
   const n = Number.parseFloat(t.replace(/,/g, ''));
   if (!Number.isFinite(n)) return { ok: false, error: 'Enter a valid number.' };
-  if (n < 0) return { ok: false, error: 'Available cannot be negative.' };
   return { ok: true, value: Math.round(n * 100) / 100 };
 }
 
@@ -21,7 +20,7 @@ export function UpdateCardBalanceModal({
   onClose,
   onSave,
   title = 'Update balance',
-  intro = 'Enter the available balance from your bank app — we work out how much is owed from your credit limit.',
+  intro = 'Enter the available balance from your bank app — we work out how much is owed from your credit limit. Use a negative amount if you are over the limit.',
 }: {
   debt: DebtAccount | null;
   open: boolean;
@@ -89,11 +88,11 @@ export function UpdateCardBalanceModal({
           inputMode="decimal"
           autoComplete="off"
           autoFocus
-          placeholder="e.g. 0.51 or 34.44"
+          placeholder="e.g. 0.51, 34.44, or -50 if over limit"
           value={availableDraft}
           aria-invalid={!parsedAvailable.ok}
           aria-describedby={!parsedAvailable.ok ? fieldErrorId('card-available') : undefined}
-          onChange={(e) => setAvailableDraft(e.target.value.replace(/[^0-9.,]/g, ''))}
+          onChange={(e) => setAvailableDraft(e.target.value.replace(/[^0-9.,-]/g, '').replace(/(?!^)-/g, ''))}
           className="mt-2 w-full rounded-xl border border-sage-400/80 bg-white px-4 py-3 text-sage-950 dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
         />
         <FieldError

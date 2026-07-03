@@ -122,7 +122,7 @@ function applySmartDebtPaymentFinalize(s: FinanceState, billId: string): Finance
   const current = next.debts.find((x) => x.id === billId);
   if (!current) return next;
 
-  if (effectiveDebtBalance(current, ref, next) <= 0) {
+  if (effectiveDebtBalance(current, ref, next) === 0) {
     next = applyMarkAllUnpaidDebtOccurrences(next, billId);
     next = {
       ...next,
@@ -684,7 +684,7 @@ export function usePersistedFinance() {
       if (!target || target.kind === 'card') return;
 
       const safeBal = round2(balance);
-      const markPaidOff = Boolean(options?.markPaidOff || safeBal <= 0);
+      const markPaidOff = Boolean(options?.markPaidOff || safeBal === 0);
 
       setState((s) => {
         let next: FinanceState = {
@@ -813,7 +813,7 @@ export function usePersistedFinance() {
         paidDelta !== 0 && debtRow
           ? s.debts.map((d) =>
               d.id === billId
-                ? { ...d, balance: round2(Math.max(0, (Number(d.balance) || 0) - paidDelta)) }
+                ? { ...d, balance: round2((Number(d.balance) || 0) - paidDelta) }
                 : d,
             )
           : s.debts;
@@ -1067,7 +1067,7 @@ export function usePersistedFinance() {
         remaining = round2(remaining - take);
       }
 
-      const carry = round2(Math.max(0, slack - directed));
+      const carry = allocations.skipCarry ? 0 : round2(Math.max(0, slack - directed));
       const today = new Date().toISOString().slice(0, 10);
       const carryMap = { ...(s.monthSpendableCarryByMonth ?? {}) };
       if (carry <= 0) delete carryMap[mk];

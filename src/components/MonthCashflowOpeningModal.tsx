@@ -16,14 +16,17 @@ import { FieldError } from './ui/FieldError';
 import { fieldErrorId } from './ui/fieldErrorId';
 import { FieldHelp } from './ui/FieldHelp';
 
-function parseAmountDraft(s: string): { ok: true; value: number } | { ok: false; error: string } {
+function parseAmountDraft(
+  s: string,
+  opts?: { allowNegative?: boolean },
+): { ok: true; value: number } | { ok: false; error: string } {
   const t = s.trim();
   if (!t) return { ok: true, value: 0 };
   const n = Number.parseFloat(t.replace(/,/g, ''));
   if (!Number.isFinite(n)) {
     return { ok: false, error: 'Enter a valid number (e.g. 500 or 0.5), or leave blank for $0.' };
   }
-  if (n < 0) return { ok: false, error: 'Amount cannot be negative.' };
+  if (!opts?.allowNegative && n < 0) return { ok: false, error: 'Amount cannot be negative.' };
   return { ok: true, value: n };
 }
 
@@ -61,7 +64,9 @@ export function MonthCashflowOpeningModal({
       out[g.id] = parseAmountDraft(drafts[g.id] ?? '');
     }
     for (const c of cardRows) {
-      out[`${CARD_FIELD_PREFIX}${c.id}`] = parseAmountDraft(drafts[`${CARD_FIELD_PREFIX}${c.id}`] ?? '');
+      out[`${CARD_FIELD_PREFIX}${c.id}`] = parseAmountDraft(drafts[`${CARD_FIELD_PREFIX}${c.id}`] ?? '', {
+        allowNegative: true,
+      });
     }
     return out;
   }, [drafts, goalRows, cardRows]);
@@ -111,12 +116,16 @@ export function MonthCashflowOpeningModal({
   }, [allocationInput, goalRows, rawTotal, slack]);
 
   const setDraft = (id: string, value: string) => {
-    setDrafts((d) => ({ ...d, [id]: value.replace(/[^0-9.,]/g, '') }));
+    const allowNeg = id.startsWith(CARD_FIELD_PREFIX);
+    const cleaned = allowNeg
+      ? value.replace(/[^0-9.,-]/g, '').replace(/(?!^)-/g, '')
+      : value.replace(/[^0-9.,]/g, '');
+    setDrafts((d) => ({ ...d, [id]: cleaned }));
   };
 
-  const submit = () => {
+  const submit = (skipCarry = false) => {
     if (!allParsedOk) return;
-    onConfirm(cappedAllocation);
+    onConfirm({ ...cappedAllocation, skipCarry });
   };
 
   return (
@@ -308,17 +317,28 @@ export function MonthCashflowOpeningModal({
           type="button"
           className="btn-primary mt-6 w-full py-3 text-base font-bold"
           disabled={!allParsedOk}
-          onClick={submit}
+          onClick={() => submit(false)}
         >
           {mo.saveUnlock(monthHeading)}
         </button>
+        <button
+          type="button"
+          className="btn-secondary mt-3 w-full py-2.5 text-sm font-bold"
+          disabled={!allParsedOk}
+          onClick={() => submit(true)}
+        >
+          {mo.startFresh(monthHeading)}
+        </button>
+        <p className="mt-2 text-center text-[12px] leading-snug text-sage-700 dark:text-moss-muted">
+          {mo.startFreshHelp}
+        </p>
         {onStartTourAfterUnlock ? (
           <button
             type="button"
             className="btn-secondary mt-3 w-full py-2.5 text-sm font-bold"
             disabled={!allParsedOk}
             onClick={() => {
-              submit();
+              submit(false);
               onStartTourAfterUnlock();
             }}
           >

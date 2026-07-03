@@ -109,4 +109,26 @@ describe('applyAutoMarkHandled', () => {
     expect(next.billsPaid['hp-phone']).toContain('2026-06');
     expect(next.billPaymentAttribution?.['hp-phone']?.['2026-06']?.role).toBe('owner');
   });
+
+  it('subtracts monthly payment from loan balance when newly auto-marked', () => {
+    const state = {
+      ...baseState(),
+      debts: [
+        {
+          id: 'car',
+          name: 'Car Loan',
+          balance: 5000,
+          monthlyPayment: 224,
+          dueDay: 4,
+          autoDeduction: true,
+          kind: 'loan',
+        },
+      ],
+      billsPaid: {},
+      billPaidAmounts: {},
+    } as FinanceState;
+    const ref = new Date('2026-06-06T12:00:00');
+    const next = applyAutoMarkHandled(state, ref);
+    expect(next.debts[0].balance).toBe(4776);
+  });
 });

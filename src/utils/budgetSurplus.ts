@@ -144,6 +144,8 @@ export type MonthOpeningAllocationInput = {
   goals?: Record<string, number>;
   /** Optional card available-credit check-ins keyed by debt id (bank app “available balance”). */
   cardAvailableCredit?: Record<string, number>;
+  /** When true, seal the month with $0 carry even if prior-month leftover was positive. */
+  skipCarry?: boolean;
 };
 
 /** Sum of dollars directed to emergency + savings goals at month open (capped by caller). */

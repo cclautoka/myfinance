@@ -19,6 +19,10 @@ describe('cardOwedFromAvailable', () => {
     expect(cardOwedFromAvailable(2500, 0.51)).toBe(2499.49);
     expect(cardOwedFromAvailable(10000, 34.44)).toBe(9965.56);
   });
+
+  it('allows negative available (over limit)', () => {
+    expect(cardOwedFromAvailable(2500, -50)).toBe(2550);
+  });
 });
 
 describe('cardAvailableFromOwed', () => {
