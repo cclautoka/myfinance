@@ -28,16 +28,21 @@ export async function pickReminderRecipientsAsync(householdId, body, stateData) 
   return notifyToRecipients();
 }
 
+/**
+ * Load workbook for reminders. The Postgres row is authoritative — the filesystem snapshot is a
+ * partial reminder cache only and must never replace the full workbook on write.
+ */
 export async function loadHouseholdReminderState(householdId, log) {
   const id = householdId.trim().slice(0, 64);
-  const snap = await readSnapshot(id).catch(() => null);
-  let stateData = snap?.data ?? null;
+  await initDbIfNeeded(log);
+  let stateData = null;
+  if (getDbEnabled()) {
+    const stored = await readState(id).catch(() => null);
+    stateData = stored?.state ?? null;
+  }
   if (!stateData) {
-    await initDbIfNeeded(log);
-    if (getDbEnabled()) {
-      const stored = await readState(id).catch(() => null);
-      stateData = stored?.state ?? null;
-    }
+    const snap = await readSnapshot(id).catch(() => null);
+    stateData = snap?.data ?? null;
   }
   return { id, stateData };
 }
@@ -106,7 +111,11 @@ export async function sendRemindersForHousehold(householdId, { log, body = {} } 
 
     if (overdueCadence.length > 0 && getDbEnabled()) {
       await initDbIfNeeded(log);
-      const patched = patchOverdueReminderSentLog(pruned, overdueCadence, ref);
+      // Patch only the overdue-sent log onto the latest full workbook — never write the partial
+      // reminder snapshot back (that wiped incomeLog and other fields after the 7am cron ran).
+      const current = await readState(id).catch(() => null);
+      const base = current?.state ?? pruned;
+      const patched = patchOverdueReminderSentLog(base, overdueCadence, ref);
       await writeState(id, patched).catch((e) => log?.warn?.(e, 'Failed to persist billOverdueReminderSentAt'));
     }
 
