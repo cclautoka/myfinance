@@ -10,7 +10,6 @@ function parseOwedDraft(s: string): { ok: true; value: number } | { ok: false; e
   if (!t) return { ok: false, error: 'Enter how much is still owed.' };
   const n = Number.parseFloat(t.replace(/,/g, ''));
   if (!Number.isFinite(n)) return { ok: false, error: 'Enter a valid number.' };
-  if (n < 0) return { ok: false, error: 'Owed cannot be negative.' };
   return { ok: true, value: Math.round(n * 100) / 100 };
 }
 
@@ -18,17 +17,18 @@ function loanModalCopy(debt: DebtAccount): { title: string; intro: string; field
   if (debt.kind === 'loan') {
     return {
       title: 'Update balance',
-      intro: 'Enter the remaining balance from your bank app. Snowball and debt-free update immediately.',
+      intro:
+        'Enter the remaining balance from your bank app. Use a negative amount if you have overpaid (gone over). Snowball and debt-free update immediately.',
       fieldLabel: 'Remaining balance (bank app)',
-      placeholder: 'e.g. 3988.40',
+      placeholder: 'e.g. 3988.40 or -50 if overpaid',
     };
   }
   return {
     title: 'Update balance',
     intro:
-      'Enter what you still owe. Mark fully paid off when nothing remains — the debt moves to achievements automatically.',
+      'Enter what you still owe. Negative means you have overpaid. Mark fully paid off when nothing remains — the debt moves to achievements automatically.',
     fieldLabel: 'Amount still owed',
-    placeholder: 'e.g. 281 or 0',
+    placeholder: 'e.g. 281, 0, or -25 if overpaid',
   };
 }
 
@@ -93,7 +93,7 @@ export function UpdateDebtBalanceModal({
           value={owedDraft}
           aria-invalid={!parsed.ok}
           aria-describedby={!parsed.ok ? fieldErrorId('debt-owed') : undefined}
-          onChange={(e) => setOwedDraft(e.target.value.replace(/[^0-9.,]/g, ''))}
+          onChange={(e) => setOwedDraft(e.target.value.replace(/[^0-9.,-]/g, ''))}
           className="mt-2 w-full rounded-xl border border-sage-400/80 bg-white px-4 py-3 text-sage-950 dark:border-moss-border dark:bg-moss-bg dark:text-moss-fg"
         />
         <FieldError id={fieldErrorId('debt-owed')} message={!parsed.ok ? parsed.error : null} />

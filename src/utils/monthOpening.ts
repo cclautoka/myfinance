@@ -1,6 +1,8 @@
 import type { FinanceState, TimelineBill } from '../types/finance';
-import { currentMonthKey, parseCalendarMonthKey } from '../data/defaults';
-import { timelineOccurrencesDueInCalendarMonth } from './billsTimeline';
+import { currentMonthKey, parseCalendarMonthKey, previousCalendarMonthKey } from '../data/defaults';
+import { billOccurrenceIsPaid, timelineOccurrencesDueInCalendarMonth } from './billsTimeline';
+import { extraIncomeMonthTotal, surpriseExpensesMonthTotal } from './calculations';
+import { incomeLogMonthTotal } from './incomeLog';
 
 /** Any real workbook use beyond static Household numbers — gates month-opening nag. */
 export function hasMeaningfulFinanceTouch(state: FinanceState): boolean {
@@ -14,11 +16,24 @@ export function hasMeaningfulFinanceTouch(state: FinanceState): boolean {
   return false;
 }
 
-/** Block the rest of the app until today’s calendar month has an opening seal. */
+/** Prior calendar month had real workbook activity worth settling at month open. */
+export function priorMonthHadMeaningfulTouch(state: FinanceState, priorMonthKey: string): boolean {
+  if (incomeLogMonthTotal(state, priorMonthKey) > 0) return true;
+  if (extraIncomeMonthTotal(state, priorMonthKey) > 0) return true;
+  if (surpriseExpensesMonthTotal(state, priorMonthKey) > 0) return true;
+  if ((state.budgetSurplusSweeps ?? []).some((e) => e.monthKey === priorMonthKey)) return true;
+  const occ = timelineOccurrencesDueInCalendarMonth(state, priorMonthKey);
+  return occ.some((b) => billOccurrenceIsPaid(state, b));
+}
+
+/** Block the rest of the app until today's calendar month has an opening seal. */
 export function requiresMonthCashflowOpening(state: FinanceState): boolean {
   const mk = currentMonthKey();
-  if (state.monthCashflowOpening?.[mk]) return false;
+  const opening = state.monthCashflowOpening?.[mk];
+  if (opening && !opening.migrated) return false;
   if (!hasMeaningfulFinanceTouch(state)) return false;
+  const prev = previousCalendarMonthKey(mk);
+  if (!priorMonthHadMeaningfulTouch(state, prev)) return false;
   return true;
 }
 

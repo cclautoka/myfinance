@@ -60,16 +60,16 @@ describe('pocketLeftSoFar', () => {
     expect(pocketLeftSoFar(state, '2026-06', ref)).toBe(0);
   });
 
-  it('ignores handled bills due after ref', () => {
+  it('subtracts handled bills marked paid even when due after ref', () => {
     const state = baseState({
-      essentials: [
-        { id: 'food', name: 'Groceries', amount: 150, cadence: 'week', weeklyDueWeekday: 6 },
-      ],
-      billsPaid: { food: ['2026-06-13'] },
-      billPaidAmounts: { food: { '2026-06-13': 150 } },
+      monthSpendableCarryByMonth: {},
+      incomeLog: [{ id: '1', date: '2026-06-05', amount: 420, earner: 'husband', label: 'Pay' }],
+      essentials: [{ id: 'net', name: 'Internet', amount: 150, cadence: 'month', dueDay: 20 }],
+      billsPaid: { net: ['2026-06'] },
+      billPaidAmounts: { net: { '2026-06': 150 } },
     });
     const ref = new Date('2026-06-01T12:00:00');
-    expect(pocketLeftSoFar(state, '2026-06', ref)).toBe(0);
+    expect(pocketLeftSoFar(state, '2026-06', ref)).toBe(270);
   });
 
   it('subtracts deposits and due-so-far spend after carry is used first', () => {

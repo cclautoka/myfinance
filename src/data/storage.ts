@@ -16,7 +16,7 @@ import { applyAutoScheduledPayLogs } from '../utils/autoScheduledPayLog';
 import { applyAutoMarkHandled, syncAutoDeductionBillAttribution } from '../utils/autoBills';
 import { monthSpendableCarry, surplusSweepRoomRemaining } from '../utils/budgetSurplus';
 import { combinedMonthlyIncome } from '../utils/calculations';
-import { hasMeaningfulFinanceTouch } from '../utils/monthOpening';
+import { hasMeaningfulFinanceTouch, priorMonthHadMeaningfulTouch } from '../utils/monthOpening';
 import {
   ensureNotifyRelayHouseholdId,
   readNotifyRelayConfig,
@@ -244,6 +244,8 @@ const silentlyBackfillMonthCashflowOpeningForLegacySave = (
   const mk = currentMonthKey();
   if (!hasMeaningfulFinanceTouch(state)) return state;
   const prev = previousCalendarMonthKey(mk);
+  // When the prior month had real activity, show the month-opening modal — do not auto-seal.
+  if (priorMonthHadMeaningfulTouch(state, prev)) return state;
   const S = surplusSweepRoomRemaining(state, prev);
   const C = monthSpendableCarry(state, mk);
   const roundedS = Math.round(S * 100) / 100;

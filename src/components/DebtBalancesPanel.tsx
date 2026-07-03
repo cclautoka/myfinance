@@ -66,6 +66,7 @@ function rowIsClickable(d: DebtAccount): boolean {
  */
 function isPaidOffAchievement(state: FinanceState, r: DebtRow): boolean {
   if (r.balance > 0) return false;
+  if (r.balance < 0) return false;
   const d = r.debt;
   if (debtPaymentHistory(state, d).length > 0) return true;
   if (d.endsOn) return true;
@@ -209,6 +210,11 @@ export function DebtBalancesPanel({
           {paidOff ? (
             <span className="text-xs font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-300/90">
               Paid off
+            </span>
+          ) : balance < 0 ? (
+            <span className="font-semibold text-rose-700 dark:text-rose-300">
+              {formatMoney(balance)}
+              <span className="mt-0.5 block text-[10px] font-normal uppercase tracking-wide">Overpaid</span>
             </span>
           ) : (
             formatMoney(balance)

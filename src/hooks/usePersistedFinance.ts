@@ -683,7 +683,7 @@ export function usePersistedFinance() {
       const target = before.debts.find((d) => d.id === debtId);
       if (!target || target.kind === 'card') return;
 
-      const safeBal = round2(Math.max(0, balance));
+      const safeBal = round2(balance);
       const markPaidOff = Boolean(options?.markPaidOff || safeBal <= 0);
 
       setState((s) => {

@@ -48,23 +48,23 @@ export function monthActualExpenseTotal(state: FinanceState, monthKey: string): 
 }
 
 /**
- * Handled bills/surprises counted for “pocket left so far” — only occurrences due on or before `ref`
- * (default today) so future-dated lines do not reduce pocket early.
+ * Handled bills/surprises counted for “pocket left so far”.
+ * Marked-as-paid lines count immediately — even when due later this month — so early
+ * payments reduce Left from deposits right away.
  */
 export function monthActualExpenseSoFarForPocket(
   state: FinanceState,
   monthKey: string,
   ref: Date = new Date(),
 ): number {
-  const endOfToday = startOfLocalDay(ref).getTime();
   const occ = timelineOccurrencesDueInCalendarMonth(state, monthKey);
   let billsPaid = 0;
   for (const b of occ) {
     if (!billOccurrenceIsPaid(state, b)) continue;
-    if (startOfLocalDay(b.due).getTime() > endOfToday) continue;
     billsPaid += billOccurrencePaidDisplayAmount(state, b, b.amount);
   }
   const [y, m] = monthKey.split('-').map(Number);
+  const endOfToday = startOfLocalDay(ref).getTime();
   let surprises = 0;
   for (const e of state.surpriseExpenses) {
     const d = new Date(e.date);

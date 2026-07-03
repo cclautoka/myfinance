@@ -47,7 +47,8 @@ export const effectiveDebtBalance = (
   state?: FinanceState,
 ): number => {
   if (state && d.endsOn && d.monthlyPayment > 0 && debtCalendarFullyPaid(state, d)) return 0;
-  if (d.balance > 0) return round2(d.balance);
+  const stored = round2(Number(d.balance) || 0);
+  if (stored !== 0) return stored;
   if (!d.endsOn) return 0;
   if (state && d.monthlyPayment > 0) {
     return unpaidDebtContractRemaining(state, d);

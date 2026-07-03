@@ -9,7 +9,7 @@ export const dashboard = {
   plannedIncomeHelper: 'From Household numbers. Log one-off cash on the Dashboard.',
 
   leftFromDepositsLabel: glossary.leftFromDeposits,
-  leftFromDepositsHelper: 'Deposits minus bills due so far. Carry-over is used first.',
+  leftFromDepositsHelper: 'Deposits minus bills you marked paid this month. Carry-over is used first.',
 
   carryOverLine: (amount: string) => `${glossary.carryOver} ${amount} remaining.`,
 
